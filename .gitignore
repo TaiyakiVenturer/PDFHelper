@@ -1,0 +1,75 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+venv/
+.env
+.env.local
+.env.production
+*.key
+
+# Node.js
+node_modules/
+dist-ssr/
+*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Instance folders - 包含使用者資料
+backend/instance/chroma_db/*
+backend/instance/mineru_outputs/*
+backend/instance/pdfs/*
+backend/instance/reconstructed_files/*
+backend/instance/translated_files/*.json
+
+# 但是要保留 .gitkeep 文件
+!*.gitkeep
+
+# 敏感資訊
+config.local.py
+secrets.json
+*.pem
+*.p12
+
+# 測試覆蓋率
+.coverage
+htmlcov/
+
+# 暫時文件
+*.tmp
+*.temp
+
+# TODO lists（開發中的文件）
+docs/TODO_Frontend.md
+docs/RELEASE_CHECKLIST.md
+
+# 未完成的功能
+frontend/

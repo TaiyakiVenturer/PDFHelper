@@ -1,0 +1,112 @@
+# PDFHelper - 智能PDF處理與分析系統
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/TaiyakiVenturer/PDFHelper)
+
+## 📖 專案簡介
+
+PDFHelper 是一個基於 AI 的智能 PDF 處理系統，提供 PDF 解析、翻譯、向量檢索等功能。
+
+## ✨ 主要功能
+
+- 🔍 **PDF 智能解析** - 使用 MinerU 引擎進行高精度 PDF 內容提取
+- 🌐 **多語言翻譯** - 支援多種語言的雙向翻譯
+- 🧠 **RAG 檢索增強** - 基於 ChromaDB 的向量檢索系統
+- 💬 **智能問答** - 與 PDF 內容進行自然語言對話
+- 🎨 **現代化前端** - React + Material-UI 的直觀介面
+
+## 🛠️ 技術架構
+
+### 後端
+- **Python 3.10+**
+- **MinerU** - PDF 解析引擎
+- **ChromaDB** - 向量資料庫
+- **PyTorch** - 機器學習框架
+- **Flask** - Web API 框架
+
+### 前端 (正在開發中)
+- **React 19**
+- **TypeScript**
+- **Material-UI**
+- **Vite** - 建構工具
+
+## 🚀 快速開始
+
+### 環境需求
+- Python 3.10 或更高版本
+- Node.js 18 或更高版本
+- Git
+
+### 安裝步驟
+
+1. **克隆專案**
+```bash
+git clone https://github.com/TaiyakiVenturer/PDFHelper
+cd PDFHelper
+```
+
+2. **後端設置**
+```bash
+# 創建虛擬環境
+python -m venv .venv
+
+# 啟動虛擬環境 (Windows)
+.venv\Scripts\activate
+
+# 安裝依賴
+pip install -r requirements.txt
+```
+
+3. **前端設置**
+```bash
+cd frontend
+npm install
+```
+
+4. **啟動服務**
+```bash
+# 後端 (在專案根目錄)
+python -m backend.api.pdf_helper
+
+# 前端 (在 frontend 目錄)
+npm run dev
+```
+
+## 📄 授權資訊
+
+本專案採用 **GNU Affero General Public License v3.0 (AGPL-3.0)** 授權。
+
+### ⚠️ 重要說明
+
+由於使用了 MinerU (AGPL-3.0)，本專案必須採用 AGPL-3.0 授權，這意味著：
+
+- ✅ **可以自由使用、修改和分發**
+- ✅ **允許商業使用**
+- ⚠️ **必須公開所有原始碼**
+- ⚠️ **網路服務必須提供原始碼下載**
+- ⚠️ **衍生作品必須採用相同授權**
+
+詳細授權資訊請參考 [LICENSE_GUIDE.md](./docs/LICENSE_GUIDE.md)
+
+### 第三方套件授權
+- MinerU - AGPL-3.0
+- ChromaDB - Apache-2.0
+- PyTorch - BSD-3-Clause
+- React - MIT
+
+## 📞 聯絡資訊
+
+- **作者**: [TaiyakiVenturer](https://github.com/TaiyakiVenturer)
+
+## 📋 TODO
+
+詳細的開發計畫請參考：
+- [總體 TODO](./docs/TODO.md)
+- [RAG 系統 TODO](./docs/TODO_RAG.md)
+
+---
+
+## ⚖️ 免責聲明
+
+本軟體按 "現狀" 提供，不提供任何形式的保證。使用本軟體的風險由使用者自行承擔。
+
+**注意**：本專案使用 AGPL-3.0 授權，在使用前請確保了解相關法律義務。如有疑問，請諮詢專業律師。

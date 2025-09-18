@@ -52,26 +52,24 @@ class RAGEngine:
     """RAG查詢增強生成引擎"""
     
     def __init__(self, 
-            instance_path: str, 
             llm_service: Literal['ollama', 'gemini'],
-            llm_service_model: str = None,
-            embedding_model: str = "nomic-embed-v2-text-moe", 
-            min_chunk_size: int = 100, 
-            max_chunk_size: int = 500,
-            merge_short_chunks: bool = True,
+            model_name: str = None,
+            document_processor_obj: DocumentProcessor = None,
+            embedding_service_obj: EmbeddingService = None,
+            chromadb_obj: ChromaVectorStore = None,
             verbose: bool = False,
         ):
         """
         初始化RAG引擎
         
         Args:
-            instance_path: 資料路徑 (用於DocumentProcessor和ChromaVectorStore)
             llm_service: 使用的LLM服務 (ollama/gemini)
-            llm_service_model: LLM服務模型名稱 (如未提供則使用預設模型)
-            embedding_model: Embedding模型名稱
-            min_chunk_size: 內容片段最小長度
-            max_chunk_size: 內容片段最大長度
-            merge_short_chunks: 是否合併過短的內容片段
+            model_name: LLM服務模型名稱 (如未提供則使用預設模型)
+                - Ollama 預設為 "yi-chat" (為自訂模型，須依使用者修改使用模型名稱)
+                - Gemini 預設為 "gemini-2.5-flash-lite"
+            document_processor_obj: 文件處理器物件
+            embedding_service_obj: Embedding服務物件
+            chromadb_obj: ChromaDB向量資料庫物件
             verbose: 是否輸出詳細日誌
         """
         self.verbose = verbose
@@ -79,29 +77,20 @@ class RAGEngine:
             print("⏳ 正在初始化RAG引擎...")
         
         # 初始化各個組件
-        self.document_processor = DocumentProcessor(
-            instance_path=instance_path,
-            min_chunk_size=min_chunk_size,
-            chunk_size_limit=max_chunk_size,
-            merge_short_chunks=merge_short_chunks,
-            verbose=self.verbose
-        )
-        
-        self.embedding_service = EmbeddingService(
-            model_name=embedding_model,
-            verbose=self.verbose
-        )
-        
-        self.vector_store = ChromaVectorStore(
-            instance_path=instance_path,
-            verbose=self.verbose
-        )
+        self.document_processor = document_processor_obj
+        assert self.document_processor, "請提供DocumentProcessor物件或確保能夠初始化"
+
+        self.embedding_service = embedding_service_obj
+        assert self.embedding_service, "請提供EmbeddingService物件或確保能夠初始化"
+
+        self.vector_store = chromadb_obj
+        assert self.vector_store, "請提供ChromaVectorStore物件或確保能夠初始化"
 
         # 根據選擇的LLM服務初始化
         self.llm_service = None
         if llm_service == 'ollama':
             self.llm_service = OllamaService(
-                llm_service_model or "yi-chat",
+                model_name or "yi-chat",
                 model_uses="chat",
                 verbose=self.verbose
             )
@@ -109,7 +98,7 @@ class RAGEngine:
                 raise ValueError("⚠️ Ollama服務不可用，請檢查設定")
         elif llm_service == 'gemini':
             self.llm_service = GeminiService(
-                llm_service_model or "gemini-2.5-flash-lite", 
+                model_name or "gemini-2.5-flash-lite", 
                 verbose=self.verbose
             )
             if not self.llm_service.is_available():
@@ -154,7 +143,7 @@ class RAGEngine:
 
             # 生成embedding向量
             texts = [chunk.content for chunk in chunks]
-            embeddings = self.embedding_service.get_embeddings(texts)
+            embeddings = self.embedding_service.get_embeddings(texts, store=True)
             
             # 如果文件已存在，先刪除
             collection_name = collection_name or json_file_name
@@ -195,7 +184,7 @@ class RAGEngine:
                 print(f"開始查詢，查詢內容: {searching_content}, top_k: {top_k}, filter: {filter_dict}")
 
             # 獲取查詢的embedding向量
-            content_embedding = self.embedding_service.get_embedding(searching_content)
+            content_embedding = self.embedding_service.get_embedding(searching_content, store=False)
 
             if content_embedding is None:
                 print("無法獲取查詢的embedding向量")

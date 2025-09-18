@@ -7,9 +7,11 @@ import os
 from pathlib import Path
 from dataclasses import dataclass
 
+import pprint as pp
+
 from services.pdf_service import MinerUProcessor # 導入MinerU文件處理器
 from services.translation_service import OllamaTranslator, GeminiTranslator # 導入翻譯器
-from services.rag_service import RAGEngine # 導入RAG引擎
+from services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine # 導入RAG引擎
 from services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
 
 from .config import Config # 導入配置管理
@@ -40,44 +42,72 @@ class PDFHelper:
             print("🔧 初始化 PDFHelper API...")
 
         self.pdf_processor = MinerUProcessor(
-            self.config.instance_path, 
-            self.config.mineru_config.output_dirname, 
-            self.config.mineru_config.verbose
+            instance_path=self.config.instance_path,
+            output_dirname=self.config.mineru_config.output_dirname,
+            verbose=self.config.mineru_config.verbose
         )
         if self.verbose:
             print("✅ PDF處理器初始化完成")
 
         if self.config.translator_config.llm_service == "ollama":
             self.translator = OllamaTranslator(
-                self.config.instance_path,
-                self.config.translator_config.model_name,
-                self.config.translator_config.verbose
+                instance_path=self.config.instance_path,
+                model_name=self.config.translator_config.model_name,
+                verbose=self.config.translator_config.verbose
             )
         else:
             self.translator = GeminiTranslator(
-                self.config.instance_path,
-                self.config.translator_config.model_name,
-                self.config.translator_config.api_key,
-                self.config.translator_config.verbose
+                instance_path=self.config.instance_path,
+                model_name=self.config.translator_config.model_name,
+                api_key=self.config.translator_config.api_key,
+                verbose=self.config.translator_config.verbose
             )
         if self.verbose:
             print("✅ 翻譯器初始化完成")
 
+        document_processor = DocumentProcessor(
+            instance_path=self.config.instance_path,
+            min_chunk_size=self.config.rag_config.document_processor_config.min_chunk_size,
+            max_chunk_size=self.config.rag_config.document_processor_config.max_chunk_size,
+            merge_short_chunks=self.config.rag_config.document_processor_config.merge_short_chunks,
+            verbose=self.config.rag_config.document_processor_config.verbose
+        )
+        if self.verbose:
+            print("✅ 文件處理器初始化完成")
+
+        embedding_service = EmbeddingService(
+            llm_service=self.config.rag_config.llm_service,
+            model_name=self.config.rag_config.embedding_service_config.model_name,
+            api_key=self.config.rag_config.embedding_service_config.api_key,
+            max_retries=self.config.rag_config.embedding_service_config.max_retries,
+            retry_delay=self.config.rag_config.embedding_service_config.retry_delay,
+            verbose=self.config.rag_config.embedding_service_config.verbose
+        )
+        if self.verbose:
+            print("✅ Embedding服務初始化完成")
+
+        vector_store = ChromaVectorStore(
+            instance_path=self.config.instance_path,
+            persist_directory_name=self.config.rag_config.chromadb_config.persist_directory_name,
+            collection_cache_size=self.config.rag_config.chromadb_config.collection_cache_size,
+            verbose=self.config.rag_config.chromadb_config.verbose
+        )
+        if self.verbose:
+            print("✅ 向量資料庫初始化完成")
+
         self.rag_engine = RAGEngine(
-            self.config.instance_path,
-            self.config.rag_config.llm_service,
-            self.config.rag_config.model_name,
-            self.config.rag_config.embedding_model,
-            self.config.rag_config.min_chunk_size,
-            self.config.rag_config.max_chunk_size,
-            self.config.rag_config.merge_short_chunks,
-            self.config.rag_config.verbose
+            llm_service=self.config.rag_config.llm_service,
+            model_name=self.config.rag_config.model_name,
+            document_processor_obj=document_processor,
+            embedding_service_obj=embedding_service,
+            chromadb_obj=vector_store,
+            verbose=self.config.rag_config.verbose
         )
         if self.verbose:
             print("✅ RAG引擎初始化完成")
 
         self.md_constructor = MarkdownReconstructor(
-            self.config.instance_path,
+            instance_path=self.config.instance_path,
             verbose=self.config.mineru_config.verbose
         )
         if self.verbose:
@@ -86,7 +116,7 @@ class PDFHelper:
         if self.verbose:
             print("✅ PDFHelper API 已完成初始化")
             print("當前設定細項:")
-            print(self.config)
+            pp.pprint(self.config)
 
     def process_pdf_to_json(self, 
             pdf_name: str, 

@@ -38,8 +38,8 @@ class DocumentProcessor:
     def __init__(
             self,
             instance_path: str,                 # 實例路径
-            chunk_size_limit: int = 1200,       # 最大片段大小（字符數）
             min_chunk_size: int = 100,          # 最小片段大小 (小於此值會被合併)
+            max_chunk_size: int = 1200,       # 最大片段大小（字符數）
             merge_short_chunks: bool = True,    # 是否合併過短的片段
             verbose: bool = False               # 是否輸出詳細日誌
         ):
@@ -71,7 +71,7 @@ class DocumentProcessor:
         """
         self.instance_path = instance_path
 
-        self.max_chunk_size = chunk_size_limit
+        self.max_chunk_size = max_chunk_size
         self.min_chunk_size = min_chunk_size
         self.merge_short_chunks = merge_short_chunks
         
@@ -79,7 +79,7 @@ class DocumentProcessor:
 
         if self.verbose:
             print(f"DocumentProcessor 初始化完成:")
-            print(f" - 最大片段大小: {chunk_size_limit} 字")
+            print(f" - 最大片段大小: {max_chunk_size} 字")
             print(f" - 最小片段大小: {min_chunk_size} 字")
             print(f" - 合併短片段: {'是' if merge_short_chunks else '否'}")
 

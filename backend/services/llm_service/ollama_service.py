@@ -1,5 +1,5 @@
 import requests
-from typing import Optional, Literal, Generator
+from typing import Optional, Literal, Generator, List
 import os
 import subprocess
 from dataclasses import dataclass
@@ -23,7 +23,6 @@ class OllamaService():
     """
     def __init__(self,
             model_name: str,
-            model_uses: Literal["chat", "translate", "embedding"],
             verbose: bool = False
         ):
         """
@@ -35,14 +34,9 @@ class OllamaService():
             verbose: 是否顯示詳細日誌
         """
         self.model_name = model_name
-        self.is_embedding = (model_uses == "embedding")
-        ollama_port = {
-            "embedding": 11433, # 獨立端口，高併發
-            "chat": 11434,      # 共享端口
-            "translate": 11434  # 共享端口 (與chat共享)
-        }
 
-        self.ollama_host = f"http://localhost:{ollama_port[model_uses]}"
+        # self.ollama_host = f"http://localhost:{ollama_port[model_uses]}"
+        self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.session = requests.Session()
 
         self.verbose = verbose
@@ -54,8 +48,8 @@ class OllamaService():
         """檢查Ollama服務是否可用"""
         try:
             # 嘗試連接服務
-            if not self._create_service(background=False):
-                return False
+            # if not self._create_service(background=False):
+            #     return False
 
             response = self.session.get(f"{self.ollama_host}/api/tags")
             if response.status_code == 200:
@@ -71,7 +65,7 @@ class OllamaService():
     
     def _create_service(self, background: bool = True) -> bool:
         """
-        啟動Ollama服務
+        啟動Ollama服務 (目前暫時不使用)
 
         Args:
             background: 是否在背景啟動服務 (預設為True)
@@ -148,52 +142,33 @@ class OllamaService():
         """
         # 發送請求
         try:
-            if not self.is_embedding:
-                response = self.session.post(
-                    f"{self.ollama_host}/api/generate",
-                    json={
-                        "model": self.model_name,
-                        "prompt": prompt,
-                        "stream": stream
-                    },
-                    stream=stream,
-                    timeout=90 if not stream else 30  # 增加超時時間以適應自定義模型
-                )
-                if stream:
-                    if response.status_code == 200:
-                        return self._handle_stream_response(response)
-                    else:
-                        print(f"❌ 流式回應錯誤: {response.status_code} - {response.text}")
-                        return None
-            else:
-                response = self.session.post(
-                    f"{self.ollama_host}/api/embeddings",
-                    json={
-                        "model": self.model_name,
-                        "prompt": prompt,
-                        "stream": False
-                    }, 
-                    timeout=10
-                )
-        
+            response = self.session.post(
+                f"{self.ollama_host}/api/generate",
+                json={
+                    "model": self.model_name,
+                    "prompt": prompt,
+                    "stream": stream
+                },
+                stream=stream,
+                timeout=90 if not stream else 30  # 增加超時時間以適應自定義模型
+            )
+            if stream:
+                if response.status_code == 200:
+                    return self._handle_stream_response(response)
+                else:
+                    print(f"❌ 流式回應錯誤: {response.status_code} - {response.text}")
+                    return None
+
             if response.status_code == 200:
                 result = response.json()
-                if not self.is_embedding:
-                    respond_text = result.get("response", "").strip()
-                    if respond_text and self.verbose:
+                respond_text = result.get("response", "").strip()
+                if respond_text:
+                    if self.verbose:
                         print("✅ 獲取回覆成功")
-                        return respond_text
-                    else:
-                        print(f"❌ 未獲取到回覆，響應數據: {result}")
-                        return None
+                    return respond_text
                 else:
-                    embedding = result.get('embedding')
-                    if embedding and self.verbose:
-                        print(f"✅ 獲取embedding成功")
-                        return embedding
-                    else:
-                        print(f"❌ 未獲取到embedding，響應數據: {result}")
-                        return None
+                    print(f"❌ 未獲取到回覆，響應數據: {result}")
+                    return None
             elif response.status_code == 429:
                 print("❌ 請求過於頻繁")
             else:
@@ -235,3 +210,53 @@ class OllamaService():
             return response
         else:
             return None
+
+    def send_embedding_request(self, text: str, store: bool) -> Optional[List[float]]:
+        """
+        發送embedding請求到Ollama服務
+
+        Args:
+            text: 需要向量化的字串
+            store: 是否為存儲用途 True: 存儲, False: 搜索 (僅Gemini適用，Ollama忽略)
+
+        Returns:
+            List[float]: 向量化結果 (出現錯誤則返回 None)
+        """
+        if not self.is_embedding:
+            print("❌ 當前模型不支援embedding功能")
+            return None
+
+        try:
+            response = self.session.post(
+                f"{self.ollama_host}/api/embeddings",
+                json={
+                    "model": self.model_name,
+                    "prompt": text,
+                    "stream": False
+                }, 
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                embedding = result.get('embedding')
+                if embedding:
+                    if self.verbose:
+                        print(f"✅ 獲取embedding成功")
+                    return embedding
+                else:
+                    print(f"❌ 未獲取到embedding，響應數據: {result}")
+                    return None
+            elif response.status_code == 429:
+                print("❌ 請求過於頻繁")
+            else:
+                print(f"❌ 請求錯誤: {response.status_code} - {response.text}")
+        
+        except requests.exceptions.Timeout:
+            print("❌ 請求超時")
+        except requests.exceptions.RequestException as e:
+            print(f"❌ 請求錯誤: {e}")
+        except Exception as e:
+            print(f"❌ 未知錯誤: {e}")
+
+        return None

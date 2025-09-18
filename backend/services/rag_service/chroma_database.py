@@ -19,7 +19,7 @@ class ChromaVectorStore:
         self,
         instance_path: str,
         persist_directory_name: str = "chroma_db",
-        collection_cache_limit: int = 3,
+        collection_cache_size: int = 3,
         verbose: bool = False
     ):
         """
@@ -36,7 +36,7 @@ class ChromaVectorStore:
         self.persist_directory = os.path.join(self.instance_path, persist_directory_name)
         os.makedirs(self.persist_directory, exist_ok=True)
 
-        self.collection_cache_limit = max(collection_cache_limit, 1)
+        self.collection_cache_size = max(collection_cache_size, 1)
         self.collection_cache: Dict[str, chromadb.Collection] = {}  # 用於緩存集合物件 (名稱, 物件)
 
         self.verbose = verbose
@@ -90,7 +90,7 @@ class ChromaVectorStore:
                 print(f"創建集合時出錯: {e}")
                 return None
 
-        if len(self.collection_cache) + 1 > self.collection_cache_limit:
+        if len(self.collection_cache) + 1 > self.collection_cache_size:
             # 超過緩存上限，刪除最舊的集合
             name = next(iter(self.collection_cache))
             del self.collection_cache[name]

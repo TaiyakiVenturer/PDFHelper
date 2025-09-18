@@ -1,7 +1,7 @@
 from google import genai
 from google.genai import types
 import time
-from typing import Optional
+from typing import Optional, List
 
 class GeminiService():
     """
@@ -26,13 +26,12 @@ class GeminiService():
         self.verbose = verbose
 
         self.in_multi_turn = False  # 是否處於多輪對話中
-        self.chat = None
+        self.chat_object = None     # 多輪對話物件
 
     def is_available(self) -> bool:
         """檢查Gemini服務是否可用"""
         try:
             response = self.client.models.get(model="gemini-2.5-flash-lite")
-
             if response:
                 if self.verbose:
                     print("✅ Gemini服務可用")
@@ -59,7 +58,7 @@ class GeminiService():
         response = None
         if stream:
             response = self.client.models.generate_content_stream(
-                model="gemini-2.5-flash-lite", 
+                model=self.model_name, 
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,
@@ -72,7 +71,7 @@ class GeminiService():
             return response
         else:
             response = self.client.models.generate_content(
-                model="gemini-2.5-flash-lite", 
+                model=self.model_name, 
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,
@@ -106,11 +105,11 @@ class GeminiService():
         """
         if end_chat:
             self.in_multi_turn = False
-            self.chat = None
+            self.chat_object = None
             return None
 
         if not self.in_multi_turn:
-            self.chat = self.client.chats.create(
+            self.chat_object = self.client.chats.create(
                 model=self.model_name,
                 config=types.GenerateContentConfig(
                     temperature=0.2,
@@ -122,9 +121,37 @@ class GeminiService():
             )
             self.in_multi_turn = True
 
-        response = self.chat.send_message(prompt)
+        response = self.chat_object.send_message(prompt)
         if response:
             return response.text
         else:
             print("❌ 多輪請求失敗")
+            return None
+
+    def send_embedding_request(self, text: str, store: bool) -> Optional[List[float]]:
+        """
+        發送embedding請求到Gemini服務
+
+        Args:
+            text: 需要向量化的字串
+            store: 是否為存儲用途 True: 存儲, False: 搜索
+
+        Returns:
+            list: 向量化結果 (若失敗則返回None)
+        """
+        try:
+            response = self.client.models.embed_content(
+                model=self.model_name,
+                contents=text,
+                config=types.EmbedContentConfig(
+                    task_type="RETRIEVAL_DOCUMENT" if store else "RETRIEVAL_QUERY",
+                )
+            )
+            if response and len(response.embeddings) > 0:
+                return response.embeddings[0].values
+            else:
+                print(f"❌ 未獲取到embedding，響應數據: {response}")
+                return None
+        except Exception as e:
+            print(f"❌ 獲取embedding時出錯: {e}")
             return None

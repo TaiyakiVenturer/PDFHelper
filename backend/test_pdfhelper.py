@@ -1,13 +1,17 @@
 
-from api import PDFHelper, Config, MinerUConfig, TranslatorConfig, RAGConfig
+from api import PDFHelper, Config, MinerUConfig, TranslatorConfig, EmbeddingServiceConfig, RAGConfig
+import pprint as pp
 
 def test_pdf_helper():
     # 測試 PDFHelper 的初始化
     pdf_helper = PDFHelper(
         config=Config(
             mineru_config=MinerUConfig(verbose=False),
-            rag_config=RAGConfig(verbose=True),
             translator_config=TranslatorConfig(verbose=True),
+            rag_config=RAGConfig(
+                embedding_service_config=EmbeddingServiceConfig(verbose=True),
+                verbose=True
+            ),
         ), 
         verbose=True
     )
@@ -31,7 +35,7 @@ def test_pdf_helper():
     print("2. 測試問答功能")
     question = "請問這個論文是用哪一種深度學習強化演算法?"
     respond = pdf_helper.ask_question(question, document_name=collection_name, top_k=5)
-    print(respond)
+    pp.pprint(respond)
     for chunk in respond.data.get("answer"):
         print(chunk.text, end="", flush=True)
     print()
@@ -39,12 +43,12 @@ def test_pdf_helper():
     # 3. 重組MarkDown檔案
     print("3. 測試重組MarkDown檔案")
     respond = pdf_helper.reconstruct_markdown(collection_name, method="auto")
-    print(respond)
+    pp.pprint(respond)
 
     # 4. 獲取系統資訊
     print("4. 測試獲取系統資訊")
     respond = pdf_helper.get_system_health()
-    print(respond)
+    pp.pprint(respond)
 
 if __name__ == "__main__":
     test_pdf_helper()

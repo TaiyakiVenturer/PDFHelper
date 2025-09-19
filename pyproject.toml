@@ -5,20 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "torch==2.7.1+cu118",
-    "torchvision==0.22.1+cu118",
-    "torchaudio==2.7.1+cu118",
+    "torch>=2.7.1",
+    "torchvision>=0.22.1",
+    "torchaudio>=2.7.1",
     "google-genai>=1.32.0",
     "chromadb>=1.0.20",
     "python-dotenv>=1.1.1",
+    "mineru[core]>=2.5.2",
 ]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu118" }
-torchvision = { index = "pytorch-cu118" }
-torchaudio = { index = "pytorch-cu118" }
-
-[[tool.uv.index]]
-name = "pytorch-cu118"
-url = "https://download.pytorch.org/whl/cu118"
-explicit = true
+# PyTorch will be installed from PyPI (supports auto-detection)
+# Users can manually install CUDA version if needed:
+# uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118

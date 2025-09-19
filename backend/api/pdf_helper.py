@@ -6,8 +6,8 @@ import time
 import os
 from pathlib import Path
 from dataclasses import dataclass
-
 import pprint as pp
+import json
 
 from services.pdf_service import MinerUProcessor # 導入MinerU文件處理器
 from services.translation_service import OllamaTranslator, GeminiTranslator # 導入翻譯器
@@ -143,6 +143,9 @@ class PDFHelper:
         Returns:
             HelperResult: 包含處理結果的統一格式
         """
+        if self.verbose:
+            print(f"🔍 開始處理 PDF: {pdf_name}，方法: {method}, 語言: {lang}, 設備: {device}")
+
         mineru_results = self.pdf_processor.process_pdf_with_mineru(
             pdf_name, 
             method=method, 
@@ -152,7 +155,7 @@ class PDFHelper:
         if mineru_results["success"]:
             if self.verbose:
                 print(f"✅ PDF '{pdf_name}' 處理完成，輸出路徑: {mineru_results['output_path']}")
-                print(f"🔧 生成的檔案: {mineru_results['output_file_paths']}")
+                print(f"🔧 生成的檔案: {json.dumps(mineru_results['output_file_paths'], indent=2, ensure_ascii=False, sort_keys=True)}")
                 print(f"⏳ 處理時間: {mineru_results['processing_time']:.2f} 秒")
         else:
             print(f"❌ PDF '{pdf_name}' 處理失敗，錯誤訊息: {mineru_results['error']}")

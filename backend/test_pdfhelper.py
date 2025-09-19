@@ -25,8 +25,9 @@ def test_pdf_helper():
 
     # 1. 一次測試完整流程
     print("1. 測試完整流程")
+    respond = pdf_helper.process_pdf_to_json(test_document)
     # respond = pdf_helper.from_pdf_to_rag(test_document)
-    respond = pdf_helper.add_json_to_rag("doc_f6a48d55_translated.json")
+    # respond = pdf_helper.add_json_to_rag("doc_f6a48d55_translated.json")
     print(respond)
 
     # collection_name = respond.data.get("collection_name")

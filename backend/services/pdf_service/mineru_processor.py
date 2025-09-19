@@ -19,7 +19,7 @@ class MinerUProcessor:
         self.output_dir = os.path.join(instance_path, output_dirname)
         os.makedirs(self.output_dir, exist_ok=True)
 
-        self._verbose: bool = verbose
+        self.verbose: bool = verbose
 
     def process_pdf_with_mineru(
             self, 
@@ -112,15 +112,17 @@ class MinerUProcessor:
             "-d", device
         ]
         
-        print(f"執行命令: {' '.join(cmd)}")
-        print(f"輸出目錄: {output_path}")
+        if self.verbose:
+            print(f"執行命令: {' '.join(cmd)}")
+            print(f"輸出目錄: {output_path}")
         
         try:
             # 執行MinerU命令 - 即時顯示輸出
             start_time = time.time()
-            print(f"🚀 開始執行 MinerU...")
-            print("-" * 60)
-            
+            if self.verbose:
+                print(f"🚀 開始執行 MinerU...")
+                print("-" * 60)
+
             # 使用 Popen 來即時顯示輸出
             process = subprocess.Popen(
                 cmd,
@@ -135,7 +137,7 @@ class MinerUProcessor:
 
             # 收集所有輸出
             all_output = []
-            if self._verbose:
+            if self.verbose:
                 print(f"📋 MinerU 輸出:")
             
             while True:
@@ -144,7 +146,7 @@ class MinerUProcessor:
                     break
                 if output:
                     all_output.append(output.strip())
-                    if self._verbose:
+                    if self.verbose:
                         print(output.strip())  # 即時顯示
             
             # 等待進程完成
@@ -153,7 +155,7 @@ class MinerUProcessor:
             end_time = time.time()
             processing_time = end_time - start_time
             
-            if self._verbose:
+            if self.verbose:
                 print("-" * 60)
                 print(f"⏰ MinerU 執行結束，耗時: {processing_time:.2f}秒")
                 print(f"📋 返回代碼: {return_code}")
@@ -162,7 +164,7 @@ class MinerUProcessor:
             full_output = '\n'.join(all_output)
             
             if return_code == 0:
-                if self._verbose:
+                if self.verbose:
                     print(f"✅ MinerU處理成功！")
                     print(f"📁 輸出目錄: {output_path}")
                 
@@ -178,12 +180,12 @@ class MinerUProcessor:
                     # 清理臨時檔案
                     try:
                         os.remove(self._filename_mapping['short_pdf_path'])
-                        if self._verbose:
+                        if self.verbose:
                             print(f"🧹 清理臨時檔案: {self._filename_mapping['short_pdf_path']}")
                     except:
                         pass
 
-                    if self._verbose:
+                    if self.verbose:
                         print(f"📝 檔名映射: {self._filename_mapping['short']} → {self._filename_mapping['original']}")
                 else:
                     generated_files = self._find_generated_files(output_path, pdf_name, method=method)
@@ -193,7 +195,7 @@ class MinerUProcessor:
                     "output_path": str(output_path),  # 返回絕對路徑
                     "output_file_paths": generated_files,
                     "processing_time": processing_time,
-                    "stdout": full_output,
+                    "stdout": full_output if self.verbose else "未開啟詳細模式，無輸出",
                     "error": "",
                     "returncode": return_code
                 }
@@ -236,27 +238,27 @@ class MinerUProcessor:
             file_path = os.path.join(output_path, filename_without_ext, method)
             
             files_list = os.listdir(file_path)
-            if self._verbose:
+            if self.verbose:
                 print(f"📋 找到的檔案: {files_list}")
 
             for file in files_list:
                 full_path = os.path.join(file_path, file)
                 if file.endswith(".md"):
                     result_files["markdown"] = full_path
-                    if self._verbose:
+                    if self.verbose:
                         print(f"📄 找到 Markdown: {file}")
                 elif file.endswith("content_list.json"):
                     result_files["json"] = full_path
-                    if self._verbose:
+                    if self.verbose:
                         print(f"📄 找到 JSON: {file}")
                 elif os.path.isdir(full_path):
-                    if self._verbose:
+                    if self.verbose:
                         print(f"📁 檢查圖片目錄: {file}")
                     try:
                         image_files = [img for img in os.listdir(full_path) if img.endswith((".png", ".jpg", ".jpeg"))]
                         if image_files:
                             result_files["images"] = [os.path.join(full_path, img) for img in image_files]
-                            if self._verbose:
+                            if self.verbose:
                                 print(f"🖼️  找到 {len(image_files)} 張圖片")
                     except Exception as e:
                         print(f"⚠️  讀取圖片目錄失敗: {e}")

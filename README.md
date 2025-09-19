@@ -1,6 +1,15 @@
 # PDFHelper - 智能PDF處理與分析系統
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/TaiyakiVenturer/PDFHelper)
+[![Ask DeepWiki](https://deepwiki.com/badge.4. **驗證安裝**
+```bash
+uv run python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available__()}')"
+```
+
+### GPU 支援說明
+
+- **有 NVIDIA GPU**: 建議使用對應的 CUDA 版本以獲得最佳性能
+- **沒有 NVIDIA GPU**: 使用 CPU 版本，功能完全相同但速度較慢
+- **不確定**: 使用互動式腳本的自動檢測功能s://deepwiki.com/TaiyakiVenturer/PDFHelper)
 
 ## 📖 專案簡介
 
@@ -33,28 +42,55 @@ PDFHelper 是一個基於 AI 的智能 PDF 處理系統，提供 PDF 解析、�
 
 ### 環境需求
 - Python 3.10 或更高版本
-- Node.js 18 或更高版本
+- uv 包管理器
 - Git
 
 ### 安裝步驟
 
 1. **克隆專案**
 ```bash
-git clone https://github.com/TaiyakiVenturer/PDFHelper
+git clone https://github.com/TaiyakiVenturer/PDFHelper.git
 cd PDFHelper
 ```
 
-2. **後端設置**
+2. **安裝基礎依賴**
 ```bash
-# 創建虛擬環境
-python -m venv .venv
-
-# 啟動虛擬環境 (Windows)
-.venv\Scripts\activate
-
-# 安裝依賴
-pip install -r requirements.txt
+uv sync
 ```
+
+3. **配置 GPU 環境**
+
+**Windows 用戶（推薦）**：
+直接點擊 `setup_torch.bat` 檔案，會出現互動式選單：
+- 預設選擇自動檢測
+- 支援 CPU、CUDA 11.8、CUDA 12.6、CUDA 12.8 版本
+- 包含安裝驗證
+
+**手動配置**：
+```bash
+# CPU 版本
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# CUDA 11.8
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# CUDA 12.6
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+
+# CUDA 12.8
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+```
+
+4. **驗證安裝**
+```bash
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
+```
+
+### GPU 支援說明
+
+- **有 NVIDIA GPU**: 建議使用對應的 CUDA 版本以獲得最佳性能
+- **沒有 NVIDIA GPU**: 使用 CPU 版本，功能完全相同但速度較慢
+- **不確定**: 使用自動檢測模式，腳本會自動選擇合適的版本
 
 3. **前端設置**
 ```bash

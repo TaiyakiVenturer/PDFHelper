@@ -83,21 +83,6 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {
 - **沒有 NVIDIA GPU**: 使用 CPU 版本，功能完全相同但速度較慢
 - **不確定**: 使用自動檢測模式，腳本會自動選擇合適的版本
 
-3. **前端設置**
-```bash
-cd frontend
-npm install
-```
-
-4. **啟動服務**
-```bash
-# 後端 (在專案根目錄)
-python -m backend.api.pdf_helper
-
-# 前端 (在 frontend 目錄)
-npm run dev
-```
-
 ## 📄 授權資訊
 
 本專案採用 **GNU Affero General Public License v3.0 (AGPL-3.0)** 授權。

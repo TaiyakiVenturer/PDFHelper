@@ -1,15 +1,6 @@
 # PDFHelper - 智能PDF處理與分析系統
 
-[![Ask DeepWiki](https://deepwiki.com/badge.4. **驗證安裝**
-```bash
-uv run python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available__()}')"
-```
-
-### GPU 支援說明
-
-- **有 NVIDIA GPU**: 建議使用對應的 CUDA 版本以獲得最佳性能
-- **沒有 NVIDIA GPU**: 使用 CPU 版本，功能完全相同但速度較慢
-- **不確定**: 使用互動式腳本的自動檢測功能s://deepwiki.com/TaiyakiVenturer/PDFHelper)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/TaiyakiVenturer/PDFHelper)
 
 ## 📖 專案簡介
 

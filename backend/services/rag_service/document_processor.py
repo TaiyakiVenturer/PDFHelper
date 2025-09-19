@@ -74,7 +74,7 @@ class DocumentProcessor:
         self.max_chunk_size = max_chunk_size
         self.min_chunk_size = min_chunk_size
         self.merge_short_chunks = merge_short_chunks
-        
+
         self.verbose = verbose
 
         if self.verbose:

@@ -41,6 +41,11 @@ class PDFHelper:
         if self.verbose:
             print("🔧 初始化 PDFHelper API...")
 
+        if not os.path.exists(self.config.instance_path):
+            raise ValueError(f"❌ 指定的 instance_path 不存在: {self.config.instance_path}")
+        if self.verbose:
+            print(f"✅ instance_path 已確認: {self.config.instance_path}")
+
         self.pdf_processor = MinerUProcessor(
             instance_path=self.config.instance_path,
             output_dirname=self.config.mineru_config.output_dirname,
@@ -55,52 +60,54 @@ class PDFHelper:
                 model_name=self.config.translator_config.model_name,
                 verbose=self.config.translator_config.verbose
             )
-        else:
+        elif self.config.translator_config.llm_service == "gemini":
             self.translator = GeminiTranslator(
                 instance_path=self.config.instance_path,
                 model_name=self.config.translator_config.model_name,
                 api_key=self.config.translator_config.api_key,
                 verbose=self.config.translator_config.verbose
             )
+        else:
+            raise ValueError(f"不支援的翻譯服務: {self.config.translator_config.llm_service}")
         if self.verbose:
             print("✅ 翻譯器初始化完成")
 
         document_processor = DocumentProcessor(
             instance_path=self.config.instance_path,
-            min_chunk_size=self.config.rag_config.document_processor_config.min_chunk_size,
-            max_chunk_size=self.config.rag_config.document_processor_config.max_chunk_size,
-            merge_short_chunks=self.config.rag_config.document_processor_config.merge_short_chunks,
-            verbose=self.config.rag_config.document_processor_config.verbose
+            min_chunk_size=self.config.document_processor_config.min_chunk_size,
+            max_chunk_size=self.config.document_processor_config.max_chunk_size,
+            merge_short_chunks=self.config.document_processor_config.merge_short_chunks,
+            verbose=self.config.document_processor_config.verbose
         )
         if self.verbose:
             print("✅ 文件處理器初始化完成")
 
         embedding_service = EmbeddingService(
-            llm_service=self.config.rag_config.llm_service,
-            model_name=self.config.rag_config.embedding_service_config.model_name,
-            api_key=self.config.rag_config.embedding_service_config.api_key,
-            max_retries=self.config.rag_config.embedding_service_config.max_retries,
-            retry_delay=self.config.rag_config.embedding_service_config.retry_delay,
-            verbose=self.config.rag_config.embedding_service_config.verbose
+            llm_service=self.config.embedding_service_config.llm_service,
+            model_name=self.config.embedding_service_config.model_name,
+            api_key=self.config.embedding_service_config.api_key,
+            max_retries=self.config.embedding_service_config.max_retries,
+            retry_delay=self.config.embedding_service_config.retry_delay,
+            verbose=self.config.embedding_service_config.verbose
         )
         if self.verbose:
             print("✅ Embedding服務初始化完成")
 
         vector_store = ChromaVectorStore(
             instance_path=self.config.instance_path,
-            persist_directory_name=self.config.rag_config.chromadb_config.persist_directory_name,
-            collection_cache_size=self.config.rag_config.chromadb_config.collection_cache_size,
-            verbose=self.config.rag_config.chromadb_config.verbose
+            persist_directory_name=self.config.chromadb_config.persist_directory_name,
+            collection_cache_size=self.config.chromadb_config.collection_cache_size,
+            verbose=self.config.chromadb_config.verbose
         )
         if self.verbose:
             print("✅ 向量資料庫初始化完成")
 
         self.rag_engine = RAGEngine(
-            llm_service=self.config.rag_config.llm_service,
-            model_name=self.config.rag_config.model_name,
             document_processor_obj=document_processor,
             embedding_service_obj=embedding_service,
             chromadb_obj=vector_store,
+            llm_service=self.config.rag_config.llm_service,
+            model_name=self.config.rag_config.model_name,
             verbose=self.config.rag_config.verbose
         )
         if self.verbose:

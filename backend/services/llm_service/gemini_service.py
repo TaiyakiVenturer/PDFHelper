@@ -148,10 +148,12 @@ class GeminiService():
                 )
             )
             if response and len(response.embeddings) > 0:
+                if self.verbose:
+                    print(f"✅ Gemini獲取embedding成功")
                 return response.embeddings[0].values
             else:
-                print(f"❌ 未獲取到embedding，響應數據: {response}")
+                print(f"❌ Gemini未獲取到embedding，響應數據: {response}")
                 return None
         except Exception as e:
-            print(f"❌ 獲取embedding時出錯: {e}")
+            print(f"❌ Gemini獲取embedding時出錯: {e}")
             return None

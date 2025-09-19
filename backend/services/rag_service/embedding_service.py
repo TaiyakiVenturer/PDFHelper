@@ -47,6 +47,7 @@ class EmbeddingService:
             )
         else:
             raise ValueError(f"不支援的llm_service: {llm_service}")
+        self.model_name = self.embedding_service.model_name
         
         if not self.is_available():
             raise ValueError(f"Ollama服務不可用，請確保Ollama正在運行且已安裝{model_name}模型")
@@ -112,7 +113,7 @@ class EmbeddingService:
         Returns:
             List[Optional[List[float]]]: 向量化結果列表
         """
-        buffer_time = 0.7 if self.llm_service == "gemini" else 0
+        buffer_time = 1 if self.llm_service == "gemini" else 0
 
         embeddings = []
         error_counter = 0

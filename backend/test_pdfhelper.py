@@ -8,10 +8,11 @@ def test_pdf_helper():
         config=Config(
             mineru_config=MinerUConfig(verbose=False),
             translator_config=TranslatorConfig(verbose=True),
-            rag_config=RAGConfig(
-                embedding_service_config=EmbeddingServiceConfig(verbose=True),
+            embedding_service_config=EmbeddingServiceConfig(
+                llm_service="ollama",
                 verbose=True
             ),
+            rag_config=RAGConfig(verbose=True),
         ), 
         verbose=True
     )

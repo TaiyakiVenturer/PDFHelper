@@ -106,7 +106,7 @@ class ChromaDBConfig:
         verbose (bool): 是否啟用詳細日誌
     """
     persist_directory_name: str = "chroma_db"
-    collection_name: str = "default_collection"
+    collection_name: str = None
     collection_cache_size: int = 3 # 預設快取3個集合
     verbose: bool = False
 
@@ -120,16 +120,10 @@ class RAGConfig:
         model_name (str): 回答使用的模型名稱 (如未設定，則依服務自動選擇，可能選擇失敗)
             - Ollama 預設為 "yi-chat" (為自訂模型，須依使用者修改使用模型名稱)
             - Gemini 預設為 "gemini-2.5-flash-lite"
-        document_processor_config (DocumentProcessorConfig): 文件處理器設定
-        embedding_service_config (EmbeddingServiceConfig): Embedding服務設定
-        chromadb_config (ChromaDBConfig): ChromaDB設定
         verbose (bool): 是否啟用詳細日誌
     """
     llm_service: Literal["ollama", "gemini"] = "gemini"
     model_name: str = None
-    document_processor_config: DocumentProcessorConfig = DocumentProcessorConfig()
-    embedding_service_config: EmbeddingServiceConfig = EmbeddingServiceConfig()
-    chromadb_config: ChromaDBConfig = ChromaDBConfig()
     verbose: bool = False
 
     def __post_init__(self):
@@ -163,6 +157,9 @@ class Config:
             instance_path (str): 所有文件的統一儲存路徑 (預設為 "../instance")
             mineru_config (MinerUConfig): MinerU文件處理器設定 (可選)
             translator_config (TranslatorConfig): 翻譯器設定 (可選)
+            document_processor_config (DocumentProcessorConfig): 文件處理器設定 (可選)
+            embedding_service_config (EmbeddingServiceConfig): Embedding服務設定 (可選)
+            chromadb_config (ChromaDBConfig): ChromaDB設定 (可選)
             rag_config (RAGConfig): RAG引擎設定 (可選)
         """
         # 所有文件統一的儲存路徑
@@ -172,11 +169,13 @@ class Config:
 
         self.translator_config: TranslatorConfig = translator_config or TranslatorConfig()
 
-        self.rag_config: RAGConfig = rag_config or RAGConfig(
-            document_processor_config=document_processor_config or DocumentProcessorConfig(),
-            embedding_service_config=embedding_service_config or EmbeddingServiceConfig(),
-            chromadb_config=chromadb_config or ChromaDBConfig(),
-        )
+        self.document_processor_config: DocumentProcessorConfig = document_processor_config or DocumentProcessorConfig()
+
+        self.embedding_service_config: EmbeddingServiceConfig = embedding_service_config or EmbeddingServiceConfig()
+
+        self.chromadb_config: ChromaDBConfig = chromadb_config or ChromaDBConfig()
+
+        self.rag_config: RAGConfig = rag_config or RAGConfig()
     
     def __repr__(self):
         info = f"Config(instance_path={self.instance_path})\n"

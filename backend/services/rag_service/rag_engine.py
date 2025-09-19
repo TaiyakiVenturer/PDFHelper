@@ -52,24 +52,24 @@ class RAGEngine:
     """RAG查詢增強生成引擎"""
     
     def __init__(self, 
+            document_processor_obj: DocumentProcessor,
+            embedding_service_obj: EmbeddingService,
+            chromadb_obj: ChromaVectorStore,
             llm_service: Literal['ollama', 'gemini'],
             model_name: str = None,
-            document_processor_obj: DocumentProcessor = None,
-            embedding_service_obj: EmbeddingService = None,
-            chromadb_obj: ChromaVectorStore = None,
             verbose: bool = False,
         ):
         """
         初始化RAG引擎
         
         Args:
+            document_processor_obj: 文件處理器物件
+            embedding_service_obj: Embedding服務物件
+            chromadb_obj: ChromaDB向量資料庫物件
             llm_service: 使用的LLM服務 (ollama/gemini)
             model_name: LLM服務模型名稱 (如未提供則使用預設模型)
                 - Ollama 預設為 "yi-chat" (為自訂模型，須依使用者修改使用模型名稱)
                 - Gemini 預設為 "gemini-2.5-flash-lite"
-            document_processor_obj: 文件處理器物件
-            embedding_service_obj: Embedding服務物件
-            chromadb_obj: ChromaDB向量資料庫物件
             verbose: 是否輸出詳細日誌
         """
         self.verbose = verbose
@@ -104,7 +104,7 @@ class RAGEngine:
             if not self.llm_service.is_available():
                 raise ValueError("⚠️ Gemini服務不可用，請檢查設定")
         else:
-            print("⚠️ 未設定LLM服務，將無法生成答案")
+            raise ValueError(f"不支援的LLM服務: {llm_service}")
 
         if self.verbose:
             print("✅ RAG引擎初始化完成")
@@ -135,7 +135,7 @@ class RAGEngine:
             if len(chunks) == 0:
                 print("未生成任何內容片段")
                 return False
-            
+
             # 檢查embedding服務可用性
             if not self.embedding_service.is_available():
                 print("Embedding服務不可用")

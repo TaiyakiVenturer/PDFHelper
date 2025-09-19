@@ -1,5 +1,5 @@
 import requests
-from typing import Optional, Literal, Generator, List
+from typing import Optional, Generator, List
 import os
 import subprocess
 from dataclasses import dataclass
@@ -222,10 +222,6 @@ class OllamaService():
         Returns:
             List[float]: 向量化結果 (出現錯誤則返回 None)
         """
-        if not self.is_embedding:
-            print("❌ 當前模型不支援embedding功能")
-            return None
-
         try:
             response = self.session.post(
                 f"{self.ollama_host}/api/embeddings",
@@ -242,21 +238,19 @@ class OllamaService():
                 embedding = result.get('embedding')
                 if embedding:
                     if self.verbose:
-                        print(f"✅ 獲取embedding成功")
+                        print(f"✅ Ollama獲取embedding成功")
                     return embedding
                 else:
-                    print(f"❌ 未獲取到embedding，響應數據: {result}")
+                    print(f"❌ Ollama未獲取到embedding，響應數據: {result}")
                     return None
-            elif response.status_code == 429:
-                print("❌ 請求過於頻繁")
             else:
-                print(f"❌ 請求錯誤: {response.status_code} - {response.text}")
+                print(f"❌ Ollama請求錯誤: {response.status_code} - {response.text}")
         
         except requests.exceptions.Timeout:
-            print("❌ 請求超時")
+            print("❌ Ollama請求超時")
         except requests.exceptions.RequestException as e:
-            print(f"❌ 請求錯誤: {e}")
+            print(f"❌ Ollama請求錯誤: {e}")
         except Exception as e:
-            print(f"❌ 未知錯誤: {e}")
+            print(f"❌ Ollama未知錯誤: {e}")
 
         return None

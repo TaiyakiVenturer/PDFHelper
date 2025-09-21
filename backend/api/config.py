@@ -2,8 +2,9 @@
 PDFHelper Config 模塊 - 統一管理PDFHelper的設定選項。
 """
 import os
-from typing import Literal
+from typing import Literal, List
 from dataclasses import dataclass
+import json
 
 @dataclass
 class MinerUConfig:
@@ -137,6 +138,17 @@ class RAGConfig:
         if self.llm_service == "gemini" and self.model_name is None:
             self.model_name = "gemini-2.5-flash-lite"
 
+@dataclass
+class MarkdownReconstructorConfig:
+    """
+    Markdown重組器設定
+
+    Args:
+        instance_path (str): 實例路徑
+        verbose (bool): 是否啟用詳細日誌
+    """
+    verbose: bool = False
+
 class Config:
     """
     設定管理 - 提供所有設定選項的統一接口。
@@ -149,6 +161,7 @@ class Config:
             embedding_service_config: EmbeddingServiceConfig = None,
             chromadb_config: ChromaDBConfig = None,
             rag_config: RAGConfig = None,
+            markdown_reconstructor_config: MarkdownReconstructorConfig = None,
         ):
         """
         初始化配置管理
@@ -176,10 +189,18 @@ class Config:
         self.chromadb_config: ChromaDBConfig = chromadb_config or ChromaDBConfig()
 
         self.rag_config: RAGConfig = rag_config or RAGConfig()
-    
-    def __repr__(self):
-        info = f"Config(instance_path={self.instance_path})\n"
-        info += f"{self.mineru_config}\n"
-        info += f"{self.translator_config}\n"
-        info += f"{self.rag_config}\n"
+
+        self.markdown_reconstructor_config: MarkdownReconstructorConfig = markdown_reconstructor_config or MarkdownReconstructorConfig()
+
+    def __repr__(self) -> List[str]:
+        info = [
+            f"Instance Path: {self.instance_path}",
+            f"MinerU Config: {json.dumps(self.mineru_config.__dict__, indent=4)}",
+            f"Translator Config: {json.dumps(self.translator_config.__dict__, indent=4)}",
+            f"Document Processor Config: {json.dumps(self.document_processor_config.__dict__, indent=4)}",
+            f"Embedding Service Config: {json.dumps(self.embedding_service_config.__dict__, indent=4)}",
+            f"ChromaDB Config: {json.dumps(self.chromadb_config.__dict__, indent=4)}",
+            f"RAG Config: {json.dumps(self.rag_config.__dict__, indent=4)}",
+            f"Markdown Reconstructor Config: {json.dumps(self.markdown_reconstructor_config.__dict__, indent=4)}"
+        ]
         return info

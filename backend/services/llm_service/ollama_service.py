@@ -5,6 +5,9 @@ import subprocess
 from dataclasses import dataclass
 import json
 
+import logging
+logger = logging.getLogger(__name__)
+
 @dataclass
 class OllamaStreamResponse:
     """
@@ -30,19 +33,20 @@ class OllamaService():
         
         Args:
             model_name: 使用的模型名稱
-            model_uses: 模型用途 (chat, translate, embedding)
             verbose: 是否顯示詳細日誌
         """
         self.model_name = model_name
 
-        # self.ollama_host = f"http://localhost:{ollama_port[model_uses]}"
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.session = requests.Session()
 
         self.verbose = verbose
 
-        self.in_multi_turn = False  # 是否處於多輪對話中
-        self.chat = None
+        self._in_multi_turn = False  # 是否處於多輪對話中
+        self._chat = None
+
+        if self.verbose:
+            logger.info("Ollama服務初始化完成")
 
     def is_available(self) -> bool:
         """檢查Ollama服務是否可用"""
@@ -51,16 +55,22 @@ class OllamaService():
             # if not self._create_service(background=False):
             #     return False
 
-            response = self.session.get(f"{self.ollama_host}/api/tags")
+            response = self.session.get(f"{self.ollama_host}/api/tags", timeout=5)
             if response.status_code == 200:
                 if self.verbose:
-                    print("✅ Ollama服務可用")
+                    logger.info("Ollama服務可用")
                 return True
             else:
-                print(f"❌ Ollama服務不可用: {response.status_code} - {response.text}")
+                logger.error(f"Ollama服務不可用: {response.status_code} - {response.text}")
                 return False
+        except requests.exceptions.Timeout:
+            logger.error("Ollama服務檢查超時")
+            return False
+        except requests.exceptions.ConnectionError:
+            logger.error("無法連接到Ollama服務")
+            return False
         except Exception as e:
-            print(f"❌ 檢查Ollama服務可用性時出錯: {e}")
+            logger.error(f"檢查Ollama服務可用性時出錯: {e}")
             return False
     
     def _create_service(self, background: bool = True) -> bool:
@@ -125,7 +135,7 @@ class OllamaService():
                             yield OllamaStreamResponse(text=chunk, done=False)
                 yield OllamaStreamResponse(text="", done=True)  # 流結束標
             except Exception as e:
-                print(f"❌ 處理流式回應時出錯: {e}")
+                logger.error(f"處理流式回應時出錯: {e}")
                 yield None
         return generate()
 
@@ -140,6 +150,13 @@ class OllamaService():
         Returns:
             (str | Generator[OllamaStreamResponse, None, None]): 模型回覆的文本，若使用流式回應則返回生成器 (若失敗則返回None)
         """
+        if not self.is_available():
+            logger.warning("Ollama服務不可用，無法發送請求")
+            return None
+        else:
+            if self.verbose:
+                logger.info(f"發送請求到Ollama服務，模型: {self.model_name}, 流式: {stream}")
+
         # 發送請求
         try:
             response = self.session.post(
@@ -156,7 +173,7 @@ class OllamaService():
                 if response.status_code == 200:
                     return self._handle_stream_response(response)
                 else:
-                    print(f"❌ 流式回應錯誤: {response.status_code} - {response.text}")
+                    logger.error(f"流式回應錯誤: {response.status_code} - {response.text}")
                     return None
 
             if response.status_code == 200:
@@ -164,22 +181,22 @@ class OllamaService():
                 respond_text = result.get("response", "").strip()
                 if respond_text:
                     if self.verbose:
-                        print("✅ 獲取回覆成功")
+                        logger.info("獲取回覆成功")
                     return respond_text
                 else:
-                    print(f"❌ 未獲取到回覆，響應數據: {result}")
+                    logger.error(f"未獲取到回覆，響應數據: {result}")
                     return None
             elif response.status_code == 429:
-                print("❌ 請求過於頻繁")
+                logger.warning("請求過於頻繁")
             else:
-                print(f"❌ 請求錯誤: {response.status_code} - {response.text}")
+                logger.error(f"請求錯誤: {response.status_code} - {response.text}")
 
         except requests.exceptions.Timeout:
-            print("❌ 請求超時")
+            logger.error("請求超時")
         except requests.exceptions.RequestException as e:
-            print(f"❌ 請求錯誤: {e}")
+            logger.error(f"請求錯誤: {e}")
         except Exception as e:
-            print(f"❌ 未知錯誤: {e}")
+            logger.error(f"未知錯誤: {e}")
 
         return None
 
@@ -194,19 +211,30 @@ class OllamaService():
         Returns:
             str: 模型回覆的文本 (若失敗則返回None)
         """
+        if not self.is_available():
+            logger.warning("Ollama服務不可用，無法發送請求")
+            return None
+        else:
+            if self.verbose:
+                logger.info(f"發送請求到Ollama服務，模型: {self.model_name}, 流式: {True}")
+        
         if end_chat:
-            self.in_multi_turn = False
-            self.chat = None
+            if self.verbose:
+                logger.info("結束多輪對話")
+            self._in_multi_turn = False
+            self._chat = None
             return None
 
-        if not self.in_multi_turn:
-            self.chat = []
-            self.in_multi_turn = True
+        if not self._in_multi_turn:
+            self._chat = []
+            self._in_multi_turn = True
+            if self.verbose:
+                logger.info("開始多輪對話")
 
-        self.chat.append({"role": "user", "content": prompt})
+        self._chat.append({"role": "user", "content": prompt})
         response = self.send_single_request(prompt)
         if response is not None:
-            self.chat.append({"role": "assistant", "content": response})
+            self._chat.append({"role": "assistant", "content": response})
             return response
         else:
             return None
@@ -238,19 +266,19 @@ class OllamaService():
                 embedding = result.get('embedding')
                 if embedding:
                     if self.verbose:
-                        print(f"✅ Ollama獲取embedding成功")
+                        logger.info("Ollama獲取embedding成功")
                     return embedding
                 else:
-                    print(f"❌ Ollama未獲取到embedding，響應數據: {result}")
+                    logger.error(f"Ollama未獲取到embedding，響應數據: {result}")
                     return None
             else:
-                print(f"❌ Ollama請求錯誤: {response.status_code} - {response.text}")
-        
+                logger.error(f"Ollama請求錯誤: {response.status_code} - {response.text}")
+
         except requests.exceptions.Timeout:
-            print("❌ Ollama請求超時")
+            logger.error("Ollama請求超時")
         except requests.exceptions.RequestException as e:
-            print(f"❌ Ollama請求錯誤: {e}")
+            logger.error(f"Ollama請求錯誤: {e}")
         except Exception as e:
-            print(f"❌ Ollama未知錯誤: {e}")
+            logger.error(f"Ollama未知錯誤: {e}")
 
         return None

@@ -11,6 +11,8 @@ from chromadb.config import Settings
 from .document_processor import DocumentChunk
 from .embedding_service import EmbeddingService
 
+import logging
+logger = logging.getLogger(__name__)
 
 class ChromaVectorStore:
     """基於ChromaDB的向量儲存服務"""
@@ -47,6 +49,9 @@ class ChromaVectorStore:
             settings=Settings(anonymized_telemetry=False)
         )
 
+        if self.verbose:
+            logger.info(f"ChromaDB向量儲存服務初始化完成，持久化目錄: {self.persist_directory}")
+
     def get_create_collection(self, collection_name: str, 
         distance_metric: Literal['cosine', 'l2', 'ip'], load_into_cache: bool = True
     ) -> Optional[chromadb.Collection]:
@@ -71,7 +76,7 @@ class ChromaVectorStore:
         try:    # 嘗試獲取現有集合
             collection = self.client.get_collection(name=collection_name)
             if self.verbose:
-                print(f"獲取現有集合: {collection_name}")
+                logger.info(f"獲取現有集合: {collection_name}")
 
             if not load_into_cache:
                 return collection
@@ -82,19 +87,19 @@ class ChromaVectorStore:
                     metadata={"hnsw:space": distance_metric}
                 )
                 if self.verbose:
-                    print(f"創建新集合: {collection_name}")
+                    logger.info(f"創建新集合: {collection_name}")
                 
                 if not load_into_cache:
                     return collection
             except Exception as e:
-                print(f"創建集合時出錯: {e}")
+                logger.error(f"創建集合時出錯: {e}")
                 return None
 
         if len(self.collection_cache) + 1 > self.collection_cache_size:
             # 超過緩存上限，刪除最舊的集合
             name = next(iter(self.collection_cache))
             del self.collection_cache[name]
-            print(f"刪除緩存集合: {name}")
+            logger.info(f"刪除緩存集合: {name}")
 
         self.collection_cache[collection_name] = collection
         return collection
@@ -112,13 +117,13 @@ class ChromaVectorStore:
             是否成功
         """
         if len(chunks) == 0 or len(embeddings) == 0 or len(chunks) != len(embeddings):
-            print("片段列表或embedding列表無效或長度不匹配，操作終止")
+            logger.error("片段列表或embedding列表無效或長度不匹配，操作終止")
             return False
 
         if self.verbose:
-            print(f"準備新增 {len(chunks)} 個片段到向量資料庫")
-            print(f"第一個片段內容預覽: {chunks[0].content[:100]}...")
-            print(f"Embedding維度: {len(embeddings[0]) if embeddings else 0}")
+            logger.info(f"準備新增 {len(chunks)} 個片段到向量資料庫")
+            logger.info(f"第一個片段內容預覽: {chunks[0].content[:100]}...")
+            logger.info(f"Embedding維度: {len(embeddings[0]) if embeddings else 0}")
 
         # 獲取集合
         collection_name = collection_name or chunks[0].document_name
@@ -127,7 +132,7 @@ class ChromaVectorStore:
             distance_metric="cosine"            # 適合文本相似度
         )
         if collection is None:
-            print("無法獲取或創建集合，操作終止")
+            logger.error("無法獲取或創建集合，操作終止")
             return False
 
         try:
@@ -139,11 +144,11 @@ class ChromaVectorStore:
             filtered_embeddings = [embed for chunk, embed in zip(chunks, embeddings) if chunk.chunk_id not in existing_ids]
 
             if len(filtered_chunks) == 0:
-                print("所有片段均已存在於資料庫中，無需新增")
+                logger.info("所有片段均已存在於資料庫中，無需新增")
                 return True
 
             if self.verbose and len(filtered_chunks) > 0:
-                print(f"   ✅ 濾除重複的片段，剩餘 {len(filtered_chunks)} 筆資料將被新增至資料庫")
+                logger.info(f"濾除重複的片段，剩餘 {len(filtered_chunks)} 筆資料將被新增至資料庫")
 
             # 準備數據
             contents = [chunk.content for chunk in filtered_chunks] # 文本內容
@@ -165,11 +170,11 @@ class ChromaVectorStore:
                 metadatas=metadatas
             )
 
-            print(f"成功新增 {len(filtered_chunks)} 個內容片段到向量資料庫")
+            logger.info(f"成功新增 {len(filtered_chunks)} 個內容片段到向量資料庫")
             return True
             
         except Exception as e:
-            print(f"新增內容片段時出錯: {e}")
+            logger.error(f"新增內容片段時出錯: {e}")
             return False
 
     def search(self, collection_name: str, searching_embedding: List[float], n_results: int = 10, 
@@ -203,7 +208,7 @@ class ChromaVectorStore:
                 distance_metric="cosine"
             )
             if collection is None:
-                print("無法獲取集合，操作終止")
+                logger.error("無法獲取集合，操作終止")
                 return None
             
             # 執行查詢
@@ -214,14 +219,14 @@ class ChromaVectorStore:
                 include=include_list
             )
             if len(results['ids'][0]) == 0:
-                print("資料庫內查無關於此內容的資料")
+                logger.warning("資料庫內查無關於此內容的資料")
                 return None
 
-            print(f"✅ ChromaDB查詢完成，返回 {len(results['ids'][0])} 個結果")
+            logger.info(f"ChromaDB查詢完成，返回 {len(results['ids'][0])} 個結果")
             return results
             
         except Exception as e:
-            print(f"查詢時出錯: {e}")
+            logger.error(f"查詢時出錯: {e}")
             return None
 
     def search_by_text(self, document_name: str, searching_text: str, n_results: int = 10, 
@@ -245,7 +250,7 @@ class ChromaVectorStore:
         searching_embedding = embedding_service.get_embedding(searching_text)
         
         if searching_embedding is None:
-            print("輸入文本無法生成有效的embedding，操作終止")
+            logger.error("輸入文本無法生成有效的embedding，操作終止")
             return None
 
         return self.search(document_name, searching_embedding, n_results, filter_dict, include_distances)
@@ -271,7 +276,7 @@ class ChromaVectorStore:
             load_into_cache=False
         )
         if collection is None:
-            print("無法獲取集合，操作終止")
+            logger.error("無法獲取集合，操作終止")
             return None
 
         try:
@@ -282,7 +287,7 @@ class ChromaVectorStore:
                 "persist_directory": str(self.persist_directory)
             }
         except Exception as e:
-            print(f"獲取集合資訊時出錯: {e}")
+            logger.error(f"獲取集合資訊時出錯: {e}")
             return None
 
     def delete_collection(self, document_name: str) -> bool:
@@ -304,10 +309,10 @@ class ChromaVectorStore:
                 collection = self.client.get_collection(name="SiLU_translated.json")
                 raise ValueError(f"集合 {collection.name} 仍然存在")  # 這不應該出現
             except:
-                print(f"集合 {document_name} 已成功刪除")  # 這是正常的
+                logger.info(f"集合 {document_name} 已成功刪除")  # 這是正常的
             return True
         except Exception as e:
-            print(f"刪除集合時出錯: {e}")
+            logger.error(f"刪除集合時出錯: {e}")
             return False
 
     def update_chunk(self, update_id: str, new_embedding: List[float], 
@@ -335,18 +340,18 @@ class ChromaVectorStore:
             distance_metric="cosine"
         )
         if collection is None:
-            print("無法獲取集合，操作終止")
+            logger.error("無法獲取集合，操作終止")
             return False
         
         if new_embedding is None:
-            print("新的embedding無效，操作終止")
+            logger.error("新的embedding無效，操作終止")
             return False
 
         if new_page_num is None or new_chunk_index is None:
             # 嘗試從現有數據中獲取
             existing = collection.get(ids=[update_id], include=["metadatas"])
             if not existing['ids'] or not existing['metadatas']:
-                print("無法獲取請求片段的核心數據，請提供新的頁碼和片段索引")
+                logger.warning("無法獲取請求片段的核心數據，請提供新的頁碼和片段索引")
                 return False
             
             metadata = existing['metadatas'][0]
@@ -368,11 +373,11 @@ class ChromaVectorStore:
                     }
                 ]
             )
-            print(f"成功更新片段 {update_id}")
+            logger.info(f"成功更新片段 {update_id}")
             return True
                 
         except Exception as e:
-            print(f"更新片段時出錯: {e}")
+            logger.error(f"更新片段時出錯: {e}")
             return False
 
     def export_collection(self, document_name: str, output_file: str) -> bool:
@@ -393,7 +398,7 @@ class ChromaVectorStore:
             load_into_cache=False
         )
         if collection is None:
-            print("無法獲取集合，操作終止")
+            logger.error("無法獲取集合，操作終止")
             return False
 
         try:
@@ -415,10 +420,10 @@ class ChromaVectorStore:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
 
-            print(f"集合資料已導出到 {output_path}")
+            logger.info(f"集合資料已導出到 {output_path}")
             return True
         except Exception as e:
-            print(f"導出集合資料時出錯: {e}")
+            logger.error(f"導出集合資料時出錯: {e}")
             return False
 
     def import_collection(self, input_file_name: str) -> bool:
@@ -433,7 +438,7 @@ class ChromaVectorStore:
         """
         input_path = os.path.join(self.persist_directory, input_file_name)
         if not os.path.isfile(input_path):
-            print(f"輸入文件不存在: {input_path}")
+            logger.error(f"輸入文件不存在: {input_path}")
             return False
 
         try:
@@ -445,7 +450,7 @@ class ChromaVectorStore:
             data = import_data.get("data")
             
             if not collection_name or not data:
-                print("輸入文件格式不正確，缺少必要字段")
+                logger.error("輸入文件格式不正確，缺少必要字段")
                 return False
             
             # 獲取或創建集合
@@ -454,7 +459,7 @@ class ChromaVectorStore:
                 distance_metric=distance_metric
             )
             if collection is None:
-                print("無法獲取或創建集合，操作終止")
+                logger.error("無法獲取或創建集合，操作終止")
                 return False
             
             # 新增數據到集合
@@ -465,8 +470,8 @@ class ChromaVectorStore:
                 metadatas=data.get("metadatas", [])
             )
 
-            print(f"集合數據已從 {input_path} 導入到 {collection_name}")
+            logger.info(f"集合數據已從 {input_path} 導入到 {collection_name}")
             return True
         except Exception as e:
-            print(f"導入集合數據時出錯: {e}")
+            logger.error(f"導入集合數據時出錯: {e}")
             return False

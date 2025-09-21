@@ -3,6 +3,9 @@ import subprocess
 from typing import Dict, Any, Literal
 import time
 
+import logging
+logger = logging.getLogger(__name__)
+
 class MinerUProcessor:
     """MinerU PDF處理器"""
 
@@ -20,6 +23,11 @@ class MinerUProcessor:
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.verbose: bool = verbose
+
+        if self.verbose:
+            logger.info("MinerU處理器初始化完成")
+            logger.info(f"PDF預設讀取路徑: {self.default_path}")
+            logger.info(f"輸出目錄: {self.output_dir}")
 
     def process_pdf_with_mineru(
             self, 
@@ -72,10 +80,10 @@ class MinerUProcessor:
             short_filename = f"doc_{hash_part}"
             short_pdf_name = f"{short_filename}.pdf"
             
-            print(f"⚠️  路徑過長，創建短檔名副本:")
-            print(f"   原檔名: {original_filename}")
-            print(f"   短檔名: {short_filename}")
-            
+            logger.warning(f"路徑過長，創建短檔名副本:")
+            logger.warning(f"原檔名: {original_filename}")
+            logger.warning(f"短檔名: {short_filename}")
+
             # 創建短檔名的 PDF 副本
             import shutil
             short_pdf_path = os.path.join(self.default_path, short_pdf_name)
@@ -113,15 +121,15 @@ class MinerUProcessor:
         ]
         
         if self.verbose:
-            print(f"執行命令: {' '.join(cmd)}")
-            print(f"輸出目錄: {output_path}")
-        
+            logger.info(f"執行命令: {' '.join(cmd)}")
+            logger.info(f"輸出目錄: {output_path}")
+
         try:
             # 執行MinerU命令 - 即時顯示輸出
             start_time = time.time()
             if self.verbose:
-                print(f"🚀 開始執行 MinerU...")
-                print("-" * 60)
+                logger.info(f"開始執行 MinerU...")
+                logger.info("-" * 60)
 
             # 使用 Popen 來即時顯示輸出
             process = subprocess.Popen(
@@ -138,7 +146,7 @@ class MinerUProcessor:
             # 收集所有輸出
             all_output = []
             if self.verbose:
-                print(f"📋 MinerU 輸出:")
+                logger.info(f"MinerU 輸出:")
             
             while True:
                 output = process.stdout.readline()
@@ -147,7 +155,7 @@ class MinerUProcessor:
                 if output:
                     all_output.append(output.strip())
                     if self.verbose:
-                        print(output.strip())  # 即時顯示
+                        logger.info(output.strip())  # 即時顯示
             
             # 等待進程完成
             return_code = process.poll()
@@ -156,18 +164,18 @@ class MinerUProcessor:
             processing_time = end_time - start_time
             
             if self.verbose:
-                print("-" * 60)
-                print(f"⏰ MinerU 執行結束，耗時: {processing_time:.2f}秒")
-                print(f"📋 返回代碼: {return_code}")
-            
+                logger.info("-" * 60)
+                logger.info(f"MinerU 執行結束，耗時: {processing_time:.2f}秒")
+                logger.info(f"返回代碼: {return_code}")
+
             # 將所有輸出合併成字符串
             full_output = '\n'.join(all_output)
             
             if return_code == 0:
                 if self.verbose:
-                    print(f"✅ MinerU處理成功！")
-                    print(f"📁 輸出目錄: {output_path}")
-                
+                    logger.info(f"MinerU處理成功！")
+                    logger.info(f"輸出目錄: {output_path}")
+
                 # 查找生成的文件
                 if self._filename_mapping and hasattr(self, '_filename_mapping'):
                     # 使用短檔名查找文件
@@ -181,12 +189,12 @@ class MinerUProcessor:
                     try:
                         os.remove(self._filename_mapping['short_pdf_path'])
                         if self.verbose:
-                            print(f"🧹 清理臨時檔案: {self._filename_mapping['short_pdf_path']}")
+                            logger.info(f"清理臨時檔案: {self._filename_mapping['short_pdf_path']}")
                     except:
                         pass
 
                     if self.verbose:
-                        print(f"📝 檔名映射: {self._filename_mapping['short']} → {self._filename_mapping['original']}")
+                        logger.info(f"檔名映射: {self._filename_mapping['short']} → {self._filename_mapping['original']}")
                 else:
                     generated_files = self._find_generated_files(output_path, pdf_name, method=method)
 
@@ -200,9 +208,9 @@ class MinerUProcessor:
                     "returncode": return_code
                 }
             else:
-                print(f"❌ MinerU處理失敗！錯誤代碼: {return_code}")
-                print(f"完整輸出內容:")
-                print(full_output)
+                logger.error(f"MinerU處理失敗！錯誤代碼: {return_code}")
+                logger.error(f"完整輸出內容:")
+                logger.error(full_output)
 
                 return {
                     "success": False,
@@ -212,13 +220,13 @@ class MinerUProcessor:
                     "returncode": return_code
                 }
         except subprocess.TimeoutExpired:
-            print("❌ MinerU處理超時！")
+            logger.error(f"MinerU處理超時！")
             return {
                 "success": False,
                 "error": "處理超時"
             }
         except Exception as e:
-            print(f"❌ 執行MinerU時發生錯誤: {str(e)}")
+            logger.error(f"執行MinerU時發生錯誤: {str(e)}")
             return {
                 "success": False,
                 "error": str(e)
@@ -239,32 +247,32 @@ class MinerUProcessor:
             
             files_list = os.listdir(file_path)
             if self.verbose:
-                print(f"📋 找到的檔案: {files_list}")
+                logger.info(f"找到的檔案: {files_list}")
 
             for file in files_list:
                 full_path = os.path.join(file_path, file)
                 if file.endswith(".md"):
                     result_files["markdown"] = full_path
                     if self.verbose:
-                        print(f"📄 找到 Markdown: {file}")
+                        logger.info(f"找到 Markdown: {file}")
                 elif file.endswith("content_list.json"):
                     result_files["json"] = full_path
                     if self.verbose:
-                        print(f"📄 找到 JSON: {file}")
+                        logger.info(f"找到 JSON: {file}")
                 elif os.path.isdir(full_path):
                     if self.verbose:
-                        print(f"📁 檢查圖片目錄: {file}")
+                        logger.info(f"檢查圖片目錄: {file}")
                     try:
                         image_files = [img for img in os.listdir(full_path) if img.endswith((".png", ".jpg", ".jpeg"))]
                         if image_files:
                             result_files["images"] = [os.path.join(full_path, img) for img in image_files]
                             if self.verbose:
-                                print(f"🖼️  找到 {len(image_files)} 張圖片")
+                                logger.info(f"找到 {len(image_files)} 張圖片")
                     except Exception as e:
-                        print(f"⚠️  讀取圖片目錄失敗: {e}")
+                        logger.error(f"讀取圖片目錄失敗: {e}")
 
             return result_files
             
         except Exception as e:
-            print(f"❌ 搜尋檔案時發生錯誤: {e}")
+            logger.error(f"搜尋檔案時發生錯誤: {e}")
             return result_files

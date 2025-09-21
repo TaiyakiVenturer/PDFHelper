@@ -6,7 +6,6 @@ import time
 import os
 from pathlib import Path
 from dataclasses import dataclass
-import pprint as pp
 import json
 
 from services.pdf_service import MinerUProcessor # 導入MinerU文件處理器
@@ -15,6 +14,12 @@ from services.rag_service import DocumentProcessor, EmbeddingService, ChromaVect
 from services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
 
 from .config import Config # 導入配置管理
+
+import logging
+from .logger import setup_project_logger  # 導入日誌設置函數
+
+setup_project_logger(verbose=True)  # 設置全局日誌記錄器
+logger = logging.getLogger(__name__)
 
 @dataclass
 class HelperResult:
@@ -39,12 +44,12 @@ class PDFHelper:
         self.verbose = verbose
 
         if self.verbose:
-            print("🔧 初始化 PDFHelper API...")
+            logger.info("初始化 PDFHelper API...")
 
         if not os.path.exists(self.config.instance_path):
             raise ValueError(f"❌ 指定的 instance_path 不存在: {self.config.instance_path}")
         if self.verbose:
-            print(f"✅ instance_path 已確認: {self.config.instance_path}")
+            logger.info(f"instance_path 已確認: {self.config.instance_path}")
 
         self.pdf_processor = MinerUProcessor(
             instance_path=self.config.instance_path,
@@ -52,7 +57,7 @@ class PDFHelper:
             verbose=self.config.mineru_config.verbose
         )
         if self.verbose:
-            print("✅ PDF處理器初始化完成")
+            logger.info("PDF處理器初始化完成")
 
         if self.config.translator_config.llm_service == "ollama":
             self.translator = OllamaTranslator(
@@ -70,7 +75,7 @@ class PDFHelper:
         else:
             raise ValueError(f"不支援的翻譯服務: {self.config.translator_config.llm_service}")
         if self.verbose:
-            print("✅ 翻譯器初始化完成")
+            logger.info("翻譯器初始化完成")
 
         document_processor = DocumentProcessor(
             instance_path=self.config.instance_path,
@@ -80,7 +85,7 @@ class PDFHelper:
             verbose=self.config.document_processor_config.verbose
         )
         if self.verbose:
-            print("✅ 文件處理器初始化完成")
+            logger.info("文件處理器初始化完成")
 
         embedding_service = EmbeddingService(
             llm_service=self.config.embedding_service_config.llm_service,
@@ -91,7 +96,7 @@ class PDFHelper:
             verbose=self.config.embedding_service_config.verbose
         )
         if self.verbose:
-            print("✅ Embedding服務初始化完成")
+            logger.info("Embedding服務初始化完成")
 
         vector_store = ChromaVectorStore(
             instance_path=self.config.instance_path,
@@ -100,7 +105,7 @@ class PDFHelper:
             verbose=self.config.chromadb_config.verbose
         )
         if self.verbose:
-            print("✅ 向量資料庫初始化完成")
+            logger.info("向量資料庫初始化完成")
 
         self.rag_engine = RAGEngine(
             document_processor_obj=document_processor,
@@ -111,19 +116,20 @@ class PDFHelper:
             verbose=self.config.rag_config.verbose
         )
         if self.verbose:
-            print("✅ RAG引擎初始化完成")
+            logger.info("RAG引擎初始化完成")
 
         self.md_constructor = MarkdownReconstructor(
             instance_path=self.config.instance_path,
-            verbose=self.config.mineru_config.verbose
+            verbose=self.config.markdown_reconstructor_config.verbose
         )
         if self.verbose:
-            print("✅ Markdown重建器初始化完成")
+            logger.info("Markdown重建器初始化完成")
 
         if self.verbose:
-            print("✅ PDFHelper API 已完成初始化")
-            print("當前設定細項:")
-            pp.pprint(self.config)
+            logger.info("PDFHelper API 已完成初始化")
+            logger.info("當前設定細項:")
+            for line in self.config.__repr__():
+                logger.info(f"{line}")
 
     def process_pdf_to_json(self, 
             pdf_name: str, 
@@ -144,7 +150,7 @@ class PDFHelper:
             HelperResult: 包含處理結果的統一格式
         """
         if self.verbose:
-            print(f"🔍 開始處理 PDF: {pdf_name}，方法: {method}, 語言: {lang}, 設備: {device}")
+            logger.info(f"開始處理 PDF: {pdf_name}，方法: {method}, 語言: {lang}, 設備: {device}")
 
         mineru_results = self.pdf_processor.process_pdf_with_mineru(
             pdf_name, 
@@ -154,11 +160,11 @@ class PDFHelper:
         )
         if mineru_results["success"]:
             if self.verbose:
-                print(f"✅ PDF '{pdf_name}' 處理完成，輸出路徑: {mineru_results['output_path']}")
-                print(f"🔧 生成的檔案: {json.dumps(mineru_results['output_file_paths'], indent=2, ensure_ascii=False, sort_keys=True)}")
-                print(f"⏳ 處理時間: {mineru_results['processing_time']:.2f} 秒")
+                logger.info(f"PDF '{pdf_name}' 處理完成，輸出路徑: {mineru_results['output_path']}")
+                logger.info(f"生成的檔案: {json.dumps(mineru_results['output_file_paths'], indent=2, ensure_ascii=False, sort_keys=True)}")
+                logger.info(f"處理時間: {mineru_results['processing_time']:.2f} 秒")
         else:
-            print(f"❌ PDF '{pdf_name}' 處理失敗，錯誤訊息: {mineru_results['error']}")
+            logger.error(f"PDF '{pdf_name}' 處理失敗，錯誤訊息: {mineru_results['error']}")
         return HelperResult(
             success=mineru_results["success"],
             message="PDF處理完成" if mineru_results["success"] else f"PDF處理失敗: {mineru_results['error']}",
@@ -176,7 +182,7 @@ class PDFHelper:
             HelperResult: 包含翻譯後的JSON檔案路徑的統一格式
         """
         if not self.translator.is_available():
-            print(f"❌ 翻譯服務不可用")
+            logger.error("翻譯服務不可用")
             return HelperResult(
                 success=False,
                 message="翻譯服務不可用"
@@ -189,8 +195,8 @@ class PDFHelper:
                 buffer_time=1.8 if self.config.translator_config.llm_service == "gemini" else 0.3,
             )
             if self.verbose:
-                print(f"✅ JSON '{json_path}' 翻譯完成，輸出路徑: {translated_file_path}")
-                print(f"⏳ 處理時間: {time.time() - start:.2f} 秒")
+                logger.info(f"JSON '{json_path}' 翻譯完成，輸出路徑: {translated_file_path}")
+                logger.info(f"處理時間: {time.time() - start:.2f} 秒")
 
             return HelperResult(
                 success=True,
@@ -198,7 +204,7 @@ class PDFHelper:
                 data={"translated_file_path": translated_file_path}
             )
         except Exception as e:
-            print(f"❌ JSON '{json_path}' 翻譯失敗，錯誤訊息: {e}")
+            logger.error(f"JSON '{json_path}' 翻譯失敗，錯誤訊息: {e}")
             return HelperResult(
                 success=False,
                 message=f"JSON翻譯失敗: {e}"
@@ -220,10 +226,10 @@ class PDFHelper:
             json_file_name=json_name
         )
         if success and self.verbose:
-            print(f"✅ JSON '{json_name}' 已加入向量資料庫")
-            print(f"⏳ 處理時間: {time.time() - start:.2f} 秒")
+            logger.info(f"JSON '{json_name}' 已加入向量資料庫")
+            logger.info(f"處理時間: {time.time() - start:.2f} 秒")
         else:
-            print(f"❌ JSON '{json_name}' 加入向量資料庫失敗")
+            logger.error(f"JSON '{json_name}' 加入向量資料庫失敗")
         return HelperResult(
             success=success,
             message="JSON已加入向量資料庫" if success else "JSON加入向量資料庫失敗"
@@ -260,14 +266,14 @@ class PDFHelper:
         # 獲取生成的JSON檔案路徑
         json_path = mineru_results.data.get("output_file_paths").get("json")
         if not json_path:
-            print(f"❌ 未找到生成的JSON檔案，無法進行後續操作")
+            logger.error("未找到生成的JSON檔案，無法進行後續操作")
             return HelperResult(
                 success=False,
                 message="未找到生成的JSON檔案"
             )
         
         if not os.path.exists(json_path):
-            print(f"❌ 生成的JSON檔案不存在: {json_path}，無法進行後續操作")
+            logger.error(f"生成的JSON檔案不存在: {json_path}，無法進行後續操作")
             return HelperResult(
                 success=False,
                 message="生成的JSON檔案不存在"
@@ -283,7 +289,7 @@ class PDFHelper:
         
         translated_json_path = translated_path.data.get("translated_file_path")
         if not os.path.exists(translated_json_path):
-            print(f"❌ 未找到翻譯後的JSON檔案 {translated_json_path}，無法進行後續操作")
+            logger.error(f"未找到翻譯後的JSON檔案 {translated_json_path}，無法進行後續操作")
             return HelperResult(
                 success=False,
                 message="未找到翻譯後的JSON檔案"
@@ -325,10 +331,10 @@ class PDFHelper:
         )
         if ask_results.status == "success":
             if self.verbose:
-                print(f"✅ 問題已提交至RAG引擎")
-                print(f"⏳ 處理時間: {time.time() - start:.2f} 秒")
+                logger.info("問題已提交至RAG引擎")
+                logger.info(f"處理時間: {time.time() - start:.2f} 秒")
         else:
-            print(f"❌ 問題提交失敗，發生錯誤")
+            logger.error("問題提交失敗，發生錯誤")
         return HelperResult(
             success=ask_results.status == "success",
             message="問答查詢完成" if ask_results.status == "success" else "問答查詢失敗",

@@ -4,6 +4,9 @@ import json
 import shutil
 import re
 
+import logging
+logger = logging.getLogger(__name__)
+
 class MarkdownReconstructor:
     """
     ### 將翻譯過的.json文件重組回.md檔案
@@ -23,6 +26,11 @@ class MarkdownReconstructor:
 
         self.in_reference = False
 
+        if self.verbose:
+            logger.info("Markdown重組器初始化完成")
+            logger.info(f"PDF預設讀取路徑: {self.pdf_path}")
+            logger.info(f"輸出目錄: {os.path.join(self.instance_path, 'reconstructed_files')}")
+
     def reconstruct(self, 
             file_name: str, 
             method: Literal['auto', 'ocr', 'text'], 
@@ -41,13 +49,13 @@ class MarkdownReconstructor:
         """
         translated_file_path = os.path.join(self.instance_path, "translated_files", file_name)
         if not os.path.exists(translated_file_path):
-            print(f"❌ 找不到翻譯後的檔案: {translated_file_path}")
+            logger.error(f"找不到翻譯後的檔案: {translated_file_path}")
             return None
 
         with open(translated_file_path, 'r', encoding='utf-8') as f:
             content_list = json.load(f)
         if self.verbose:
-            print(f"✅ 讀取翻譯後的檔案: {translated_file_path}")
+            logger.info(f"讀取翻譯後的檔案: {translated_file_path}")
 
         # 組合完整PDF路徑
         file_name = file_name.replace("_translated.json", "")
@@ -57,7 +65,7 @@ class MarkdownReconstructor:
         for item in content_list:
             content_type, content_value = self._classify_content_type(item, language)
             if self.verbose:
-                print(f"✅ 內容類型: {content_type}, 內容: {content_value[:50]}")
+                logger.info(f"內容類型: {content_type}, 內容: {content_value[:50]}")
 
             if content_type == 'title':
                 md_lines.append(f"# {content_value}")

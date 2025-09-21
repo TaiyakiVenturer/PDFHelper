@@ -7,6 +7,9 @@ import hashlib
 from typing import Literal, List, Optional
 from dataclasses import dataclass
 
+import logging
+logger = logging.getLogger(__name__)
+
 @dataclass
 class DocumentChunk:
     """
@@ -78,10 +81,10 @@ class DocumentProcessor:
         self.verbose = verbose
 
         if self.verbose:
-            print(f"DocumentProcessor 初始化完成:")
-            print(f" - 最大片段大小: {max_chunk_size} 字")
-            print(f" - 最小片段大小: {min_chunk_size} 字")
-            print(f" - 合併短片段: {'是' if merge_short_chunks else '否'}")
+            logger.info("DocumentProcessor 初始化完成:")
+            logger.info(f" - 最大片段大小: {max_chunk_size} 字")
+            logger.info(f" - 最小片段大小: {min_chunk_size} 字")
+            logger.info(f" - 合併短片段: {'是' if merge_short_chunks else '否'}")
 
     def load_translated_json(self, json_file_name: str) -> Optional[List[DocumentChunk]]:
         """
@@ -95,7 +98,7 @@ class DocumentProcessor:
         """
         json_file_path = os.path.join(self.instance_path, "translated_files", json_file_name)
         if not os.path.exists(json_file_path):
-            print(f"文件不存在: {json_file_path}")
+            logger.warning(f"文件不存在: {json_file_path}")
             return None
 
         with open(json_file_path, 'r', encoding='utf-8') as f:
@@ -118,7 +121,7 @@ class DocumentProcessor:
             chunks.append(chunk)
         
         if self.verbose:
-            print(f"已讀取並生成初始片段: {len(chunks)} 個 (來自 {json_file_path})")
+            logger.info(f"已讀取並生成初始片段: {len(chunks)} 個 (來自 {json_file_path})")
         return chunks
 
     def process_chunks(self, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
@@ -149,7 +152,7 @@ class DocumentProcessor:
             processed_chunks.extend(processed)
         
         if self.verbose:
-            print(f"處理後的片段總數: {len(processed_chunks)} 個")
+            logger.info(f"處理後的片段總數: {len(processed_chunks)} 個")
         return processed_chunks
 
     def _process_title(self, base_chunk: DocumentChunk, index_start: int) -> List[DocumentChunk]:

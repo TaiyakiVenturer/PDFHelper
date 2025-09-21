@@ -7,6 +7,9 @@ from typing import List, Optional, Literal
 from ..llm_service import OllamaService
 from ..llm_service.gemini_service import GeminiService
 
+import logging
+logger = logging.getLogger(__name__)
+
 class EmbeddingService:
     """基於Ollama的Embedding服務"""
     
@@ -50,7 +53,7 @@ class EmbeddingService:
         self.model_name = self.embedding_service.model_name
         
         if not self.is_available():
-            raise ValueError(f"Ollama服務不可用，請確保Ollama正在運行且已安裝{model_name}模型")
+            raise ConnectionError(f"無法連接到 {llm_service} 服務，請檢查配置")
 
         self.max_retries = max_retries
         self.retry_delay = retry_delay
@@ -75,15 +78,15 @@ class EmbeddingService:
             embedding = self.embedding_service.send_embedding_request(text, store=store)
             if embedding is not None:
                 if self.verbose:
-                    print(f"✅ 成功獲取embedding")
+                    logger.info("成功獲取embedding")
                 return embedding
             else:
-                print(f"⚠️ 第 {attempt + 1} 次嘗試獲取embedding失敗，正在重試...")
+                logger.warning(f"第 {attempt + 1} 次嘗試獲取embedding失敗，正在重試...")
 
             if attempt < self.max_retries - 1:
                 time.sleep(self.retry_delay * (attempt + 1))
 
-        print(f"所有重試都失敗，無法獲取embedding")
+        logger.error("所有重試都失敗，無法獲取embedding")
         return None
 
     def get_embedding(self, text: str, store: bool) -> Optional[List[float]]:
@@ -98,9 +101,9 @@ class EmbeddingService:
         """
         embedding = self._get_single_embedding_with_retry(text, store=store)
         if embedding is None:
-            print(f"❌ 無法為文本獲取embedding: {text[:30]}...")
+            logger.error(f"無法為文本獲取embedding: {text[:30]}...")
         if self.verbose and embedding is not None:
-            print(f"✅ 獲取單個embedding完成")
+            logger.info("獲取單個embedding完成")
         return embedding
 
     def get_embeddings(self, texts: List[str], store: bool) -> List[List[float]]:
@@ -122,14 +125,14 @@ class EmbeddingService:
 
             # 紀錄embedding獲取失敗的字串，並過濾掉失敗的結果
             if embedding is None:
-                print(f"❌ 無法為字串處理embedding: {text[:30]}...")
+                logger.error(f"無法為字串處理embedding: {text[:30]}...")
                 error_counter += 1
             else:
                 embeddings.append(embedding)
             time.sleep(buffer_time)
         
         if error_counter > 0:
-            print(f"⚠️ 總共有 {error_counter} 條字串未能成功處理embedding")
+            logger.warning(f"總共有 {error_counter} 條字串未能成功處理embedding")
         if self.verbose:
-            print(f"✅ 批量處理embedding完成，共處理 {len(texts)} 條字串")
+            logger.info(f"批量處理embedding完成，共處理 {len(texts)} 條字串")
         return embeddings

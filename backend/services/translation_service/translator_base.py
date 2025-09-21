@@ -8,6 +8,9 @@ import time
 import requests
 from pathlib import Path
 
+import logging
+logger = logging.getLogger(__name__)
+
 class TranslatorBase:
     """
     ### 翻譯器基類
@@ -139,7 +142,7 @@ class TranslatorBase:
             try:
                 translation = self.send_translate_request(prompt)
                 if not translation:
-                    print(f"⚠️  翻譯出現錯誤，重新嘗試 (嘗試 {attempt}/{max_retries})")
+                    logger.warning(f"翻譯出現錯誤，重新嘗試 (嘗試 {attempt}/{max_retries})")
                     continue
 
                 # 更新術語對照表
@@ -148,32 +151,32 @@ class TranslatorBase:
                 return translation
             
             except requests.exceptions.Timeout:
-                print(f"⏰ 翻譯超時 (嘗試 {attempt}/{max_retries})")
+                logger.warning(f"翻譯超時 (嘗試 {attempt}/{max_retries})")
                 if attempt < max_retries:
                     time.sleep(2)
                     continue
                 else:
                     return ""
             except requests.exceptions.RequestException as e:
-                print(f"❌ 請求錯誤 (嘗試 {attempt}/{max_retries}): {e}")
+                logger.error(f"請求錯誤 (嘗試 {attempt}/{max_retries}): {e}")
                 if attempt < max_retries:
                     wait_time = 2 ** attempt
-                    print(f"⏳ 等待 {wait_time} 秒後重試...")
+                    logger.info(f"等待 {wait_time} 秒後重試...")
                     time.sleep(wait_time)
                 else:
-                    print("❌ 已達到最大重試次數，放棄翻譯該段落")
+                    logger.error("已達到最大重試次數，放棄翻譯該段落")
                     return ""
             except Exception as e:
-                print(f"❌ 翻譯錯誤 (嘗試 {attempt}/{max_retries}): {e}")
+                logger.error(f"翻譯錯誤 (嘗試 {attempt}/{max_retries}): {e}")
                 if attempt < max_retries:
                     wait_time = 2 ** attempt
-                    print(f"⏳ 等待 {wait_time} 秒後重試...")
+                    logger.info(f"等待 {wait_time} 秒後重試...")
                     time.sleep(wait_time)
                 else:
-                    print("❌ 已達到最大重試次數，放棄翻譯該段落")
+                    logger.error("已達到最大重試次數，放棄翻譯該段落")
                     return ""
         if self.verbose:
-            print(f"超過最大重試次數")
+            logger.info("超過最大重試次數")
         return ""
 
     def translate_content_list(self, content_list_path: str, 
@@ -204,13 +207,13 @@ class TranslatorBase:
             content_list = progress_data.get("content_list", [])
 
             if self.verbose:
-                print(f"📖 偵測到翻譯進度: {progress_path}")
-                print(f"🔄 重新載入翻譯進度: 剩餘 {self._check_translated_progress(content_list)} 個段落")
+                logger.info(f"偵測到翻譯進度: {progress_path}")
+                logger.info(f"重新載入翻譯進度: 剩餘 {self._check_translated_progress(content_list)} 個段落")
 
             self._set_term_dictionary(progress_data.get("term_dictionary", {}))
 
             if self._check_translated_progress(content_list) == 0:
-                print("✅ 檔案已全部翻譯完成，無需重複翻譯")
+                logger.info("檔案已全部翻譯完成，無需重複翻譯")
                 return self._save_translated_progress(content_list, file_name)
         else:
             # 初次翻譯，載入原始檔案
@@ -224,8 +227,8 @@ class TranslatorBase:
             content_list = progress_data.get("content_list", [])
 
             if self.verbose:
-                print(f"📖 初次翻譯，建立進度檔案: {progress_path}")
-                print(f"🔄 總計翻譯項目: {len(content_list)} 個項目")
+                logger.info(f"初次翻譯，建立進度檔案: {progress_path}")
+                logger.info(f"總計翻譯項目: {len(content_list)} 個項目")
 
         # 翻譯處理
         translated_count = 0
@@ -238,7 +241,7 @@ class TranslatorBase:
 
             if translated_count != 0 and translated_count % 10 == 0:
                 start_time = time.time()
-                print(f"⏳ 第 {i//10} 個檢查點，正在保存翻譯進度...")
+                logger.info(f"第 {i//10} 個檢查點，正在保存翻譯進度...")
                 self._save_translated_progress(content_list, file_name)
                 end_time = time.time()
 
@@ -256,12 +259,12 @@ class TranslatorBase:
                 content_type=content_type
             )
             if translated_text == "":
-                print(f"❌ 翻譯失敗，跳過段落: {original_text}")
+                logger.error(f"翻譯失敗，跳過段落: {original_text}")
                 continue
             else:
                 if self.verbose:
-                    print(f"📝 翻譯進度: {i+1}/{len(content_list)} - 第{item.get('page_idx', 0)+1}頁")
-            
+                    logger.info(f"翻譯進度: {i+1}/{len(content_list)} - 第{item.get('page_idx', 0)+1}頁")
+
             translated_count += 1
 
             # 保存翻譯結果
@@ -274,10 +277,10 @@ class TranslatorBase:
             }
             
             if self.verbose:
-                print(f"   原文: {original_text[:50]}...")
-                print(f"   譯文: {translated_text[:50]}...")
-                print()
-            
+                logger.info(f"   原文: {original_text[:50]}...")
+                logger.info(f"   譯文: {translated_text[:50]}...")
+                logger.info("")
+
             # 避免請求過於頻繁
             time.sleep(buffer_time)
 
@@ -299,10 +302,10 @@ class TranslatorBase:
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(content_list, f, ensure_ascii=False, indent=2)
-        
-        print(f"✅ 翻譯完成！")
-        print(f"📁 翻譯結果已保存: {output_path}")
-        print(f"📊 共翻譯 {translated_count} 個段落")
+
+        logger.info("翻譯完成！")
+        logger.info(f"翻譯結果已保存: {output_path}")
+        logger.info(f"共翻譯 {translated_count} 個段落")
 
         self._clear_translated_progress(file_name)
         
@@ -361,7 +364,7 @@ class TranslatorBase:
                 json.dump(progress_info, f, ensure_ascii=False, indent=2)
             return output_path
         except Exception as e:
-            print(f"❌ 保存翻譯進度時出錯: {e}")
+            logger.error(f"保存翻譯進度時出錯: {e}")
             return ""
 
     def _load_translated_progress(self, file_name: str) -> Optional[dict]:
@@ -381,7 +384,7 @@ class TranslatorBase:
                 progress_info = json.load(f)
             return progress_info
         except Exception as e:
-            print(f"❌ 加載翻譯進度時出錯: {e}")
+            logger.error(f"加載翻譯進度時出錯: {e}")
             return None
 
     def _check_translated_progress(self, content_list: list) -> int:
@@ -420,10 +423,10 @@ class TranslatorBase:
         try:
             if os.path.exists(progress_path):
                 os.remove(progress_path)
-                print(f"✅ 成功清除翻譯進度檔案: {progress_path}")
+                logger.info(f"成功清除翻譯進度檔案: {progress_path}")
             else:
-                print(f"⚠️ 翻譯進度檔案不存在: {progress_path}")
+                logger.warning(f"翻譯進度檔案不存在: {progress_path}")
             return True
         except Exception as e:
-            print(f"❌ 清除翻譯進度時出錯: {e}")
+            logger.error(f"清除翻譯進度時出錯: {e}")
             return False

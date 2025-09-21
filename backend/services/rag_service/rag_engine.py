@@ -11,6 +11,9 @@ from .chroma_database import ChromaVectorStore
 
 from ..llm_service import OllamaService, GeminiService
 
+import logging
+logger = logging.getLogger(__name__)
+
 @dataclass
 class SearchResult:
     """
@@ -74,7 +77,7 @@ class RAGEngine:
         """
         self.verbose = verbose
         if self.verbose:
-            print("⏳ 正在初始化RAG引擎...")
+            logger.info("正在初始化RAG引擎...")
         
         # 初始化各個組件
         self.document_processor = document_processor_obj
@@ -107,7 +110,7 @@ class RAGEngine:
             raise ValueError(f"不支援的LLM服務: {llm_service}")
 
         if self.verbose:
-            print("✅ RAG引擎初始化完成")
+            logger.info("RAG引擎初始化完成")
 
     def store_document_into_vectordb(self, json_file_name: str, collection_name: str = None) -> bool:
         """
@@ -122,23 +125,23 @@ class RAGEngine:
         """
         try:
             if self.verbose:
-                print(f"開始儲存文件: {json_file_name}")
+                logger.info(f"開始儲存文件: {json_file_name}")
             
             # 讀取翻譯資料
             document_chunks = self.document_processor.load_translated_json(json_file_name)
             if not document_chunks:
-                print("未讀取到任何內容片段，請檢查翻譯文件")
+                logger.error("未讀取到任何內容片段，請檢查翻譯文件")
                 return False
 
             # 處理文件生成片段
             chunks = self.document_processor.process_chunks(document_chunks)
             if len(chunks) == 0:
-                print("未生成任何內容片段")
+                logger.error("未生成任何內容片段")
                 return False
 
             # 檢查embedding服務可用性
             if not self.embedding_service.is_available():
-                print("Embedding服務不可用")
+                logger.error("Embedding服務不可用")
                 return False
 
             # 生成embedding向量
@@ -154,14 +157,14 @@ class RAGEngine:
             success = self.vector_store.add_chunks(chunks, embeddings, collection_name=collection_name)
 
             if success and self.verbose:
-                print(f"文件向量化儲存完成: {collection_name}, 集合包含 {len(chunks)} 個片段")
+                logger.info(f"文件向量化儲存完成: {collection_name}, 集合包含 {len(chunks)} 個片段")
                 return True
             else:
-                print("向量資料庫新增失敗")
+                logger.error("向量資料庫新增失敗")
                 return False
                 
         except Exception as e:
-            print(f"文件向量化儲存時出錯: {e}")
+            logger.error(f"文件向量化儲存時出錯: {e}")
             return False
 
     def search(self, searching_content: str, collection_name: str,
@@ -181,13 +184,13 @@ class RAGEngine:
         """
         try:
             if self.verbose:
-                print(f"開始查詢，查詢內容: {searching_content}, top_k: {top_k}, filter: {filter_dict}")
+                logger.info(f"開始查詢，查詢內容: {searching_content}, top_k: {top_k}, filter: {filter_dict}")
 
             # 獲取查詢的embedding向量
             content_embedding = self.embedding_service.get_embedding(searching_content, store=False)
 
             if content_embedding is None:
-                print("無法獲取查詢的embedding向量")
+                logger.error("無法獲取查詢的embedding向量")
                 return None
 
             # 在向量資料庫中查詢
@@ -200,7 +203,7 @@ class RAGEngine:
             )
             if results is None or not results['ids'][0]:
                 if self.verbose:
-                    print("未找到相關文件")
+                    logger.info("未找到相關文件")
                 return None
 
             # 轉換為SearchResult物件
@@ -224,10 +227,10 @@ class RAGEngine:
                 search_results.append(search_result)
             
             if self.verbose:
-                print(f"✅ RAGEngine查詢完成，返回 {len(search_results)} 個結果")
+                logger.info(f"RAGEngine查詢完成，返回 {len(search_results)} 個結果")
             return search_results
         except Exception as e:
-            print(f"查詢時出錯: {e}")
+            logger.error(f"查詢時出錯: {e}")
             return None
 
     def _generate_answer(self, question: str, search_results: List[SearchResult]) -> Iterable[str]:
@@ -251,7 +254,7 @@ class RAGEngine:
             # 構建上下文
             context = self._generate_context(search_results)
             if self.verbose:
-                print(f"生成的上下文:\n{context}")
+                logger.info(f"生成的上下文:\n{context}")
             
             # 構建提示詞
             prompt = f"""基於以下文件內容回答問題。請提供準確、詳細的答案，並在適當的地方引用文件片段。
@@ -333,7 +336,7 @@ class RAGEngine:
             )
             
         except Exception as e:
-            print(f"RAG查詢時出錯: {e}")
+            logger.error(f"RAG查詢時出錯: {e}")
             return RAGResponse(
                 status="error",
                 answer=f"抱歉，處理您的問題時發生錯誤: {str(e)}",

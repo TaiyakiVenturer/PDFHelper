@@ -9,13 +9,14 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1000,
-    height: 700,
-    minWidth: 600,
-    minHeight: 400,
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
     frame: false, // 使用自訂標題列
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 12, y: 12 }, // macOS 位置（Windows 忽略）
+    show: false, // 先隱藏，等最大化後再顯示
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -24,6 +25,13 @@ function createWindow() {
   });
 
   win.loadFile('index.html');
+  
+  // 預設最大化視窗
+  win.once('ready-to-show', () => {
+    win.maximize(); // 設定為最大化
+    win.show();     // 然後顯示視窗
+  });
+  
   // 同步最大化狀態到 renderer
   registerWindowStateEvents(win);
   win.webContents.once('did-finish-load', () => {

@@ -131,7 +131,6 @@ function addLogEntry(message, type = 'info') {
           color = '#ef4444';
         } else if (entry.message.includes('[MinerU]')) {
           color = '#06b6d4'; // 青色表示 MinerU 輸出
-          style = 'font-family: monospace; font-size: 0.9em;';
         } else if (entry.message.includes('[INFO]')) {
           color = '#10b981'; // 綠色表示信息
         } else if (entry.message.includes('[SUCCESS]')) {
@@ -139,7 +138,7 @@ function addLogEntry(message, type = 'info') {
         }
       }
       
-      return `<div style="color:${color}; margin-bottom:2px; ${style}">[${entry.time}] ${entry.message}</div>`;
+      return `<div class="log-line" style="color:${color}; ${style}">[${entry.time}] ${entry.message}</div>`;
     }).join('');
     logContent.innerHTML = logHtml;
     
@@ -171,9 +170,32 @@ function currentMarkdown() {
 function renderMarkdown() {
   if (!mdContainer) return;
   const src = currentMarkdown();
+  
+  // 除錯：檢查 Markdown 函式庫是否載入
+  console.log('Markdown 渲染偵錯:', {
+    hasMarked: !!window.marked,
+    markedType: typeof window.marked,
+    srcLength: src.length,
+    srcPreview: src.slice(0, 200) + (src.length > 200 ? '...' : '')
+  });
+  
   try {
-    // 解析 Markdown 並處理圖片路徑
-    let html = window.marked ? window.marked.parse(src) : `<pre>${src}</pre>`;
+    let html = '';
+    
+    // 檢查 marked 函式庫
+    if (window.marked && typeof window.marked.parse === 'function') {
+      // 使用 marked 解析 Markdown
+      html = window.marked.parse(src);
+      console.log('使用 marked 解析 Markdown');
+    } else if (window.marked && typeof window.marked === 'function') {
+      // 舊版 marked 的用法
+      html = window.marked(src);
+      console.log('使用舊版 marked 解析 Markdown');
+    } else {
+      // 後備：使用簡單的 Markdown 解析
+      console.warn('marked 函式庫未載入，使用後備解析器');
+      html = simpleMarkdownParse(src);
+    }
     
     // 處理圖片相對路徑，基於 metadata 中的 markdownPath
     if (resultState.meta?.markdownPath) {
@@ -186,21 +208,65 @@ function renderMarkdown() {
     }
     
     mdContainer.innerHTML = html;
+    console.log('Markdown 渲染成功，HTML 長度:', html.length);
     
     // 渲染 LaTeX（KaTeX auto-render）
     if (window.renderMathInElement) {
-      window.renderMathInElement(mdContainer, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '$', right: '$', display: false }
-        ],
-        throwOnError: false
-      });
+      try {
+        window.renderMathInElement(mdContainer, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false }
+          ],
+          throwOnError: false
+        });
+        console.log('LaTeX 渲染完成');
+      } catch (katexError) {
+        console.warn('LaTeX 渲染失敗:', katexError);
+      }
     }
   } catch (e) {
-    mdContainer.textContent = src;
     console.error('Markdown 渲染錯誤:', e);
+    // 顯示原始文本，但保持基本格式
+    mdContainer.innerHTML = `<pre style="white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">${escapeHtml(src)}</pre>`;
   }
+}
+
+// 簡單的 Markdown 解析器（後備方案）
+function simpleMarkdownParse(text) {
+  return text
+    // 標題
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    // 粗體和斜體
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // 程式碼塊
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    // 連結
+    .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2">$1</a>')
+    // 圖片
+    .replace(/!\[([^\]]*)\]\(([^\)]+)\)/g, '<img alt="$1" src="$2" style="max-width: 100%; height: auto;">')
+    // 列表
+    .replace(/^\* (.*$)/gim, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    // 段落
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[h1-6]|<ul|<pre|<code)(.+)$/gm, '<p>$1</p>')
+    // 清理多餘的標籤
+    .replace(/<p><\/p>/g, '')
+    .replace(/<p>(<h[1-6]>.*?<\/h[1-6]>)<\/p>/g, '$1')
+    .replace(/<p>(<ul>.*?<\/ul>)<\/p>/g, '$1')
+    .replace(/<p>(<pre>.*?<\/pre>)<\/p>/g, '$1');
+}
+
+// HTML 跳脫函數
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 const procStatus = document.getElementById('procStatus');
 // const uploadCard = document.querySelector('.upload-card'); // 不再使用整卡片點擊/拖放

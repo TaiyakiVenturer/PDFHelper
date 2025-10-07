@@ -1,29 +1,88 @@
-# Electron 文字顯示範例
+# Electron PDF 解析前端應用
 
-一個最小可執行的 Electron 專案，用來顯示文字。
+基於 Electron 的桌面 PDF 解析前端介面，搭配 PDFHelper 後端引擎，提供現代化的用戶體驗，包含拖放上傳、實時進度監控、Markdown 渲染和聊天整合功能。
 
-## 啟動
+## ✨ 主要功能
 
-1. 安裝依賴（首次）：
+- 📄 **PDF 拖放上傳**：支援拖放或點擊選擇 PDF 文件
+- 🔄 **實時處理進度**：智能進度條和詳細處理狀態
+- 📋 **即時日誌顯示**：查看 MinerU 後端的實際處理過程
+- 📝 **Markdown 渲染**：完整的 Markdown 和 LaTeX 公式支援
+- 🖼️ **圖片路徑解析**：自動處理相對路徑圖片顯示
+- 💬 **聊天整合**：基於處理結果的 AI 問答功能
+- 📚 **處理歷史記錄**：保存處理記錄和元數據
 
-```
+## 🚀 快速開始
+
+### 1. 系統需求
+
+- **Node.js** 16+ 和 npm
+- **Python** 3.10+ (建議使用 Anaconda)
+- **Windows** 10+ (主要測試平台)
+
+### 2. 安裝前端依賴
+
+```powershell
+# 安裝 Node.js 依賴
 npm install
 ```
 
-2. 啟動應用：
+**注意**: 後端 Python 環境請參考 `../backend/` 目錄中的相關說明文件進行配置。
 
-```
+### 3. 啟動應用
+
+```powershell
+# 從 GitHub clone 後，進入前端目錄啟動
+cd frontend
 npm start
 ```
 
-出現視窗後，中心面板會顯示一段文字，並在 1.5 秒後由 `renderer.js` 更新。
+啟動後會出現桌面應用窗口，您可以拖放 PDF 文件開始處理。
 
-## 結構
+## 📁 前端應用結構
 
-- `main.js`：主程序，建立視窗並載入 `index.html`。
-- `preload.js`：預加載腳本，可用於暴露安全 API。
-- `index.html`：視圖模板，顯示文字的頁面。
-- `renderer.js`：前端邏輯，控制畫面上的文字。
+```
+frontend/                      # Electron 前端應用
+├── main.js                    # Electron 主程序
+├── preload.js                 # 安全 API 暴露
+├── renderer.js                # 前端渲染邏輯
+├── index.html                 # 使用者介面
+├── package.json               # Node.js 依賴配置
+├── VERSION_DIFF.md            # 版本更新記錄
+├── README.md                  # 本文件
+└── scripts/                   # Python 橋接腳本
+    ├── processor.py           # 主處理協調器
+    ├── pdfhelper_bridge.py    # PDFHelper 後端橋接
+    └── chat.py                # 聊天功能腳本
+```
+
+**後端說明**: 後端 PDFHelper 引擎位於 `../backend/` 目錄，詳細配置請參考該目錄的說明文件。
+
+### 關鍵組件說明
+
+#### `main.js` - Electron 主程序
+- **IPC 事件處理**: 處理前端與後端通訊
+- **Python 程序管理**: 啟動和管理 Python 子程序
+- **編碼配置**: 確保 UTF-8 正確處理
+- **歷史記錄管理**: 處理結果的持久化存儲
+
+#### `renderer.js` - 前端渲染引擎
+- **Markdown 渲染**: 支援 KaTeX 數學公式
+- **進度監控**: 智能進度條和狀態顯示
+- **日誌管理**: 多層級日誌顯示和過濾
+- **圖片路徑解析**: 相對路徑自動解析
+
+#### `processor.py` - 處理協調器
+- **進度追蹤**: 基於 MinerU 輸出的智能進度更新
+- **錯誤處理**: 完善的異常捕獲和報告
+- **編碼安全**: UTF-8 編碼問題的解決方案
+- **實時通訊**: JSONL 事件流和日誌輸出
+
+#### `pdfhelper_bridge.py` - 橋接模組
+- **路徑管理**: 自動檢測和配置系統路徑
+- **文件處理**: PDF 文件的安全複製和管理
+- **MinerU 整合**: CLI 調用和輸出捕獲
+- **結果封裝**: 標準化的輸出格式
 
 ## 外部內容注入（給同學的後端）
 
@@ -55,55 +114,368 @@ npm start
 
 你可以自由修改 `scripts/chat.py`，在其中串接你同學的後端（HTTP/WebSocket 皆可），最後只要把要顯示的回覆字串放到 `{"text": "..."}` 輸出即可。
 
-## 使用 PDFHelper 後端處理 PDF
+## 🔧 前端環境配置
 
-Electron 專案已整合 `PDFHelper-master/backend` 的 MinerU PDF 管線。預設資料夾結構如下：
+### Python 環境設定
 
+前端需要 Python 環境來運行橋接腳本。系統會自動檢測：
+
+1. **Anaconda**: `C:\Users\User\anaconda3\python.exe`
+2. **系統環境**: `PYTHON` 環境變數
+3. **PATH 中的 python**
+
+#### 手動指定 Python 路徑
+如果自動檢測失敗，請在 `main.js` 中修改：
+
+```javascript
+// 在 main.js 中修改 Python 路徑
+const py = process.env.PYTHON || '你的Python路徑/python.exe';
 ```
-專題/
-  scripts/
-	 processor.py         # 會呼叫 PDFHelper 管線
-	 pdfhelper_bridge.py  # 處理路徑與 MinerU 呼叫
-PDFHelper-master/
-  backend/
-	 ...                  # 原 PDFHelper 原始碼
+
+#### 環境變數設定
+```powershell
+# 設置 Python 路徑
+$env:PYTHON = "C:\Users\YourName\anaconda3\python.exe"
 ```
 
-啟用步驟：
+### 後端路徑配置
 
-1. **安裝 Python 依賴**：
-	```powershell
-	cd ..\PDFHelper-master
-	pip install -r requirements.txt
-	```
-	請另外安裝 MinerU CLI（例如 `pip install mineru-client` 或官方發行版），並確保在命令列執行 `mineru --help` 會成功。
+橋接腳本會自動檢測後端路徑：
 
-2. **準備 PDF**：在 Electron 前端選擇或拖放 PDF。`processor.py` 會自動複製檔案到 `PDFHelper-master/backend/instance/pdfs/` 並呼叫 MinerU。
+```python
+# pdfhelper_bridge.py 自動檢測
+PDFHELPER_ROOT = Path(__file__).resolve().parent.parent.parent  # 到達 pdfhelper-master/
+BACKEND_ROOT = PDFHELPER_ROOT / "backend"  # 後端引擎位置
+```
 
-3. **執行流程**：
-	- Electron 透過 `ipcMain.handle('process:start')` 啟動 `scripts/processor.py`。
-	- `processor.py` 使用 `run_pipeline()` 執行 MinerU，完成後以 JSONL 事件回傳進度與 Markdown 結果。
-	- 前端在 `renderer.js` 收到 `done` 事件後切換到結果畫面並渲染 Markdown。
+**注意**: 詳細的後端配置請參考 `../backend/` 目錄中的說明文件。
+```
 
-4. **環境變數（可選）**：可在啟動 Electron 前設定下列變數自訂管線：
-	- `PDFHELPER_METHOD` (`auto`/`txt`/`ocr`)
-	- `PDFHELPER_LANG` (MinerU 語言代碼，預設 `en`)
-	- `PDFHELPER_DEVICE` (`cpu` 或 `cuda`)
-	- `PDFHELPER_VERBOSE` (`1` / `0`)
-	- `PDFHELPER_MINERU_PATH`：若 `mineru` 不在 PATH，設定此變數為包含 `mineru` 可執行檔的資料夾路徑。
-	- 若目錄不在預設位置，可設定 `PDFHELPER_ROOT`、`PDFHELPER_BACKEND` 或 `PDFHELPER_INSTANCE` 指向實際路徑。
+#### 自定義後端路徑
+如果 PDFHelper-master 不在標準位置：
 
-5. **輸出資料**：`processor.py` 最終事件包含：
-	- `content`：MinerU 產出的 Markdown 文字
-	- `metadata.markdownPath` / `metadata.jsonPath`：檔案實際路徑
-	- `metadata.processingTime`、`metadata.images` 等資訊，已儲存在歷史紀錄與 renderer 狀態，可供後續聊天/RAG 功能使用。
+```python
+# 在 pdfhelper_bridge.py 頂部修改
+import os
+CUSTOM_BACKEND = os.getenv('PDFHELPER_BACKEND')
+if CUSTOM_BACKEND:
+    BACKEND_ROOT = Path(CUSTOM_BACKEND).resolve()
+else:
+    # 原有的自動檢測邏輯
+    PDFHELPER_ROOT = Path(__file__).resolve().parent.parent.parent
+    BACKEND_ROOT = PDFHELPER_ROOT / "PDFHelper-master" / "backend"
+```
 
-## 自訂顯示文字
+#### 環境變數配置
+```powershell
+# 設置自定義後端路徑
+$env:PDFHELPER_BACKEND = "D:\MyProject\PDFHelper-master\backend"
+$env:PDFHELPER_ROOT = "D:\MyProject\PDFHelper-master"
+$env:PDFHELPER_INSTANCE = "D:\Data\pdfhelper_instance"
+```
 
-- 直接修改 `index.html` 裡的 `<p id="text">` 預設文字。
-- 或在 `renderer.js` 操作 `#text` 元素，以動態更新文字。
+### 處理配置參數
 
-## 疑難排解
+您可以通過環境變數自定義 PDF 處理參數：
 
-- 若 `npm start` 無法啟動，請先確認安裝：`npx electron --version`。
-- Windows PowerShell 若遇到執行原則問題，可嘗試用 CMD 或以系統管理員身分執行。
+```powershell
+# 設置處理參數
+$env:PDFHELPER_METHOD = "auto"      # auto/txt/ocr (處理方法)
+$env:PDFHELPER_LANG = "en"          # 語言代碼 (en/ch/korean/japan等)
+$env:PDFHELPER_DEVICE = "cpu"       # cpu/cuda (處理設備)
+$env:PDFHELPER_VERBOSE = "1"        # 1/0 (詳細日誌)
+
+# 啟動應用
+npm start
+```
+
+#### 處理方法說明
+- **auto**: 自動選擇最適合的處理方法
+- **txt**: 使用文本提取方法 (適合文字類 PDF)
+- **ocr**: 使用 OCR 方法 (適合圖片類 PDF)
+
+#### 支援的語言代碼
+- `en`: 英語
+- `ch`: 中文 (簡體)
+- `chinese_cht`: 中文 (繁體)
+- `korean`: 韓語
+- `japan`: 日語
+- 更多語言請參考 MinerU 官方文檔
+
+### 使用流程
+
+1. **上傳 PDF**: 拖放或點擊選擇 PDF 文件
+2. **開始處理**: 點擊「開始」按鈕啟動處理
+3. **查看進度**: 
+   - 觀察智能進度條顯示處理階段
+   - 點擊「顯示處理日誌」查看詳細輸出
+4. **查看結果**: 處理完成後自動顯示 Markdown 結果
+5. **AI 問答**: 在右側聊天框基於結果進行問答
+
+### 實時日誌功能 🆕
+
+- **智能進度條**: 根據 MinerU 輸出智能更新進度
+- **階段識別**: 自動識別載入、解析、提取、轉換等階段
+- **多重輸出**: 
+  - 前端 UI 日誌區域
+  - 瀏覽器開發者控制台 (F12)
+  - 終端機輸出 (如果從終端啟動)
+- **錯誤追蹤**: 詳細錯誤信息和故障排除提示
+
+### 輸出結果
+
+處理完成後會生成：
+- **Markdown 文件**: 完整的文檔內容
+- **JSON 元數據**: 包含處理信息和統計
+- **圖片文件**: 提取的圖片資源
+- **處理記錄**: 保存在歷史記錄中供後續查看
+
+## 📈 更新日誌
+
+### v2.1.0 (2025-10-07) - 實時日誌功能
+- ✨ **新增實時後端日誌顯示**
+- 🔧 **智能進度條更新機制** 
+- 🎨 **多彩日誌分類顯示**
+- 🐛 **修復 UTF-8 編碼問題**
+- 🔩 **解決 NumPy 版本兼容性**
+- 📊 **增強用戶體驗和透明度**
+
+### v2.0.0 - PDFHelper 整合
+- 🔗 **整合 PDFHelper-master 後端**
+- 📄 **支援 PDF 拖放上傳**
+- 📝 **Markdown 渲染和顯示**
+- 💬 **聊天功能集成**
+- 📚 **處理歷史記錄**
+
+### v1.0.0 - 基礎 Electron 應用
+- ⚡ **基本 Electron 框架**
+- 🎨 **使用者介面設計**
+- 📁 **文件選擇和處理**
+
+詳細更新記錄請參考 [`VERSION_DIFF.md`](VERSION_DIFF.md)
+
+## 🤝 貢獻指南
+
+### 前端開發設置
+
+1. **Fork 專案** 並 clone 到本地
+2. **安裝前端依賴**:
+   ```powershell
+   cd frontend
+   npm install --dev
+   ```
+3. **後端配置**: 參考 `../backend/` 目錄說明
+4. **創建功能分支**: `git checkout -b feature/your-feature`
+5. **進行開發和測試**
+6. **提交 Pull Request**
+
+### 前端開發規範
+
+- **JavaScript**: 使用 ES6+ 語法，2 空格縮進
+- **CSS**: 使用現代 CSS 特性，避免內聯樣式
+- **註釋**: 中文註釋，清楚說明邏輯
+- **提交信息**: 使用簡潔明瞭的中文描述
+
+### 測試
+
+```powershell
+# 手動測試前端功能
+npm start
+
+# 測試檔案上傳和進度顯示
+# 測試 Markdown 渲染效果
+# 測試聊天功能整合
+```
+
+### 改進建議
+
+- � **UI/UX 改進**: 更直觀的操作介面
+- ⚡ **前端性能**: 大檔案處理時的響應優化
+- 🔧 **功能擴展**: 更多檔案格式支援
+- � **響應式設計**: 適配不同螢幕尺寸
+
+## 📄 授權
+
+本專案基於 [MIT License](LICENSE) 授權。
+
+## 🙏 致謝
+
+- **[PDFHelper](https://github.com/opendatalab/PDFHelper)**: 核心 PDF 處理引擎
+- **[MinerU](https://github.com/opendatalab/MinerU)**: PDF 解析和處理
+- **[Electron](https://electronjs.org/)**: 跨平台桌面應用框架
+- **[marked](https://marked.js.org/)**: Markdown 渲染引擎
+- **[KaTeX](https://katex.org/)**: 數學公式渲染
+
+## 📞 聯絡方式
+
+如果您有任何問題或建議：
+
+- 🐛 **Bug 報告**: [提交 Issue](issues)
+- 💡 **功能請求**: [提交 Feature Request](issues)
+- 💬 **討論交流**: [Discussions](discussions)
+- 📧 **直接聯繫**: [電子郵件](mailto:your-email@example.com)
+
+---
+
+**Happy Coding! 🚀**
+
+## 🔧 疑難排解
+
+### 常見問題與解決方案
+
+#### 1. MinerU 相關問題
+
+**問題**: `numpy.dtype size changed, may indicate binary incompatibility`
+```powershell
+# 解決方案: 降級 numpy 版本
+pip uninstall numpy
+pip install "numpy>=1.24,<1.26"
+```
+
+**問題**: `mineru: command not found` 或找不到 MinerU CLI
+```powershell
+# 檢查 MinerU 安裝
+pip show mineru-client
+
+# 重新安裝 MinerU
+pip install --upgrade mineru-client
+
+# 手動添加到 PATH (Windows)
+$env:PATH += ";C:\Users\User\AppData\Roaming\Python\Python311\Scripts"
+```
+
+**問題**: MinerU 處理卡住不動
+- 檢查 PDF 文件是否損壞
+- 嘗試使用不同的處理方法 (`PDFHELPER_METHOD=txt` 或 `ocr`)
+- 查看詳細日誌輸出排查具體問題
+
+#### 2. Python 環境問題
+
+**問題**: `Python 退出碼 1` 或 Python 腳本執行失敗
+```powershell
+# 檢查 Python 版本和路徑
+python --version
+where python
+
+# 檢查依賴安裝
+pip list | findstr "pandas numpy"
+
+# 手動測試處理腳本
+cd scripts
+python processor.py test.pdf company model session123
+```
+
+**問題**: 編碼錯誤或中文亂碼
+```powershell
+# 設置正確的編碼環境變數
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+$env:LC_ALL = "C.UTF-8"
+```
+
+#### 3. Electron 應用問題
+
+**問題**: `npm start` 無法啟動
+```powershell
+# 檢查 Node.js 和 Electron
+node --version
+npx electron --version
+
+# 重新安裝依賴
+rm -rf node_modules package-lock.json
+npm install
+```
+
+**問題**: 拖放文件無效或路徑問題
+- 確保 PDF 文件路徑不包含特殊字符
+- 嘗試使用「選擇文件」按鈕而非拖放
+- 檢查文件權限和存取控制
+
+#### 4. 路徑配置問題
+
+**問題**: 找不到 PDFHelper 後端
+```python
+# 在 pdfhelper_bridge.py 中添加調試信息
+print(f"PDFHELPER_ROOT: {PDFHELPER_ROOT}")
+print(f"BACKEND_ROOT: {BACKEND_ROOT}")
+print(f"Backend exists: {BACKEND_ROOT.exists()}")
+```
+
+**問題**: 輸出目錄權限問題
+```powershell
+# 確保輸出目錄存在且可寫入
+mkdir "PDFHelper-master\backend\instance"
+mkdir "PDFHelper-master\backend\instance\pdfs"
+mkdir "PDFHelper-master\backend\instance\mineru_outputs"
+```
+
+### 調試模式
+
+#### 啟用詳細日誌
+```powershell
+# 設置詳細模式
+$env:PDFHELPER_VERBOSE = "1"
+$env:NODE_ENV = "development"
+
+# 啟動應用
+npm start
+```
+
+#### 檢查系統配置
+```powershell
+# 創建系統檢查腳本
+echo @"
+import sys, os, subprocess
+print(f'Python: {sys.executable}')
+print(f'Python Version: {sys.version}')
+print(f'Working Directory: {os.getcwd()}')
+print('--- 檢查 MinerU ---')
+try:
+    result = subprocess.run(['mineru', '--help'], capture_output=True, text=True)
+    print('MinerU: OK')
+except:
+    print('MinerU: NOT FOUND')
+print('--- 檢查依賴 ---')
+try:
+    import numpy, pandas, pathlib
+    print(f'NumPy: {numpy.__version__}')
+    print(f'Pandas: {pandas.__version__}')
+except ImportError as e:
+    print(f'依賴錯誤: {e}')
+"@ > check_env.py
+
+python check_env.py
+```
+
+### 性能優化
+
+#### GPU 加速 (如果可用)
+```powershell
+# 檢查 CUDA 可用性
+python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}')"
+
+# 設置使用 GPU
+$env:PDFHELPER_DEVICE = "cuda"
+```
+
+#### 記憶體優化
+- 處理大型 PDF 時，建議關閉其他應用程式
+- 設置 `PDFHELPER_METHOD=txt` 以節省記憶體
+- 分批處理多個文件而非一次處理
+
+### 獲取幫助
+
+如果遇到其他問題：
+
+1. **查看日誌**: 啟用詳細模式並檢查完整輸出
+2. **檢查版本**: 確保所有依賴版本符合要求
+3. **測試環境**: 使用上面的檢查腳本驗證配置
+4. **重置環境**: 必要時重新安裝 Python 依賴
+
+### 版本兼容性
+
+- **Python**: 3.10+ (建議 3.11)
+- **Node.js**: 16+ (建議 18+)
+- **NumPy**: 1.24.x - 1.25.x (避免 2.x)
+- **Pandas**: 1.5+ (與 NumPy 兼容版本)
+- **MinerU**: 最新版本

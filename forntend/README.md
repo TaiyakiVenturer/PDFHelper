@@ -140,39 +140,44 @@ $env:PYTHON = "C:\Users\YourName\anaconda3\python.exe"
 
 ### 後端路徑配置
 
-橋接腳本會自動檢測後端路徑：
+橋接腳本會自動偵測後端路徑，預設假設 `frontend` 與 `backend` 位於同一層，也保留對舊版巢狀目錄的相容性：
 
 ```python
-# pdfhelper_bridge.py 自動檢測
-PDFHELPER_ROOT = Path(__file__).resolve().parent.parent.parent  # 到達 pdfhelper-master/
-BACKEND_ROOT = PDFHELPER_ROOT / "backend"  # 後端引擎位置
+PDFHELPER_ROOT = _discover_pdfhelper_root()
+BACKEND_ROOT = _discover_backend_root(PDFHELPER_ROOT)
+INSTANCE_ROOT = Path(os.getenv("PDFHELPER_INSTANCE", BACKEND_ROOT / "instance"))
 ```
 
 **注意**: 詳細的後端配置請參考 `../backend/` 目錄中的說明文件。
 ```
 
 #### 自定義後端路徑
-如果 PDFHelper-master 不在標準位置：
+如果專案結構不同於預設的「frontend 與 backend 並列」，可以透過環境變數覆寫路徑設定：
 
-```python
-# 在 pdfhelper_bridge.py 頂部修改
-import os
-CUSTOM_BACKEND = os.getenv('PDFHELPER_BACKEND')
-if CUSTOM_BACKEND:
-    BACKEND_ROOT = Path(CUSTOM_BACKEND).resolve()
-else:
-    # 原有的自動檢測邏輯
-    PDFHELPER_ROOT = Path(__file__).resolve().parent.parent.parent
-    BACKEND_ROOT = PDFHELPER_ROOT / "PDFHelper-master" / "backend"
-```
-
-#### 環境變數配置
 ```powershell
 # 設置自定義後端路徑
-$env:PDFHELPER_BACKEND = "D:\MyProject\PDFHelper-master\backend"
-$env:PDFHELPER_ROOT = "D:\MyProject\PDFHelper-master"
+$env:PDFHELPER_ROOT = "D:\MyProject\PDFHelper"
+$env:PDFHELPER_BACKEND = "D:\MyProject\PDFHelper\backend"
 $env:PDFHELPER_INSTANCE = "D:\Data\pdfhelper_instance"
 ```
+
+一旦設置，上述環境變數會在 `pdfhelper_bridge.py` 初始化時被讀取，無需修改原始碼。
+
+### Electron 打包注意事項
+
+打包為 Electron 應用後，執行檔會在 `resources/app`（或 `resources/app.asar`）內運行，此時工作目錄與開發模式不同，請特別留意：
+
+- **保留後端檔案**：請在打包工具（例如 electron-builder）的 `extraResources` 或同等設定中，將整個 `backend/` 目錄連同 `instance/` 子資料夾一併放到最終安裝資料夾（常見路徑為 `resources/backend`）。
+- **設定環境變數**：在主程序啟動時，明確指定後端位置，例如：
+    ```javascript
+    const path = require('path');
+    process.env.PDFHELPER_ROOT = path.join(process.resourcesPath, '..');
+    process.env.PDFHELPER_BACKEND = path.join(process.resourcesPath, '..', 'backend');
+    ```
+    如需自訂輸出資料夾，也可同時設定 `PDFHELPER_INSTANCE`。
+- **避免 ASAR 壓縮 Python 腳本**：`scripts/` 下的 Python 檔案與後端程式需可被外部 Python 執行，若使用 asar 請將相關檔案標記為 `asarUnpack`。
+
+遵循上述配置，打包後的 Electron 應用即可與後端保持一致的路徑結構，確保 `pdfhelper_bridge.py` 能夠正確連結並啟動 Python 引擎。
 
 ### 處理配置參數
 
@@ -313,7 +318,7 @@ npm start
 - 🐛 **Bug 報告**: [提交 Issue](issues)
 - 💡 **功能請求**: [提交 Feature Request](issues)
 - 💬 **討論交流**: [Discussions](discussions)
-- 📧 **直接聯繫**: [電子郵件](mailto:your-email@example.com)
+- 📧 **直接聯繫**: [電子郵件](linj80912@gmail.com)
 
 ---
 
@@ -404,9 +409,9 @@ print(f"Backend exists: {BACKEND_ROOT.exists()}")
 **問題**: 輸出目錄權限問題
 ```powershell
 # 確保輸出目錄存在且可寫入
-mkdir "PDFHelper-master\backend\instance"
-mkdir "PDFHelper-master\backend\instance\pdfs"
-mkdir "PDFHelper-master\backend\instance\mineru_outputs"
+mkdir "..\backend\instance"
+mkdir "..\backend\instance\pdfs"
+mkdir "..\backend\instance\mineru_outputs"
 ```
 
 ### 調試模式

@@ -1,0 +1,15 @@
+{
+  "name": "electron-text-display",
+  "version": "0.1.0",
+  "description": "顯示文字的簡易 Electron App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^38.1.2"
+  },
+  "dependencies": {
+    "marked": "^12.0.2"
+  }
+}

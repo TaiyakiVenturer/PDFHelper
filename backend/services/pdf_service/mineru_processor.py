@@ -276,3 +276,192 @@ class MinerUProcessor:
         except Exception as e:
             logger.error(f"搜尋檔案時發生錯誤: {e}")
             return result_files
+
+    def process_pdf_with_mineru_realtime(
+            self,
+            pdf_name: str,
+            method: Literal["auto", "txt", "ocr"] = "auto",
+            backend: Literal["pipeline"] = "pipeline",
+            lang: str = "en",
+            formula: bool = True,
+            table: bool = True,
+            device: Literal["cuda", "cpu"] = "cuda",
+            verbose: bool = None,
+            output_callback = None
+    ) -> Dict[str, Any]:
+        """
+        使用MinerU處理PDF文件（支持實時輸出回調）
+
+        Args:
+            pdf_name: PDF檔案名稱
+            method: 處理方法
+            backend: 後端類型
+            lang: 語言設定
+            formula: 是否解析公式
+            table: 是否解析表格
+            device: 設備模式
+            verbose: 是否啟用詳細模式
+            output_callback: 輸出回調函數，接收每行輸出
+
+        Returns:
+            Dict: 處理結果
+        """
+        
+        if verbose is None:
+            verbose = self.verbose
+            
+        # 準備輸出路徑
+        original_pdf_path = os.path.join(self.default_path, pdf_name)
+        output_path = os.path.abspath(self.output_dir)
+        
+        # 處理超長檔名問題
+        original_filename = os.path.splitext(pdf_name)[0]
+        test_path = os.path.join(output_path, original_filename, method, f"{original_filename}_layout.pdf")
+        
+        if len(test_path) > 250:
+            import hashlib
+            hash_part = hashlib.md5(original_filename.encode()).hexdigest()[:8]
+            short_filename = f"doc_{hash_part}"
+            short_pdf_name = f"{short_filename}.pdf"
+            
+            if output_callback:
+                output_callback(f"[INFO] 路徑過長，創建短檔名副本:")
+                output_callback(f"[INFO] 原檔名: {original_filename}")
+                output_callback(f"[INFO] 短檔名: {short_filename}")
+
+            import shutil
+            short_pdf_path = os.path.join(self.default_path, short_pdf_name)
+            shutil.copy2(original_pdf_path, short_pdf_path)
+            
+            pdf_path = short_pdf_path
+            processing_filename = short_filename
+            
+            self._filename_mapping = {
+                'original': original_filename,
+                'short': short_filename,
+                'short_pdf_path': short_pdf_path
+            }
+        else:
+            pdf_path = original_pdf_path
+            processing_filename = original_filename
+            self._filename_mapping = None
+            
+        expected_output_dir = os.path.join(output_path, processing_filename, method)
+        os.makedirs(expected_output_dir, exist_ok=True)
+
+        # 構建MinerU命令
+        cmd = [
+            "mineru",
+            "-p", str(pdf_path),
+            "-o", str(output_path),
+            "-m", method,
+            "-b", backend,
+            "-l", lang,
+            "-f", str(formula).lower(),
+            "-t", str(table).lower(),
+            "-d", device
+        ]
+        
+        if output_callback:
+            output_callback(f"[INFO] 執行命令: {' '.join(cmd)}")
+            output_callback(f"[INFO] 輸出目錄: {output_path}")
+
+        try:
+            start_time = time.time()
+            if output_callback:
+                output_callback("[INFO] 開始執行 MinerU...")
+                output_callback("[INFO] " + "-" * 60)
+
+            # 使用 Popen 來即時顯示輸出
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=os.path.dirname(__file__),
+                universal_newlines=True,
+                bufsize=1,
+                env=os.environ.copy()
+            )
+
+            # 收集所有輸出並即時回調
+            all_output = []
+            
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    line = output.strip()
+                    all_output.append(line)
+                    if output_callback:
+                        output_callback(f"[MinerU] {line}")
+                    if verbose:
+                        logger.info(line)
+            
+            return_code = process.poll()
+            end_time = time.time()
+            processing_time = end_time - start_time
+            
+            if output_callback:
+                output_callback("[INFO] " + "-" * 60)
+                output_callback(f"[INFO] MinerU 執行結束，耗時: {processing_time:.2f}秒")
+                output_callback(f"[INFO] 返回代碼: {return_code}")
+
+            full_output = '\n'.join(all_output)
+            
+            if return_code == 0:
+                if output_callback:
+                    output_callback("[INFO] MinerU處理成功！")
+
+                # 查找生成的文件
+                if self._filename_mapping and hasattr(self, '_filename_mapping'):
+                    generated_files = self._find_generated_files(
+                        output_path, 
+                        f"{self._filename_mapping['short']}.pdf", 
+                        method=method
+                    )
+                    
+                    try:
+                        os.remove(self._filename_mapping['short_pdf_path'])
+                        if output_callback:
+                            output_callback(f"[INFO] 清理臨時檔案: {self._filename_mapping['short_pdf_path']}")
+                    except:
+                        pass
+                else:
+                    generated_files = self._find_generated_files(output_path, pdf_name, method=method)
+
+                return {
+                    "success": True,
+                    "output_path": str(output_path),
+                    "output_file_paths": generated_files,
+                    "processing_time": processing_time,
+                    "stdout": full_output,
+                    "error": "",
+                    "returncode": return_code
+                }
+            else:
+                if output_callback:
+                    output_callback(f"[ERROR] MinerU處理失敗！錯誤代碼: {return_code}")
+                    output_callback("[ERROR] 完整輸出內容:")
+                    for line in all_output:
+                        output_callback(f"[ERROR] {line}")
+
+                return {
+                    "success": False,
+                    "error": f"MinerU 執行失敗 (錯誤代碼: {return_code})",
+                    "stdout": full_output,
+                    "returncode": return_code
+                }
+                
+        except Exception as e:
+            error_msg = f"執行 MinerU 時發生錯誤: {e}"
+            if output_callback:
+                output_callback(f"[ERROR] {error_msg}")
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg,
+                "stdout": "",
+                "returncode": -1
+            }

@@ -3,32 +3,50 @@
 ## 修改檔案清單
 
 ### 新增檔案
-- `專題/scripts/pdfhelper_bridge.py` - PDFHelper 後端橋接模組
-- `專題/scripts/pdfhelper_rag.py` - RAG 功能腳本（預留）
+- `frontend/scripts/pdfhelper_bridge.py` - PDFHelper 後端橋接模組
+  - ⭐ **支援實時輸出回調** (2025-10-07)
+- `frontend/scripts/pdfhelper_rag.py` - RAG 功能腳本（預留）
+
+### 修改的後端檔案 ⚠️
+- `backend/services/pdf_service/mineru_processor.py` 
+  - ⭐ **新增 `process_pdf_with_mineru_realtime()` 方法** (2025-10-07)
+  - ⭐ **支援 output_callback 參數捕獲實時輸出** (2025-10-07)
+  - ✅ **完全向後兼容，不影響原有功能**
 
 ### 修改的現有檔案
-1. **`專題/scripts/processor.py`** - 主要處理腳本
+1. **`frontend/scripts/processor.py`** - 主要處理腳本
    - 改為使用 PDFHelper 的 MinerU 管線
    - 新增錯誤處理與進度回報
-   - 支援環境變數配置
+   - 支援自訂處理參數配置
+   - ⭐ **新增實時日誌輸出功能** (2025-10-07)
+   - ⭐ **修復 UTF-8 編碼問題** (2025-10-07)
 
-2. **`專題/main.js`** - Electron 主程序
+2. **`frontend/main.js`** - Electron 主程序
    - 新增 metadata 保存到歷史紀錄
    - 支援 PDFHelper 處理結果的額外資訊
+   - ⭐ **改善 Python 子進程編碼設置** (2025-10-07)
+   - ⭐ **智能區分 JSONL 和日誌輸出** (2025-10-07)
 
-3. **`專題/renderer.js`** - 前端渲染邏輯
+3. **`frontend/renderer.js`** - 前端渲染邏輯
    - 新增 metadata 狀態管理
    - 改善 Markdown 圖片路徑解析
    - 基於 markdownPath 處理相對路徑圖片
+   - ⭐ **新增實時後端日誌顯示** (2025-10-07)
+   - ⭐ **支援日誌自動展開和分類顯示** (2025-10-07)
 
-4. **`專題/index.html`** - 使用者介面
+4. **`frontend/index.html`** - 使用者介面
    - 更新文案，明確說明為 PDF 解析生成 Markdown
    - 移除 PDF 顯示相關描述
 
-5. **`專題/README.md`** - 使用說明文件
+5. **`frontend/README.md`** - 使用說明文件
    - 新增 PDFHelper 後端整合章節
    - 新增 MinerU CLI 安裝指引
-   - 新增環境變數配置說明
+   - 新增處理參數調整說明
+
+### Electron 打包提醒
+- 打包時請一併將 `backend/` 目錄放入安裝包（建議放在 `resources/backend`）。
+- 在主程序啟動時透過 `process.env.PDFHELPER_BACKEND` 與 `process.env.PDFHELPER_ROOT` 指定實際後端路徑，以配合 `pdfhelper_bridge.py` 的自動偵測。
+- 需確保 Python 腳本與後端檔案未被 ASAR 壓縮，或於打包設定中加入 `asarUnpack` 規則。
 
 ## 與原版 PDFHelper-master 的差異
 
@@ -65,26 +83,8 @@
 - **進度顯示**：即時顯示處理進度
 - **歷史紀錄**：保存處理記錄與 metadata
 
-### 5. 環境變數支援
-新增環境變數配置：
-- `PDFHELPER_METHOD` - 解析方法（auto/txt/ocr）
-- `PDFHELPER_LANG` - 語言設定
-- `PDFHELPER_DEVICE` - 處理設備（cpu/cuda）
-- `PDFHELPER_VERBOSE` - 詳細日誌
-- `PDFHELPER_MINERU_PATH` - MinerU CLI 路徑
-
-## 安裝需求差異
-
-### 原版需求
-- Python 環境
-- PDFHelper 專案依賴
-- 手動配置各種服務
-
-### 修改版需求
-- Node.js + Electron
-- Python 環境
-- MinerU CLI（`pip install mineru-client`）
-- PDFHelper 專案作為後端依賴
+### 5. 新增的設定彈性
+- 可動態調整 MinerU 處理參數，便於依需求微調流程。
 
 ## 使用場景差異
 
@@ -108,27 +108,27 @@
 - **終端機日誌**：如果從終端機啟動應用，也會顯示處理過程
 
 ### 修改的檔案（2025-10-07）
-1. **`PDFHelper-master/backend/services/pdf_service/mineru_processor.py`** ⭐ 唯一後端修改
+1. **`backend/services/pdf_service/mineru_processor.py`** ⭐ 唯一後端修改
    - 新增 `process_pdf_with_mineru_realtime()` 方法
    - 支援 `output_callback` 參數捕獲實時輸出
    - 保持與原方法完全兼容（非破壞性更新）
 
-2. **`專題/scripts/pdfhelper_bridge.py`**
+2. **`frontend/scripts/pdfhelper_bridge.py`**
    - `run_mineru()` 方法支援 `output_callback` 參數
    - `run_pipeline()` 函數傳遞回調給後端處理器
 
-3. **`專題/scripts/processor.py`**
+3. **`frontend/scripts/processor.py`**
    - 新增 `log_output()` 函數發送實時日誌事件
    - 改善 UTF-8 編碼處理，解決中文亂碼問題
    - 輸出回調函數同時輸出到前端和終端機
 
-4. **`專題/main.js`**
+4. **`frontend/main.js`**
    - 改善 Python 子進程編碼設置
-   - 新增環境變數：`PYTHONUNBUFFERED`, `LC_ALL`
+   - 新增子進程編碼相關設定（`PYTHONUNBUFFERED`, `LC_ALL`）
    - 智能區分 JSONL 事件和日誌輸出
    - 使用 `-u` 參數確保 Python 即時輸出
 
-5. **`專題/renderer.js`**
+5. **`frontend/renderer.js`**
    - 新增 `log` 事件類型處理
    - 實時日誌輸出到瀏覽器開發者控制台
    - 自動展開日誌區域顯示實時輸出

@@ -96,6 +96,70 @@ const chatListEl = document.getElementById('chatList');
 const chatInputEl = document.getElementById('chatInput');
 const btnChatSend = document.getElementById('btnChatSend');
 
+// 日誌功能元素
+const toggleLogsBtn = document.getElementById('toggleLogs');
+const processingLogs = document.getElementById('processingLogs');
+const logContent = document.getElementById('logContent');
+let logsVisible = false;
+let processingLogEntries = [];
+
+// 日誌功能
+function addLogEntry(message, type = 'info') {
+  const timestamp = new Date().toLocaleTimeString();
+  const entry = { time: timestamp, message, type };
+  processingLogEntries.push(entry);
+  
+  // 限制日誌條目數量
+  if (processingLogEntries.length > 100) {
+    processingLogEntries = processingLogEntries.slice(-100);
+  }
+  
+  // 更新日誌顯示
+  if (logContent) {
+    const logHtml = processingLogEntries.map(entry => {
+      let color = 'var(--muted)';
+      let style = '';
+      
+      // 根據類型設置顏色和樣式
+      if (entry.type === 'error') {
+        color = '#ef4444';
+      } else if (entry.type === 'warning') {
+        color = '#f59e0b';
+      } else if (entry.type === 'backend') {
+        // 後端日誌使用特殊樣式
+        if (entry.message.includes('[ERROR]')) {
+          color = '#ef4444';
+        } else if (entry.message.includes('[MinerU]')) {
+          color = '#06b6d4'; // 青色表示 MinerU 輸出
+          style = 'font-family: monospace; font-size: 0.9em;';
+        } else if (entry.message.includes('[INFO]')) {
+          color = '#10b981'; // 綠色表示信息
+        } else if (entry.message.includes('[SUCCESS]')) {
+          color = '#22c55e'; // 亮綠色表示成功
+        }
+      }
+      
+      return `<div style="color:${color}; margin-bottom:2px; ${style}">[${entry.time}] ${entry.message}</div>`;
+    }).join('');
+    logContent.innerHTML = logHtml;
+    
+    // 自動滾動到底部
+    logContent.scrollTop = logContent.scrollHeight;
+  }
+}
+
+function clearLogs() {
+  processingLogEntries = [];
+  if (logContent) logContent.innerHTML = '';
+}
+
+// 日誌展開/收起
+toggleLogsBtn?.addEventListener('click', () => {
+  logsVisible = !logsVisible;
+  if (processingLogs) processingLogs.style.display = logsVisible ? 'block' : 'none';
+  if (toggleLogsBtn) toggleLogsBtn.textContent = logsVisible ? '隱藏處理日誌' : '顯示處理日誌';
+});
+
 const resultState = { markdown: '', zh: '', en: '', lang: 'zh', meta: null };
 function currentMarkdown() {
   if (resultState.zh || resultState.en) {
@@ -348,14 +412,80 @@ btnStart?.addEventListener('click', async () => {
 
 // 訂閱主程序的處理事件，更新處理畫面
 let activeSessionId = null;
+let processingStartTime = null;
+
+function updateProcessingTime() {
+  const procTime = document.getElementById('procTime');
+  if (!procTime || !processingStartTime) return;
+  
+  const elapsed = Math.floor((Date.now() - processingStartTime) / 1000);
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const timeStr = minutes > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${seconds}秒`;
+  procTime.textContent = `處理時間: ${timeStr}`;
+}
+
 window.electronAPI?.onProcessEvent?.((evt) => {
   if (!evt || (activeSessionId && evt.sessionId && evt.sessionId !== activeSessionId)) return;
-  if (evt.sessionId && !activeSessionId) activeSessionId = evt.sessionId;
+  if (evt.sessionId && !activeSessionId) {
+    activeSessionId = evt.sessionId;
+    processingStartTime = Date.now();
+    clearLogs(); // 清除之前的日誌
+    addLogEntry(`開始處理 Session: ${evt.sessionId}`);
+    
+    // 開始時間更新
+    const timeInterval = setInterval(() => {
+      if (!activeSessionId) {
+        clearInterval(timeInterval);
+        return;
+      }
+      updateProcessingTime();
+    }, 1000);
+  }
+  
   if (evt.type === 'progress') {
+    // 記錄進度到日誌
+    const logMsg = `${evt.percent}% - ${evt.status}${evt.details ? ` (${evt.details})` : ''}`;
+    addLogEntry(logMsg);
+    
+    // 更新主要狀態
+    const procStatus = document.getElementById('procStatus');
     if (procStatus) procStatus.textContent = evt.status || '處理中…';
+    
+    // 更新詳細資訊
+    const procDetails = document.getElementById('procDetails');
+    if (procDetails) procDetails.textContent = evt.details || '';
+    
+    // 更新進度條
+    const progressBar = document.getElementById('progressBar');
+    if (progressBar && evt.percent !== undefined) {
+      progressBar.style.width = `${Math.max(0, Math.min(100, evt.percent))}%`;
+    }
+    
+    // 更新百分比顯示
+    const procPercent = document.getElementById('procPercent');
+    if (procPercent && evt.percent !== undefined) {
+      procPercent.textContent = `${Math.round(evt.percent)}%`;
+    }
+    
+    updateProcessingTime();
+    
   } else if (evt.type === 'done') {
+    const procStatus = document.getElementById('procStatus');
     if (procStatus) procStatus.textContent = '完成';
+    
+    const procDetails = document.getElementById('procDetails');
+    if (procDetails) procDetails.textContent = evt.details || '處理成功完成';
+    
+    const progressBar = document.getElementById('progressBar');
+    if (progressBar) progressBar.style.width = '100%';
+    
+    const procPercent = document.getElementById('procPercent');
+    if (procPercent) procPercent.textContent = '100%';
+    
+    updateProcessingTime();
     showToast('處理完成', 'success', 1500);
+    
     // 切到結果畫面並渲染 markdown
     const md = evt.content || '';
     resultState.markdown = md || resultState.markdown;
@@ -366,13 +496,40 @@ window.electronAPI?.onProcessEvent?.((evt) => {
     if (processingView) processingView.style.display = 'none';
     if (resultView) resultView.style.display = 'block';
     activeSessionId = null;
+    processingStartTime = null;
+    
+  } else if (evt.type === 'log') {
+    // 處理來自後端的實時日誌
+    if (evt.message) {
+      // 輸出到瀏覽器開發者控制台
+      console.log(`[PDFHelper Backend] ${evt.message}`);
+      
+      // 添加到 UI 日誌列表
+      addLogEntry(evt.message, 'backend');
+      
+      // 確保日誌區域可見（如果還沒展開的話）
+      const logContainer = document.getElementById('logContainer');
+      if (logContainer && !logContainer.style.display) {
+        // 自動展開日誌，讓用戶看到實時輸出
+        toggleLogsBtn?.click();
+      }
+    }
+    
   } else if (evt.type === 'error') {
+    const procStatus = document.getElementById('procStatus');
     if (procStatus) procStatus.textContent = '發生錯誤';
+    
+    const procDetails = document.getElementById('procDetails');
+    if (procDetails) procDetails.textContent = evt.error || '處理失敗';
+    
+    updateProcessingTime();
     showToast(evt.error || '處理失敗', 'error', 2200);
+    
     // 回到上傳畫面，避免卡在處理畫面
     if (processingView) processingView.style.display = 'none';
     if (wrapUpload) wrapUpload.style.display = '';
     activeSessionId = null;
+    processingStartTime = null;
   }
 });
 

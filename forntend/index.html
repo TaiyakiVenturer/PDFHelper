@@ -251,11 +251,38 @@
     <!-- 全畫面處理中畫面（取代上傳畫面） -->
     <div id="processingView" style="display:none; position: absolute; inset: 36px 0 48px 0;">
       <div style="height:100%; display:flex; align-items:center; justify-content:center; padding:16px;">
-        <div class="upload-card" style="max-width:720px; text-align:center; padding:16px;">
-          <h1>正在處理</h1>
-          <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px;">
+        <div class="upload-card" style="max-width:720px; text-align:center; padding:24px;">
+          <h1>正在處理 PDF</h1>
+          
+          <!-- 進度條 -->
+          <div style="width:100%; height:8px; background:var(--border); border-radius:4px; margin:20px 0; overflow:hidden;">
+            <div id="progressBar" style="height:100%; background:var(--accent); border-radius:4px; width:0%; transition:width 0.3s ease;"></div>
+          </div>
+          
+          <!-- 主要狀態 -->
+          <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:16px;">
             <div class="spinner" aria-hidden="true"></div>
-            <div id="procStatus" class="muted">準備開始…</div>
+            <div id="procStatus" style="font-size:16px; font-weight:500;">準備開始…</div>
+          </div>
+          
+          <!-- 詳細狀態 -->
+          <div id="procDetails" class="muted" style="font-size:14px; min-height:20px; margin-bottom:8px;"></div>
+          
+          <!-- 百分比顯示 -->
+          <div id="procPercent" style="font-size:24px; font-weight:600; color:var(--accent); margin-top:12px;">0%</div>
+          
+          <!-- 時間資訊 -->
+          <div id="procTime" class="muted" style="font-size:12px; margin-top:8px;"></div>
+          
+          <!-- 展開日誌按鈕 -->
+          <button id="toggleLogs" style="margin-top:16px; padding:6px 12px; background:var(--button-bg); border:1px solid var(--border); border-radius:6px; color:var(--text); cursor:pointer; font-size:12px;">
+            顯示處理日誌
+          </button>
+          
+          <!-- 日誌區域 -->
+          <div id="processingLogs" style="display:none; margin-top:12px; padding:12px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; text-align:left; max-height:200px; overflow-y:auto;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:8px; color:var(--muted);">處理日誌：</div>
+            <div id="logContent" style="font-family:monospace; font-size:11px; color:var(--muted); line-height:1.4;"></div>
           </div>
         </div>
       </div>

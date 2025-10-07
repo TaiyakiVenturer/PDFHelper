@@ -181,14 +181,30 @@ ipcMain.handle('process:start', async (event, payload) => {
   try {
     console.log('[process:start]', { filePath, company, model, sessionId });
     const win = BrowserWindow.fromWebContents(event.sender);
-    // 優先使用 Python 腳本（若存在），否則回退到模擬計時器
-    const py = process.env.PYTHON || 'python';
+    // 優先使用 Anaconda 的 Python 環境
+    const py = process.env.PYTHON || 'C:\\Users\\User\\anaconda3\\python.exe';
     const script = path.join(__dirname, 'scripts', 'processor.py');
   if (fs.existsSync(script)) {
-      const env = { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' };
-      const child = spawn(py, [script, filePath, company, model, sessionId], { cwd: __dirname, env });
-      child.stdout.setEncoding && child.stdout.setEncoding('utf8');
-      child.stderr.setEncoding && child.stderr.setEncoding('utf8');
+      const env = { 
+        ...process.env, 
+        PYTHONIOENCODING: 'utf-8', 
+        PYTHONUTF8: '1',
+        PYTHONUNBUFFERED: '1',  // 確保即時輸出
+        LC_ALL: 'C.UTF-8'       // 設置正確的 locale
+      };
+      const child = spawn(py, ['-u', script, filePath, company, model, sessionId], { 
+        cwd: __dirname, 
+        env,
+        stdio: ['pipe', 'pipe', 'pipe']  // 明確設置 stdio
+      });
+      
+      // 設置編碼
+      if (child.stdout) {
+        child.stdout.setEncoding('utf8');
+      }
+      if (child.stderr) {
+        child.stderr.setEncoding('utf8');
+      }
       child.stdout.on('data', (buf) => {
         const text = typeof buf === 'string' ? buf : String(buf);
         const lines = text.split(/\r?\n/).filter(Boolean);
@@ -228,7 +244,13 @@ ipcMain.handle('process:start', async (event, payload) => {
               }
             }
           } catch (e) {
-            console.warn('Invalid JSONL from python:', line);
+            // 如果不是 JSON，檢查是否是日誌輸出
+            if (line.includes('[PDFHelper]')) {
+              // 這是來自 Python 的日誌輸出，直接顯示在控制台
+              console.log('Python 日誌:', line);
+            } else {
+              console.warn('無法解析的 Python 輸出:', line);
+            }
           }
         }
       });
@@ -495,7 +517,7 @@ ipcMain.handle('models:list', async (_event, company) => {
 ipcMain.handle('chat:ask', async (_event, payload) => {
   try {
     const { question, context, lang } = payload || {};
-    const py = process.env.PYTHON || 'python';
+    const py = process.env.PYTHON || 'C:\\Users\\User\\anaconda3\\python.exe';
     const script = path.join(__dirname, 'scripts', 'chat.py');
     if (!fs.existsSync(script)) {
       return { ok: false, error: '找不到聊天腳本 scripts/chat.py' };

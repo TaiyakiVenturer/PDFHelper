@@ -40,13 +40,14 @@ class MarkdownReconstructor:
         重組.md檔案
 
         Args:
-            file_name: PDF檔案名稱
+            file_name: 翻譯後的Json檔案名稱含副檔名 (例如: `example_translated.json`)
             method: 處理方法 (auto/ocr/text)
             language: 語言選擇 (zh, en)
 
         Returns:
             str: 重組後的.md檔案路徑，失敗則回傳None
         """
+        # 
         translated_file_path = os.path.join(self.instance_path, "translated_files", file_name)
         if not os.path.exists(translated_file_path):
             logger.error(f"找不到翻譯後的檔案: {translated_file_path}")

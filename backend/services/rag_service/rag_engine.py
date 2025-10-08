@@ -112,13 +112,12 @@ class RAGEngine:
         if self.verbose:
             logger.info("RAG引擎初始化完成")
 
-    def store_document_into_vectordb(self, json_file_name: str, collection_name: str = None) -> bool:
+    def store_document_into_vectordb(self, json_file_name: str) -> bool:
         """
         儲存單個文件到向量資料庫
         
         Args:
             json_file_name: JSON檔案名稱 (必須是翻譯後的JSON文件)
-            collection_name: 向量資料庫集合名稱 (如未提供則使用json_file_name)
 
         Returns:
             是否儲存成功
@@ -126,17 +125,11 @@ class RAGEngine:
         try:
             if self.verbose:
                 logger.info(f"開始儲存文件: {json_file_name}")
-            
-            # 讀取翻譯資料
-            document_chunks = self.document_processor.load_translated_json(json_file_name)
-            if not document_chunks:
-                logger.error("未讀取到任何內容片段，請檢查翻譯文件")
-                return False
 
             # 處理文件生成片段
-            chunks = self.document_processor.process_chunks(document_chunks)
-            if len(chunks) == 0:
-                logger.error("未生成任何內容片段")
+            chunks = self.document_processor.json_to_chunks(json_file_name)
+            if not chunks:
+                logger.error("未讀取到翻譯JSON文件或文件內容為空")
                 return False
 
             # 檢查embedding服務可用性
@@ -149,15 +142,16 @@ class RAGEngine:
             embeddings = self.embedding_service.get_embeddings(texts, store=True)
             
             # 如果文件已存在，先刪除
-            collection_name = collection_name or json_file_name
+            collection_name = '_'.join(json_file_name.split("_")[:-1])
             if self.vector_store.get_collection_info(collection_name)['document_count'] > 0:
                 self.vector_store.delete_collection(collection_name)
 
             # 新增到向量資料庫
             success = self.vector_store.add_chunks(chunks, embeddings, collection_name=collection_name)
 
-            if success and self.verbose:
-                logger.info(f"文件向量化儲存完成: {collection_name}, 集合包含 {len(chunks)} 個片段")
+            if success:
+                if self.verbose:
+                    logger.info(f"文件向量化儲存完成: {collection_name}, 集合包含 {len(chunks)} 個片段")
                 return True
             else:
                 logger.error("向量資料庫新增失敗")
@@ -345,12 +339,9 @@ class RAGEngine:
                 response_time=time.time() - start_time
             )
 
-    def get_system_info(self, collection_name: str = None) -> Dict[str, Any]:
+    def get_system_info(self) -> Dict[str, Any]:
         """
         獲取系統資訊
-
-        Args:
-            collection_name: 向量資料庫集合名稱 (如提供則返回該集合資訊)
 
         Returns:
             Dict: [str, Any] 系統資訊字典
@@ -361,7 +352,7 @@ class RAGEngine:
                 - min_chunk_size: 內容片段最小長度
         """
         return {
-            "vector_store_info": self.vector_store.get_collection_info(collection_name) if collection_name else "未指定集合",
+            "vector_store_info": self.vector_store.list_collections() or "未指定集合",
             "embedding_model": self.embedding_service.model_name,
             "llm_service": self.llm_service.model_name if self.llm_service else "未設定",
             "document_processor": {

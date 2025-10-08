@@ -24,7 +24,7 @@ class GeminiService():
             api_key: Google Gemini API的API密鑰 (無輸入則使用環境變量中的API_KEY)
             verbose: 是否啟用詳細模式 (預設為False)
         """
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(api_key="AIzaSyCsZf8TurUWon1mjbIRoDNQxhp0gsEJTQ8")
         self.model_name = model_name
         self.verbose = verbose
 

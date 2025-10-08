@@ -68,8 +68,10 @@ htmlcov/
 *.temp
 
 # TODO lists（開發中的文件）
-docs/TODO_Frontend.md
-docs/RELEASE_CHECKLIST.md
+docs/*
+!docs/LICENSE_GUILD.md
+!docs/TODO.md
+!docs/TODO_RAG.md
 
 # 未完成的功能
-frontend/
+frontend_backup/

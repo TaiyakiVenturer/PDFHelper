@@ -127,11 +127,11 @@ def test_document_processor():
     
     for test_path in test_paths:
         try:
-            chunks = processor.load_translated_json(test_path)
+            chunks = processor._load_translated_json(test_path)
             if not chunks:
                 print("   ❌ 加載切片失敗")
                 continue
-            chunks = processor.process_chunks(chunks)
+            chunks = processor._process_chunks(chunks)
             print(f"   ✅ 處理完成，生成 {len(chunks)} 個切片")
             
             if chunks:

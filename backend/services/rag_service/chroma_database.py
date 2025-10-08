@@ -475,3 +475,19 @@ class ChromaVectorStore:
         except Exception as e:
             logger.error(f"導入集合數據時出錯: {e}")
             return False
+
+    def list_collections(self) -> List[str]:
+        """
+        列出所有集合名稱
+
+        Returns:
+            List[str]: 集合名稱列表
+        """
+        try:
+            collections = self.client.list_collections()
+            collection_names = [col.name for col in collections]
+            logger.info(f"目前存在的集合: {collection_names}")
+            return collection_names
+        except Exception as e:
+            logger.error(f"列出集合時出錯: {e}")
+            return []

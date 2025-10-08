@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="Content-Language" content="zh-Hant" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文字顯示</title>
+    <style>
+      /* 全域盒模型，避免寬高計算造成溢出 */
+      *, *::before, *::after { box-sizing: border-box; }
+      /* 動畫偏好：尊重使用者的減少動態設定 */
+      @media (prefers-reduced-motion: reduce) {
+        * { animation: none !important; transition: none !important; }
+      }
+
+      :root[data-theme="dark"] {
+        --bg: #0f172a; /* slate-900 */
+        --text: #e2e8f0; /* slate-200 */
+        --muted: #94a3b8; /* slate-400 */
+        --panel: #111827; /* gray-900 */
+        --surface-1: #0f172a; /* base surface */
+        --surface-2: #0b1220; /* elevated surface */
+        --border: #334155; /* slate-700 */
+        --titlebar: #0b1220;
+        --button-bg: #0f172a;
+        --button-hover-bg: #111827;
+        --accent-bg: #0ea5e9;
+        --accent-hover-bg: #38bdf8;
+        --accent-border: #0284c7;
+        --accent-text: #082f49;
+        --drop-border: #475569;
+        --drop-hover-bg: rgba(56,189,248,0.08);
+        --outline-strong: #1f2937; /* slate-800 */
+      }
+      :root[data-theme="light"] {
+        --bg: #f8fafc; /* slate-50 */
+        --text: #0f172a; /* slate-900 */
+        --muted: #475569; /* slate-600 */
+        --panel: #ffffff;
+        --surface-1: #ffffff;
+        --surface-2: #f1f5f9; /* slate-100 */
+        --border: #cbd5e1; /* slate-300 */
+        --titlebar: #ffffff;
+        --button-bg: #f1f5f9; /* slate-100 */
+        --button-hover-bg: #e2e8f0; /* slate-200 */
+        --accent-bg: #0284c7;
+        --accent-hover-bg: #0ea5e9;
+        --accent-border: #0369a1;
+        --accent-text: #f0f9ff;
+        --drop-border: #94a3b8;
+        --drop-hover-bg: rgba(2,136,209,0.08);
+        --outline-strong: #94a3b8; /* slate-400 */
+      }
+      html, body {
+        height: 100%;
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          'Microsoft JhengHei', 'Noto Sans TC', arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        /* 全域主題切換轉場 */
+        transition: background-color 220ms ease, color 220ms ease;
+      }
+      /* 自訂標題列（可拖曳區域） */
+      .titlebar {
+        -webkit-app-region: drag; /* 允許拖曳 */
+        height: 36px;
+        padding: 0 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--titlebar);
+        border-bottom: 1px solid var(--border);
+        transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+      }
+      .titlebar .left, .titlebar .right { display: flex; align-items: center; gap: 8px; }
+      .titlebar .title { font-size: 13px; color: var(--muted); }
+      .window-controls { -webkit-app-region: no-drag; display: flex; gap: 6px; }
+      .win-btn {
+        width: 46px; height: 28px; display: grid; place-items: center;
+        border-radius: 6px; cursor: pointer; color: var(--muted); border: 1px solid var(--border);
+        background: var(--button-bg);
+        transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease;
+      }
+      .win-btn:hover { background: var(--button-hover-bg); transform: translateY(-1px); }
+      .win-close:hover { background: #b91c1c; color: #fff; border-color: #7f1d1d; }
+      .icon { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+
+      /* 主內容區：上傳/拖放 */
+      .wrap { display: flex; align-items: center; justify-content: center; height: calc(100% - 36px); padding: 16px; }
+      .upload-card {
+        width: 720px; max-width: 100%;
+        background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+        padding: 32px 28px 24px;
+        text-align: center;
+        transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+      }
+      .upload-card h1 { margin: 0 0 8px; font-size: 24px; }
+      .upload-card .subtitle { color: var(--muted); font-size: 14px; }
+      .upload-zone {
+        border: 2px dashed var(--drop-border, #475569); border-radius: 14px;
+        padding: 28px; margin-top: 16px; color: var(--muted, #94a3b8); background: var(--surface-2, #0b1220);
+        cursor: pointer; min-height: 140px; display: grid; place-items: center;
+        transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, transform 180ms ease, box-shadow 200ms ease;
+      }
+      .upload-zone.dragover { border-color: var(--accent-hover-bg); background: var(--drop-hover-bg); transform: scale(1.01); box-shadow: 0 8px 22px rgba(2,132,199,0.25); }
+      .upload-btn { -webkit-app-region: no-drag; margin-top: 12px; padding: 10px 16px; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-text); font-weight: 700; border-radius: 10px; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease; }
+      .upload-btn:hover { background: var(--accent-hover-bg); transform: translateY(-1px); box-shadow: 0 6px 14px rgba(0,0,0,0.25); }
+      .formats { margin-top: 8px; color: var(--muted); font-size: 14px; }
+      .filelist { border-top: 1px dashed var(--border); margin-top: 16px; padding-top: 12px; text-align: left; color: var(--muted); font-size: 13px; }
+
+      /* 底部工具列 */
+  .footer { position: fixed; left: 0; right: 0; bottom: 0; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--titlebar); border-top: 1px solid var(--border); transition: background-color 220ms ease, border-color 220ms ease; }
+      .footer .spacer { flex: 1; }
+  .btn { -webkit-app-region: no-drag; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease; }
+  .btn:hover { background: var(--button-hover-bg); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+
+      /* 設定 Modal */
+  /* 讓標題列可在設定開啟時仍可操作：保留上方 36px（titlebar 高度）不覆蓋 */
+  .modal-backdrop { position: fixed; left: 0; right: 0; top: 36px; bottom: 0; background: rgba(2,6,23,0.55); display: none; align-items: center; justify-content: center; z-index: 1000; -webkit-app-region: no-drag; opacity: 0; transition: opacity 200ms ease; }
+  .modal-backdrop.show { opacity: 1; }
+  .modal { width: 560px; max-width: calc(100% - 24px); background: var(--surface-1); border: 1px solid var(--outline-strong); border-radius: 16px; padding: 16px 16px 12px; color: var(--text); position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.45); transform: translateY(8px) scale(0.98); opacity: 0; transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, transform 200ms ease, opacity 200ms ease; }
+  .modal.open { transform: none; opacity: 1; }
+  .modal .close { position: absolute; right: 10px; top: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); border-radius: 6px; width: 32px; height: 28px; cursor: pointer; }
+  .modal h2 { margin: 4px 0 14px; font-size: 20px; }
+  .section { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .section-title { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 14px; }
+  .input, .select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--text); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease; min-height: 40px; line-height: 1.2; outline: none; }
+  .input:focus, .select:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px rgba(2,132,199,0.25); }
+  .input-group { position: relative; }
+  /* 讓輸入框為了 suffix 按鈕預留空間，避免文字被遮或造成視覺溢出 */
+  .input-group input { padding-right: 96px; }
+  .input-group .suffix-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 32px; padding: 0 10px; width: 84px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+      .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  .btn-primary { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); font-weight: 700; }
+  .btn-primary:hover { background: var(--accent-hover-bg); }
+
+  /* Segmented control for theme */
+  .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--button-bg); transition: background-color 160ms ease, border-color 160ms ease; }
+  .segmented input { display: none; }
+  /* 修正按鈕可點區域與視覺對齊：統一高度，垂直置中 */
+  .segmented label { display: inline-flex; align-items: center; height: 34px; padding: 0 14px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; transition: background-color 160ms ease, color 160ms ease; }
+  .segmented label + label { border-left: 1px solid var(--border); }
+  .segmented input:checked + label { background: var(--accent-bg); color: var(--accent-text); }
+
+  /* Toast */
+  .toast { position: fixed; right: 16px; bottom: 60px; z-index: 1100; display: none; }
+  .toast .item { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 220px; box-shadow: 0 10px 24px rgba(0,0,0,0.3); opacity: 0; transform: translateY(8px); transition: opacity 200ms ease, transform 200ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+  .toast .item.show { opacity: 1; transform: none; }
+  .toast .item.hide { opacity: 0; transform: translateY(8px); }
+  .toast .success { border-color: #16a34a; }
+  .toast .error { border-color: #ef4444; }
+  /* 更新狀態卡片 */
+  .update-status { display: none; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 200ms ease; }
+  .update-status.show { display: flex; opacity: 1; }
+  .update-status.ok { border-color: #16a34a; color: #16a34a; }
+  .update-status.info { border-color: #0284c7; color: #0284c7; }
+  .update-status.error { border-color: #ef4444; color: #ef4444; }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--muted); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+        font-weight: 700;
+      }
+      p {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.6;
+        white-space: pre-line;
+      }
+      .muted {
+        color: #94a3b8; /* slate-400 */
+        font-size: 13px;
+        margin-top: 14px;
+      }
+      /* 處理狀態行中的文字不需要額外上邊距，避免與 spinner 垂直對齊偏移 */
+      #procStatus { margin: 0; }
+      /* 提供商徽章（純文字圓角，避免外部圖檔） */
+      .provider-badge { margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; vertical-align: middle; display: inline-block; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); }
+      .provider-badge.openai { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.45); color: #10b981; }
+      .provider-badge.google { background: rgba(2,136,209,0.12); border-color: rgba(2,136,209,0.45); color: #0288d1; }
+      .provider-badge.xai { background: rgba(109,40,217,0.12); border-color: rgba(109,40,217,0.45); color: #6d28d9; }
+      .provider-badge.anthropic { background: rgba(244,114,182,0.12); border-color: rgba(244,114,182,0.45); color: #f472b6; }
+  .provider-badge.ollama { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.45); color: #22c55e; }
+
+      /* 結果畫面佈局 */
+  .result-wrap { display: grid; grid-template-columns: 1fr 340px; gap: 16px; height: calc(100% - 36px - 48px); padding: 16px 16px 8px 16px; }
+  .result-main { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 16px 16px 8px 16px; display: flex; flex-direction: column; overflow: hidden; }
+  /* Markdown 內容樣式 */
+      .markdown h1 { font-size: 24px; margin: 12px 0; }
+      .markdown h2 { font-size: 20px; margin: 10px 0; }
+      .markdown h3 { font-size: 18px; margin: 8px 0; }
+      .markdown p { line-height: 1.7; margin: 8px 0; }
+      .markdown ul, .markdown ol { margin: 8px 0 8px 20px; }
+      .markdown code { background: var(--surface-2); border: 1px solid var(--border); padding: 0 4px; border-radius: 6px; }
+  .markdown pre { background: var(--surface-2); border: 1px solid var(--border); padding: 10px; overflow: auto; border-radius: 10px; }
+  .markdown > :last-child { margin-bottom: 0 !important; }
+
+  .result-content { flex: 1; min-height: 0; overflow: auto; }
+
+  /* Chat 側欄 */
+  .result-aside { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; min-height: 0; }
+  .chat-header { display:flex; align-items:center; justify-content: space-between; border-bottom:1px solid var(--border); padding-bottom:6px; margin-bottom:8px; }
+  .chat-header h3 { margin: 0; font-size: 16px; }
+  .chat-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
+  .msg { max-width: 90%; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--border); line-height: 1.5; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: rgba(2,132,199,0.12); border-color: rgba(2,132,199,0.35); }
+  .msg.assistant { align-self: flex-start; background: var(--surface-2); }
+  .chat-input { display:flex; align-items:flex-end; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .chat-input textarea { flex: 1; resize: vertical; min-height: 44px; max-height: 160px; border-radius: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--text); padding: 8px 10px; outline: none; }
+  .chat-input textarea:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px rgba(2,132,199,0.25); }
+  .msg-content { line-height: 1.6; font-size: 14px; }
+  .msg-content code { background: var(--surface-2); border: 1px solid var(--border); padding: 0 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace; }
+  .msg-content pre { background: var(--surface-2); border: 1px solid var(--border); padding: 8px; border-radius: 8px; overflow: auto; }
+  .msg-content pre code { background: none; border: none; padding: 0; }
+  .msg-references { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .reference-chip { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--accent-border); background: rgba(14,165,233,0.2); color: var(--accent-bg); font-size: 12px; cursor: pointer; }
+  .followup-list { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .followup-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); cursor: pointer; font-size: 12px; }
+  .followup-btn:hover { background: var(--button-hover-bg); color: var(--text); }
+  @media (max-width: 980px) { .result-wrap { grid-template-columns: 1fr; } }
+  /* Processing 日誌區域 */
+  .proc-log { margin-top: 14px; max-height: 300px; overflow: auto; text-align: left; border: 1px dashed var(--border); border-radius: 10px; padding: 12px; color: var(--muted); background: var(--surface-2); }
+  .proc-log .line { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 13px !important; line-height: 1.6; margin-bottom: 2px; }
+  
+  /* 日誌內容區域固定字體 */
+  #logContent { 
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace !important; 
+    font-size: 13px !important; 
+    line-height: 1.6 !important; 
+    color: var(--muted) !important;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  #logContent .log-line {
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+    margin-bottom: 2px;
+  }
+
+  /* ─── Reader Layout Enhancements ─────────────────────────────────────────── */
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  .result-header .title { margin: 0; font-size: 22px; }
+  .result-header .header-left { display: flex; flex-direction: column; gap: 4px; }
+  .doc-meta { font-size: 12px; color: var(--muted); }
+  .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .reader-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .search-group { display: flex; align-items: center; gap: 8px; flex: 1; }
+  .search-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--button-bg);
+    color: var(--text);
+    min-width: 0;
+  }
+  .search-controls { display: inline-flex; align-items: center; gap: 6px; }
+  .search-counter { font-size: 12px; color: var(--muted); min-width: 54px; text-align: right; }
+  .btn-icon {
+    -webkit-app-region: no-drag;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--button-bg);
+    color: var(--muted);
+    cursor: pointer;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease;
+  }
+  .btn-icon:hover { background: var(--button-hover-bg); color: var(--text); transform: translateY(-1px); }
+  .btn-icon.active { background: rgba(14,165,233,0.18); border-color: var(--accent-border); color: var(--text); }
+  .context-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .toolbar-right { display: flex; align-items: center; gap: 12px; }
+  .nav-controls { display: inline-flex; gap: 6px; }
+  .context-chip {
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--accent-border);
+    background: rgba(14,165,233,0.12);
+    color: var(--accent-bg);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .reader-content {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 16px;
+    height: 100%;
+    min-height: 0;
+  }
+  .reader-content.toc-hidden { grid-template-columns: 1fr; }
+  .toc {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+  }
+  .toc.hidden { display: none; }
+  .toc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; }
+  .toc-list { flex: 1; overflow: auto; padding-right: 4px; }
+  .toc-item { display: block; padding: 6px 8px; border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .toc-item:hover, .toc-item.active { background: rgba(14,165,233,0.15); color: var(--text); }
+  .toc-level-2 { padding-left: 16px; }
+  .toc-level-3 { padding-left: 28px; }
+  .toc-level-4 { padding-left: 40px; }
+
+  .reader-panels {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-height: 0;
+  }
+  .reader-panels[data-split="true"] { grid-template-columns: 1fr 1fr; }
+  .markdown-panel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .markdown-panel .markdown { padding: 16px; overflow: auto; flex: 1; }
+  .markdown-panel.secondary[hidden] { display: none; }
+  .panel-header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+
+  /* ─── Aside Sections ─────────────────────────────────────────────────────── */
+  .aside-section {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-1);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .section-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .section-header h3 { margin: 0; font-size: 15px; }
+  .section-actions { display: flex; gap: 6px; }
+  .section-body { display: flex; flex-direction: column; gap: 12px; }
+  .subsection { display: flex; flex-direction: column; gap: 8px; }
+  .subsection-header { display: flex; justify-content: space-between; align-items: center; }
+  .subsection-header h4 { margin: 0; font-size: 13px; color: var(--muted); }
+
+  .bookmark-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow: auto; }
+  .bookmark-item { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; border: 1px solid transparent; background: var(--surface-2); cursor: pointer; }
+  .bookmark-item:hover { border-color: var(--accent-border); }
+  .bookmark-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .bookmark-actions { display: flex; gap: 6px; }
+
+  .note-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow: auto; }
+  .note-card { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; }
+  .note-meta { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; }
+  .note-actions { display: flex; gap: 6px; }
+  .note-snippet { font-size: 12px; color: var(--muted); }
+  .note-composer { border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; }
+  .composer-context { font-size: 12px; color: var(--muted); }
+  .composer-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+  .chat-section { flex: 1; min-height: 0; }
+  .suggestion-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .suggestion-item { padding: 6px 10px; border-radius: 999px; background: rgba(14,165,233,0.15); color: var(--accent-bg); cursor: pointer; font-size: 12px; border: 1px solid transparent; }
+  .suggestion-item:hover { border-color: var(--accent-border); }
+  .chat-actions { display: flex; gap: 6px; }
+  .chat-input textarea { width: 100%; }
+
+  /* ─── Inline Tools ───────────────────────────────────────────────────────── */
+  .selection-popover {
+    position: fixed;
+    z-index: 1200;
+    display: flex;
+    gap: 6px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 12px 24px rgba(0,0,0,0.35);
+  }
+  .selection-popover button {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--button-bg);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .selection-popover button:hover { background: var(--button-hover-bg); color: var(--text); }
+
+  .reference-trail {
+    position: fixed;
+    left: 16px;
+    bottom: 60px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    max-width: 320px;
+    box-shadow: 0 14px 24px rgba(0,0,0,0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .trail-item { font-size: 12px; color: var(--muted); cursor: pointer; }
+
+  .history-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--surface-2); }
+  .history-item { border: 1px solid transparent; border-radius: 8px; padding: 8px; margin-bottom: 6px; cursor: pointer; }
+  .history-item.active { border-color: var(--accent-border); background: rgba(14,165,233,0.12); }
+
+  .search-hit { background: rgba(14,165,233,0.35); color: inherit; border-radius: 4px; padding: 0 2px; }
+  .search-hit.active-hit { outline: 2px solid var(--accent-border); }
+  .annotation-highlight { background: rgba(249,115,22,0.25); padding: 0 2px; border-radius: 4px; }
+
+  @media (max-width: 1280px) {
+    .reader-content { grid-template-columns: 1fr; }
+    .toc { order: -1; flex-direction: row; align-items: flex-start; overflow-x: auto; }
+    .toc-list { display: flex; flex-direction: row; gap: 6px; }
+    .toc-item { white-space: nowrap; }
+  }
+  @media (max-width: 1080px) {
+    .result-wrap { grid-template-columns: 1fr; }
+    .result-aside { order: -1; }
+  }
+  @media (max-width: 640px) {
+    .reader-toolbar { flex-direction: column; align-items: stretch; }
+    .chat-actions { flex-direction: column; }
+    .header-actions { justify-content: flex-end; }
+  }
+    </style>
+  </head>
+  <body>
+    <!-- 自訂標題列 -->
+    <div class="titlebar">
+      <div class="left">
+        <span class="title">論文小助理</span>
+      </div>
+      <div class="right window-controls">
+        <button class="win-btn win-min" id="btnMin" title="最小化"><span class="icon">—</span></button>
+        <button class="win-btn win-max" id="btnMax" title="最大化/還原"><span class="icon" id="iconMax">▢</span></button>
+        <button class="win-btn win-close" id="btnClose" title="關閉"><span class="icon">×</span></button>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="upload-card">
+  <h1>上傳或拖放你的 PDF 文件</h1>
+  <div class="subtitle">會使用 MinerU 解析 PDF 並生成 Markdown 文件（一次僅可處理一個檔案）</div>
+        <button id="btnUpload" class="upload-btn">選擇檔案</button>
+        <div id="dropZone" class="upload-zone" title="點擊或拖放 PDF 檔案">將 PDF 檔案拖曳到這裡，或點擊此區選擇檔案</div>
+  <div id="fileList" class="filelist" aria-live="polite" aria-atomic="true"></div>
+        <div style="margin-top:12px; display:flex; gap:8px; justify-content:center; align-items:center;">
+          <button id="btnDeleteFile" class="btn" style="display:none;">刪除</button>
+          <button id="btnStart" class="btn btn-primary" style="display:none; min-width: 120px;">開始解析</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全畫面處理中畫面（取代上傳畫面） -->
+    <div id="processingView" style="display:none; position: absolute; inset: 36px 0 48px 0;">
+      <div style="height:100%; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div class="upload-card" style="max-width:720px; text-align:center; padding:24px;">
+          <h1>正在處理 PDF</h1>
+          
+          <!-- 進度條 -->
+          <div style="width:100%; height:8px; background:var(--border); border-radius:4px; margin:20px 0; overflow:hidden;">
+            <div id="progressBar" style="height:100%; background:var(--accent); border-radius:4px; width:0%; transition:width 0.3s ease;"></div>
+          </div>
+          
+          <!-- 主要狀態 -->
+          <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:16px;">
+            <div class="spinner" aria-hidden="true"></div>
+            <div id="procStatus" style="font-size:16px; font-weight:500;">準備開始…</div>
+          </div>
+          
+          <!-- 詳細狀態 -->
+          <div id="procDetails" class="muted" style="font-size:14px; min-height:20px; margin-bottom:8px;"></div>
+          
+          <!-- 百分比顯示 -->
+          <div id="procPercent" style="font-size:24px; font-weight:600; color:var(--accent); margin-top:12px;">0%</div>
+          
+          <!-- 時間資訊 -->
+          <div id="procTime" class="muted" style="font-size:12px; margin-top:8px;"></div>
+          
+          <!-- 展開日誌按鈕 -->
+          <button id="toggleLogs" style="margin-top:16px; padding:6px 12px; background:var(--button-bg); border:1px solid var(--border); border-radius:6px; color:var(--text); cursor:pointer; font-size:12px;">
+            顯示處理日誌
+          </button>
+          
+          <!-- 日誌區域 -->
+          <div id="processingLogs" style="display:none; margin-top:12px; padding:12px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; text-align:left; max-height:300px; overflow-y:auto;">
+            <div style="font-size:13px; font-weight:600; margin-bottom:10px; color:var(--muted);">處理日誌：</div>
+            <div id="logContent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <!-- 結果畫面（Markdown） -->
+    <div id="resultView" style="display:none; position: absolute; inset: 36px 0 48px 0;">
+      <div class="result-wrap">
+        <div class="result-main">
+          <div class="result-header">
+            <div class="header-left">
+              <h2 class="title">分析結果</h2>
+              <div id="docMetaSummary" class="doc-meta" role="status" aria-live="polite"></div>
+            </div>
+            <div class="header-actions">
+              <div class="segmented" id="langToggle" aria-label="語言切換">
+                <input id="langZh" type="radio" name="lang" value="zh" checked />
+                <label for="langZh">中文</label>
+                <input id="langEn" type="radio" name="lang" value="en" />
+                <label for="langEn">English</label>
+              </div>
+              <button id="btnToggleToc" class="btn" type="button" title="切換目錄面板">顯示目錄</button>
+              <button id="btnToggleSplit" class="btn" type="button" title="切換分割檢視">分割視窗</button>
+              <button id="btnOpenNewWindow" class="btn" type="button" title="開啟新視窗">新視窗</button>
+              <button id="btnNewFile" class="btn" title="處理另一個檔案">新檔案</button>
+            </div>
+          </div>
+          <div class="reader-toolbar">
+            <div class="search-group">
+              <input id="searchInput" class="search-input" type="search" placeholder="全文搜尋…" aria-label="全文搜尋" />
+              <div class="search-controls" role="group" aria-label="搜尋導覽">
+                <span id="searchCounter" class="search-counter">0 / 0</span>
+                <button id="btnSearchPrev" class="btn-icon" type="button" title="上一個結果">▲</button>
+                <button id="btnSearchNext" class="btn-icon" type="button" title="下一個結果">▼</button>
+                <button id="btnSearchClear" class="btn-icon" type="button" title="清除搜尋">✕</button>
+              </div>
+            </div>
+            <div class="toolbar-right">
+              <div id="contextChips" class="context-chips" aria-live="polite"></div>
+              <div class="nav-controls" role="group" aria-label="章節導覽">
+                <button id="btnPrevSection" class="btn-icon" type="button" title="上一節">←</button>
+                <button id="btnNextSection" class="btn-icon" type="button" title="下一節">→</button>
+              </div>
+            </div>
+          </div>
+          <div class="reader-content toc-hidden">
+            <nav id="tocSidebar" class="toc hidden" aria-label="文件目錄">
+              <div class="toc-header">
+                <span>目錄</span>
+                <div class="toc-actions">
+                  <button id="btnTocExpand" class="btn-icon" type="button" title="展開全部">＋</button>
+                  <button id="btnTocCollapse" class="btn-icon" type="button" title="摺疊全部">－</button>
+                </div>
+              </div>
+              <div id="tocList" class="toc-list"></div>
+            </nav>
+            <div id="readerPanels" class="reader-panels" data-split="false">
+              <section class="markdown-panel primary" aria-label="主要內容">
+                <div id="mdContainer" class="markdown"></div>
+              </section>
+              <section id="secondaryPanel" class="markdown-panel secondary" aria-label="次要內容" hidden>
+                <div class="panel-header">
+                  <select id="secondarySource" class="select" aria-label="次視窗起始位置">
+                    <option value="">選擇目標節點</option>
+                  </select>
+                  <button id="btnSyncScroll" class="btn-icon" type="button" title="同步滾動">⇆</button>
+                </div>
+                <div id="mdContainerSecondary" class="markdown"></div>
+              </section>
+            </div>
+          </div>
+        </div>
+        <aside class="result-aside">
+          <section class="aside-section" aria-labelledby="markNoteTitle">
+            <div class="section-header">
+              <h3 id="markNoteTitle">書籤與筆記</h3>
+              <div class="section-actions">
+                <button id="btnAddBookmark" class="btn-icon" type="button" title="加入書籤">＋</button>
+                <button id="btnExportBookmarks" class="btn-icon" type="button" title="匯出書籤">⇩</button>
+                <button id="btnCreateNote" class="btn" type="button" title="新增筆記">新增筆記</button>
+              </div>
+            </div>
+            <div class="section-body">
+              <div class="subsection" aria-labelledby="bookmarkTitle">
+                <div class="subsection-header">
+                  <h4 id="bookmarkTitle">書籤</h4>
+                </div>
+                <ul id="bookmarkList" class="bookmark-list"></ul>
+              </div>
+              <div class="subsection" aria-labelledby="noteTitle">
+                <div class="subsection-header">
+                  <h4 id="noteTitle">筆記</h4>
+                </div>
+                <div id="noteList" class="note-list"></div>
+                <div id="noteComposer" class="note-composer" hidden>
+                  <div class="composer-context" id="noteComposerContext"></div>
+                  <textarea id="noteComposerInput" placeholder="撰寫筆記…" rows="3"></textarea>
+                  <div class="composer-actions">
+                    <button id="btnNoteCancel" class="btn" type="button">取消</button>
+                    <button id="btnNoteSave" class="btn btn-primary" type="button">儲存</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="aside-section chat-section" aria-labelledby="chatTitle">
+            <div class="section-header">
+              <h3 id="chatTitle">聊天</h3>
+              <div class="section-actions">
+                <button id="btnChatNew" class="btn-icon" type="button" title="新對話">＋</button>
+                <button id="btnChatHistory" class="btn-icon" type="button" title="聊天歷史">🕘</button>
+                <button id="btnVoiceInput" class="btn-icon" type="button" title="語音輸入">🎙️</button>
+                <button id="btnVoiceOutput" class="btn-icon" type="button" title="語音播放">🔊</button>
+              </div>
+            </div>
+            <div id="suggestedQuestions" class="suggestion-list" aria-live="polite"></div>
+            <div id="chatList" class="chat-list" aria-live="polite"></div>
+            <div class="chat-input">
+              <textarea id="chatInput" placeholder="輸入訊息（Shift+Enter 換行）" aria-label="輸入問題"></textarea>
+              <div class="chat-actions">
+                <button id="btnChatSend" class="btn btn-primary" type="button">送出</button>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button id="btnSettings" class="btn">設定</button>
+      <button id="btnHistory" class="btn">歷史</button>
+      <div class="spacer"></div>
+    </div>
+
+    <!-- 先前使用的覆蓋層已不再需要，改為全畫面處理視圖 -->
+
+    <!-- 設定 Modal -->
+    <div id="modalBackdrop" class="modal-backdrop">
+      <div class="modal">
+        <button id="btnModalClose" class="close" title="關閉">×</button>
+        <h2>設定</h2>
+        <div class="section">
+          <div class="section-title">連線設定</div>
+          <div class="field">
+            <label for="selCompany">公司 <span id="providerBadge" class="provider-badge" aria-hidden="true"></span></label>
+            <select id="selCompany" class="select">
+              <option value="">請選擇</option>
+              <option value="openai">OpenAI</option>
+              <option value="google">Google</option>
+              <option value="xai">xAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="ollama">Ollama</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="selModel">模型</label>
+            <select id="selModel" class="select">
+              <option value="">請先選公司</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="txtApiKey">API Key</label>
+            <div class="input-group">
+              <input id="txtApiKey" class="input" type="password" placeholder="輸入你的 API Key" />
+              <button id="btnToggleKey" class="suffix-btn" type="button">顯示</button>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">外觀與更新</div>
+          <div class="field">
+            <label>主題</label>
+            <div class="segmented">
+              <input id="themeDark" type="radio" name="theme" value="dark" />
+              <label for="themeDark">深色</label>
+              <input id="themeLight" type="radio" name="theme" value="light" />
+              <label for="themeLight">淺色</label>
+              <input id="themeSystem" type="radio" name="theme" value="system" />
+              <label for="themeSystem">系統</label>
+            </div>
+          </div>
+          <div class="field" style="display:flex; justify-content: space-between; align-items:center;">
+            <div style="color:var(--muted)">目前版本：<span id="lblVersion">-</span></div>
+            <button id="btnUpdateInModal" class="btn" type="button">檢查更新</button>
+          </div>
+          <div id="updateStatus" class="update-status" aria-live="polite"></div>
+        </div>
+        <div class="modal-actions">
+          <button id="btnCancelSettings" class="btn">關閉</button>
+        </div>
+      </div>
+    </div>
+    <!-- 歷史 Modal -->
+    <div id="historyBackdrop" class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+        <button id="btnHistoryClose" class="close" aria-label="關閉">✕</button>
+        <h2 id="historyTitle">處理歷程</h2>
+        <div id="historyList" style="max-height: 50vh; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:8px; background: var(--surface-2);">
+          <div class="muted">尚無歷程</div>
+        </div>
+        <div class="modal-actions">
+          <button id="btnHistoryClear" class="btn" title="清除紀錄">清除</button>
+          <div class="spacer"></div>
+          <button id="btnHistoryClose2" class="btn">關閉</button>
+        </div>
+      </div>
+    </div>
+    <div id="selectionPopover" class="selection-popover" hidden>
+      <button id="btnHighlightSelection" type="button">標註</button>
+      <button id="btnRemoveHighlight" type="button" hidden>取消標註</button>
+      <button id="btnNoteSelection" type="button">筆記</button>
+      <button id="btnAskSelection" type="button">就此提問</button>
+    </div>
+    <div id="referenceTrail" class="reference-trail" aria-live="polite" hidden></div>
+    <div id="chatHistoryBackdrop" class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="chatHistoryTitle">
+        <button id="btnChatHistoryClose" class="close" aria-label="關閉">✕</button>
+        <h2 id="chatHistoryTitle">聊天歷史</h2>
+        <div id="chatHistoryList" class="history-list"></div>
+        <div class="modal-actions">
+          <button id="btnChatHistoryDelete" class="btn" type="button" title="刪除選取">刪除</button>
+          <div class="spacer"></div>
+          <button id="btnChatHistoryLoad" class="btn btn-primary" type="button">載入</button>
+          <button id="btnChatHistoryClose2" class="btn" type="button">關閉</button>
+        </div>
+      </div>
+    </div>
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+    <!-- Markdown 解析器 -->
+    <script src="./node_modules/marked/marked.min.js" onerror="loadMarkedFallback()"></script>
+    <script>
+      function loadMarkedFallback() {
+        console.warn('本地 marked 載入失敗，使用 CDN 後備');
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js';
+        script.onload = () => console.log('marked CDN 載入成功');
+        script.onerror = () => console.error('marked CDN 也載入失敗');
+        document.head.appendChild(script);
+      }
+      
+      // 檢查 marked 是否正確載入
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          if (!window.marked) {
+            console.warn('marked 函式庫未載入，將使用後備解析器');
+          } else {
+            console.log('marked 函式庫載入成功:', typeof window.marked);
+          }
+        }, 100);
+      });
+    </script>
+    <!-- KaTeX for LaTeX 渲染 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-NiZ6m19m7m5J5O0bApbtf0Q7sB4Hq5Xb7qYj1yXkQ2k1i2H8f9q2m0z1x3y4z5a" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-2qfVgJpYkQZy7bZ9o8mLThlOeYwGQmj2Qm4oUYv1bU40g1N3v2b2jv9nK8fZxJ2Z" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-mQ93rYc9x8Rz6mO3H5vA7+1d0W6C3bFk5U3bF1QdO4CkZzYv0b2m1xQzC8k9L6+e" crossorigin="anonymous"
+      onload="renderMathInElement(document.body, {delimiters:[{left:'$$', right:'$$', display:true},{left:'$', right:'$', display:false}], throwOnError:false});"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>

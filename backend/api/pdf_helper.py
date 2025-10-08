@@ -8,10 +8,10 @@ from pathlib import Path
 from dataclasses import dataclass
 import json
 
-from services.pdf_service import MinerUProcessor # 導入MinerU文件處理器
-from services.translation_service import OllamaTranslator, GeminiTranslator # 導入翻譯器
-from services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine # 導入RAG引擎
-from services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
+from backend.services.pdf_service import MinerUProcessor # 導入MinerU文件處理器
+from backend.services.translation_service import OllamaTranslator, GeminiTranslator # 導入翻譯器
+from backend.services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine # 導入RAG引擎
+from backend.services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
 
 from .config import Config # 導入配置管理
 
@@ -216,7 +216,6 @@ class PDFHelper:
         
         Args:
             json_name: JSON檔案名稱
-            collection_name: 向量資料庫集合名稱 (可選)
         
         Returns:
             HelperResult: 包含是否成功加入向量資料庫的統一格式
@@ -225,9 +224,10 @@ class PDFHelper:
         success = self.rag_engine.store_document_into_vectordb(
             json_file_name=json_name
         )
-        if success and self.verbose:
-            logger.info(f"JSON '{json_name}' 已加入向量資料庫")
-            logger.info(f"處理時間: {time.time() - start:.2f} 秒")
+        if success:
+            if self.verbose:
+                logger.info(f"JSON '{json_name}' 已加入向量資料庫")
+                logger.info(f"處理時間: {time.time() - start:.2f} 秒")
         else:
             logger.error(f"JSON '{json_name}' 加入向量資料庫失敗")
         return HelperResult(
@@ -353,7 +353,7 @@ class PDFHelper:
         重組.md檔案
 
         Args:
-            file_name: PDF檔案名稱 (完整檔名含副檔名)
+            file_name: 翻譯後的Json檔案名稱含副檔名 (例如: `example_translated.json`)
             method: 處理方法 (auto/ocr/text)
             language: 語言選擇 (zh, en)
 
@@ -378,6 +378,7 @@ class PDFHelper:
         Returns:
             HelperResult: 包含系統健康狀態資訊的統一格式
         """
+
         health_status = {
             "pdf_processor": True,  # 假設PDF處理器總是可用
             "translator": self.translator.is_available(),

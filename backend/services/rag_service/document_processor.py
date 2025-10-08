@@ -86,7 +86,24 @@ class DocumentProcessor:
             logger.info(f" - 最小片段大小: {min_chunk_size} 字")
             logger.info(f" - 合併短片段: {'是' if merge_short_chunks else '否'}")
 
-    def load_translated_json(self, json_file_name: str) -> Optional[List[DocumentChunk]]:
+    def json_to_chunks(self, json_file_name: str) -> Optional[List[DocumentChunk]]:
+        """
+        將翻譯後的JSON文件轉換為內容片段列表
+
+        Args:
+            json_file_name: 翻譯JSON文件名稱
+            
+        Returns:
+            List[DocumentChunk]: (出現錯誤會返回 None)
+        """
+        chunks = self._load_translated_json(json_file_name)
+        if not chunks:
+            return []
+
+        processed_chunks = self._process_chunks(chunks)
+        return processed_chunks
+
+    def _load_translated_json(self, json_file_name: str) -> Optional[List[DocumentChunk]]:
         """
         讀取翻譯後的JSON文件，並生成內容片段列表
 
@@ -103,7 +120,6 @@ class DocumentProcessor:
 
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        document_name = json_file_name
 
         chunks = []
         for index, item in enumerate(data):
@@ -113,7 +129,7 @@ class DocumentProcessor:
 
             chunk = DocumentChunk(
                 content=item.get("text_zh"),
-                document_name=document_name,
+                document_name='_'.join(json_file_name.split("_")[:-1]),
                 page_num=item.get("page_idx"),
                 chunk_index=index,
                 content_type=item.get("translation_metadata").get("content_type")
@@ -124,7 +140,7 @@ class DocumentProcessor:
             logger.info(f"已讀取並生成初始片段: {len(chunks)} 個 (來自 {json_file_path})")
         return chunks
 
-    def process_chunks(self, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
+    def _process_chunks(self, chunks: List[DocumentChunk]) -> List[DocumentChunk]:
         """
         處理內容片段，根據內容類型進行不同的分段策略
         

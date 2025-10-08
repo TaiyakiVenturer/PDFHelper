@@ -1,7 +1,7 @@
 """
 RAG引擎 - 整合文件處理、向量查詢和答案生成的主引擎
 """
-from typing import List, Dict, Any, Optional, Literal, Iterable, Generator
+from typing import List, Dict, Any, Optional, Literal, Iterable, Generator, Tuple
 import time
 from dataclasses import dataclass
 
@@ -10,6 +10,8 @@ from .embedding_service import EmbeddingService
 from .chroma_database import ChromaVectorStore
 
 from ..llm_service import OllamaService, GeminiService
+
+from backend.api.api import progress_update
 
 import logging
 logger = logging.getLogger(__name__)
@@ -112,7 +114,7 @@ class RAGEngine:
         if self.verbose:
             logger.info("RAG引擎初始化完成")
 
-    def store_document_into_vectordb(self, json_file_name: str) -> bool:
+    def store_document_into_vectordb(self, json_file_name: str) -> Tuple[bool, str]:
         """
         儲存單個文件到向量資料庫
         
@@ -120,7 +122,9 @@ class RAGEngine:
             json_file_name: JSON檔案名稱 (必須是翻譯後的JSON文件)
 
         Returns:
-            是否儲存成功
+            Tuple(success, collection_name): 
+                - success: 是否儲存成功
+                - collection_name: 儲存的集合名稱 (如成功儲存則為集合名稱，否則為None)
         """
         try:
             if self.verbose:
@@ -131,6 +135,7 @@ class RAGEngine:
             if not chunks:
                 logger.error("未讀取到翻譯JSON文件或文件內容為空")
                 return False
+            progress_update(75, "文件片段生成完成，開始向量化並儲存到資料庫", "adding-to-rag")
 
             # 檢查embedding服務可用性
             if not self.embedding_service.is_available():
@@ -140,7 +145,8 @@ class RAGEngine:
             # 生成embedding向量
             texts = [chunk.content for chunk in chunks]
             embeddings = self.embedding_service.get_embeddings(texts, store=True)
-            
+            progress_update(96, "向量化完成，正在儲存到向量資料庫", "adding-to-rag")
+
             # 如果文件已存在，先刪除
             collection_name = '_'.join(json_file_name.split("_")[:-1])
             if self.vector_store.get_collection_info(collection_name)['document_count'] > 0:
@@ -148,18 +154,19 @@ class RAGEngine:
 
             # 新增到向量資料庫
             success = self.vector_store.add_chunks(chunks, embeddings, collection_name=collection_name)
+            progress_update(99, "文件成功儲存到向量資料庫", "idle")
 
             if success:
                 if self.verbose:
                     logger.info(f"文件向量化儲存完成: {collection_name}, 集合包含 {len(chunks)} 個片段")
-                return True
+                return True, collection_name
             else:
                 logger.error("向量資料庫新增失敗")
-                return False
+                return False, None
                 
         except Exception as e:
             logger.error(f"文件向量化儲存時出錯: {e}")
-            return False
+            return False, None
 
     def search(self, searching_content: str, collection_name: str,
         top_k: int = 7, filter_dict: Optional[Dict[str, Any]] = None,

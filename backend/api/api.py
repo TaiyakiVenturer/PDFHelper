@@ -1,5 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from typing import Literal, Dict, Any, Optional
+from threading import Lock, Thread
 
 import sys
 from pathlib import Path
@@ -30,15 +32,102 @@ pdf_helper = PDFHelper(
     verbose=True
 )
 
+# 全域進度變數
+current_progress = {
+    "is_processing": False,
+    "progress": float(0),
+    "stage": Literal["idle", "process-pdf", "translating-json", "adding-to-rag"],
+    "message": "",
+    "error": None,
+    "result": None
+}
+# 進度鎖，確保資料一致性
+progress_lock = Lock()
+
+# ==================== 進度更新 ====================
+
+def progress_start() -> bool:
+    """標記處理開始"""
+    if current_progress["is_processing"]:
+        return False  # 已有任務在跑，拒絕新的請求
+    with progress_lock:
+        current_progress["is_processing"] = True
+        current_progress["progress"] = 0
+        current_progress["error"] = None
+    return True
+
+def progress_complete(result: Optional[Dict[str, Any]] = None):
+    """
+    標記處理完成
+    
+    Args:
+        result (Optional[Dict[str, Any]]): 處理結果，可選 例如`{"collection_name": "doc_name"}`
+    """
+    with progress_lock:
+        current_progress["is_processing"] = False
+        current_progress["progress"] = 100
+        current_progress["message"] = "處理完成"
+        current_progress["stage"] = "idle"
+        current_progress["result"] = result
+
+def progress_update(progress, message, stage):
+    """更新進度"""
+    if not current_progress["is_processing"]:
+        return  # 沒有任務在跑，忽略更新
+    with progress_lock:
+        current_progress["progress"] = progress
+        current_progress["message"] = message
+        current_progress["stage"] = stage
+
+def progress_fail(error_message):
+    """標記處理失敗"""
+    with progress_lock:
+        current_progress["is_processing"] = False
+        current_progress["message"] = "處理遇到錯誤"
+        current_progress["stage"] = "idle"
+        current_progress["error"] = error_message
+
+# ==================== API 端點 ====================
+
+@app.route('/api/get-progress', methods=['GET'])
+def get_progress_endpoint():
+    """前端獲取當前進度"""
+    with progress_lock:
+        return jsonify(current_progress)
+
+@app.route('/api/full-process-async', methods=['POST'])
+def full_process_async_endpoint():
+    if not progress_start():
+        return jsonify({"success": False, "message": "已有任務在處理中，請稍後再試"}), 429  # Too Many Requests
+
+    data = request.json
+    pdf_name = data.get('pdf_name')
+    method = data.get('method')
+    lang = data.get('lang')
+    device = data.get('device')
+
+    # 在這裡啟動一個新線程來處理請求
+    Thread(
+        target=pdf_helper.from_pdf_to_rag,
+        args=(
+            pdf_name,
+            method,
+            lang,
+            device
+        ),
+        daemon=True
+    ).start()
+    return jsonify({"success": True, "message": "任務已受理，正在處理中"})
+
 @app.route('/api/process-pdf', methods=['POST'])
 def process_pdf_endpoint():
     """處理 PDF 檔案"""
     try:
         data = request.json
         pdf_name = data.get('pdf_name')
-        method = data.get('method', 'auto')
-        lang = data.get('lang', 'en')
-        device = data.get('device', 'cuda')
+        method = data.get('method')
+        lang = data.get('lang')
+        device = data.get('device')
         
         if not pdf_name:
             return jsonify({"success": False, "message": "缺少 pdf_name 參數"}), 400

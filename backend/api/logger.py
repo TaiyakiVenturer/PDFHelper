@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
 
 class LevelFormatter(logging.Formatter):
     def __init__(self):
@@ -45,12 +46,15 @@ def setup_project_logger(verbose: bool = False):
     Args:
         verbose: 是否啟用詳細日誌 (預設為False)
     """
-
-    os.makedirs("logs", exist_ok=True)
     log_level = logging.DEBUG if verbose else logging.INFO
 
+    # 設定log路徑固定為專案根目錄/logs
+    project_root = Path(__file__).resolve().parent.parent.parent
+    log_dir_path = project_root / "logs"
+    os.makedirs(log_dir_path, exist_ok=True)
+
     file_handler = logging.FileHandler(
-        f"logs/{datetime.now().strftime('%Y-%m-%d_%H-%M')}.log",
+        log_dir_path / f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}.log",
         encoding='utf-8'
     )
     file_handler.setFormatter(LevelFormatter())

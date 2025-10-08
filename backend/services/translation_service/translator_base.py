@@ -8,6 +8,8 @@ import time
 import requests
 from pathlib import Path
 
+from backend.api.api import progress_update
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -233,7 +235,10 @@ class TranslatorBase:
         # 翻譯處理
         translated_count = 0
 
-        for i, item in enumerate(content_list):
+        last_progress = 36  # 初始進度
+        per_progress = 30 / len(content_list)  # 30%分配給翻譯
+        for index, item in enumerate(content_list):
+            progress_update(last_progress + per_progress * index, f"正在翻譯第 {index+1}/{len(content_list)} 個段落", "translating-json")
             if item.get('translation_metadata', {}) != {}:
                 continue
             if not (item.get('type') == 'text' and item.get('text')):
@@ -241,7 +246,7 @@ class TranslatorBase:
 
             if translated_count != 0 and translated_count % 10 == 0:
                 start_time = time.time()
-                logger.info(f"第 {i//10} 個檢查點，正在保存翻譯進度...")
+                logger.info(f"第 {index//10} 個檢查點，正在保存翻譯進度...")
                 self._save_translated_progress(content_list, file_name)
                 end_time = time.time()
 
@@ -263,7 +268,7 @@ class TranslatorBase:
                 continue
             else:
                 if self.verbose:
-                    logger.info(f"翻譯進度: {i+1}/{len(content_list)} - 第{item.get('page_idx', 0)+1}頁")
+                    logger.info(f"翻譯進度: {index+1}/{len(content_list)} - 第{item.get('page_idx', 0)+1}頁")
 
             translated_count += 1
 

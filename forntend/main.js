@@ -183,16 +183,42 @@ ipcMain.on('file:chosen', (_event, filePath) => {
 // IPC: 啟動處理流程（交給 Python；此處先放 stub）
 const { spawn } = require('child_process');
 ipcMain.handle('process:start', async (event, payload) => {
-  const { filePath, company, model, sessionId } = payload || {};
+  const { filePath, company, model, apiKey, sessionId } = payload || {};
   if (!filePath) return { ok: false, error: '缺少檔案路徑' };
   if (!company || !model) return { ok: false, error: '缺少公司或模型' };
   try {
     console.log('[process:start]', { filePath, company, model, sessionId });
     const win = BrowserWindow.fromWebContents(event.sender);
-    // 優先使用 Anaconda 的 Python 環境
-    const py = process.env.PYTHON || 'C:\\Users\\User\\anaconda3\\python.exe';
+    
+    // 使用 uv run 來自動管理虛擬環境
+    const projectRoot = path.join(__dirname, '..'); // 從 frontend 回到根目錄
     const script = path.join(__dirname, 'scripts', 'processor.py');
-  if (fs.existsSync(script)) {
+    
+    // uv 的完整路徑（避免 PATH 問題）
+    const uvPath = 'C:\\Users\\User\\.local\\bin\\uv.exe';
+    const venvPython = path.join(projectRoot, '.venv', 'Scripts', 'python.exe');
+    
+    // 決定使用哪個 Python 執行方式
+    let useUv = true;
+    let command, args;
+    
+    if (fs.existsSync(uvPath)) {
+      // 使用 uv run
+      command = uvPath;
+      args = ['run', 'python', '-u', script, filePath, company, model, sessionId];
+      console.log('使用 uv run 模式');
+    } else if (fs.existsSync(venvPython)) {
+      // 備用：直接使用虛擬環境的 python
+      command = venvPython;
+      args = ['-u', script, filePath, company, model, sessionId];
+      useUv = false;
+      console.log('使用虛擬環境 Python 備用模式');
+    } else {
+      console.error('找不到 uv 或虛擬環境 Python');
+      return { ok: false, error: 'Python 環境未找到，請先執行 uv sync' };
+    }
+    
+    if (fs.existsSync(script)) {
       const env = { 
         ...process.env, 
         PYTHONIOENCODING: 'utf-8', 
@@ -200,8 +226,38 @@ ipcMain.handle('process:start', async (event, payload) => {
         PYTHONUNBUFFERED: '1',  // 確保即時輸出
         LC_ALL: 'C.UTF-8'       // 設置正確的 locale
       };
-      const child = spawn(py, ['-u', script, filePath, company, model, sessionId], { 
-        cwd: __dirname, 
+
+      env.PDFHELPER_TRANSLATOR_PROVIDER = company;
+      env.PDFHELPER_TRANSLATOR_MODEL = model;
+      if (apiKey) {
+        env.PDFHELPER_TRANSLATOR_KEY = apiKey;
+      } else {
+        delete env.PDFHELPER_TRANSLATOR_KEY;
+      }
+      if (company === 'openai' && apiKey) {
+        env.OPENAI_API_KEY = apiKey;
+      }
+      if (company === 'google' && apiKey) {
+        env.GEMINI_API_KEY = apiKey;
+      }
+      if (company === 'anthropic' && apiKey) {
+        env.ANTHROPIC_API_KEY = apiKey;
+      }
+      if (company === 'xai' && apiKey) {
+        env.XAI_API_KEY = apiKey;
+      }
+      
+      // 如果使用 uv，添加其路徑到 PATH
+      if (useUv) {
+        env.PATH = `C:\\Users\\User\\.local\\bin;${process.env.PATH || ''}`;
+      }
+      
+      console.log('執行命令:', command);
+      console.log('參數:', args.join(' '));
+      console.log('工作目錄:', projectRoot);
+      
+      const child = spawn(command, args, { 
+        cwd: projectRoot,  // 在項目根目錄執行
         env,
         stdio: ['pipe', 'pipe', 'pipe']  // 明確設置 stdio
       });
@@ -524,21 +580,75 @@ ipcMain.handle('models:list', async (_event, company) => {
 // 聊天：將問題交給合作方 Python 腳本處理
 ipcMain.handle('chat:ask', async (_event, payload) => {
   try {
-    const { question, context, lang } = payload || {};
-    const py = process.env.PYTHON || 'C:\\Users\\User\\anaconda3\\python.exe';
     const script = path.join(__dirname, 'scripts', 'chat.py');
     if (!fs.existsSync(script)) {
       return { ok: false, error: '找不到聊天腳本 scripts/chat.py' };
     }
+
+    const projectRoot = path.join(__dirname, '..');
+    const uvPath = 'C:\\Users\\User\\.local\\bin\\uv.exe';
+    const venvPython = path.join(projectRoot, '.venv', 'Scripts', 'python.exe');
+    const systemPython = process.env.PYTHON || 'C:\\Users\\User\\anaconda3\\python.exe';
+
     const { spawn } = require('child_process');
-    const env = { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' };
-    const child = spawn(py, [script], { cwd: __dirname, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let command;
+    let args;
+    let useUv = false;
+    if (fs.existsSync(uvPath)) {
+      command = uvPath;
+      args = ['run', 'python', '-u', script];
+      useUv = true;
+    } else if (fs.existsSync(venvPython)) {
+      command = venvPython;
+      args = ['-u', script];
+    } else {
+      command = systemPython;
+      args = [script];
+    }
+
+    const env = {
+      ...process.env,
+      PYTHONIOENCODING: 'utf-8',
+      PYTHONUTF8: '1',
+      PYTHONUNBUFFERED: '1',
+      LC_ALL: 'C.UTF-8'
+    };
+
+    if (useUv) {
+      env.PATH = `C:\\Users\\User\\.local\\bin;${process.env.PATH || ''}`;
+    }
+
+    // 傳遞翻譯、Embedding、RAG 設定供腳本讀取
+    if (payload?.company) env.PDFHELPER_TRANSLATOR_PROVIDER = payload.company;
+    if (payload?.model) env.PDFHELPER_TRANSLATOR_MODEL = payload.model;
+    if (payload?.apiKey) env.PDFHELPER_TRANSLATOR_KEY = payload.apiKey;
+    if (payload?.apiKey && payload?.company === 'openai') env.OPENAI_API_KEY = payload.apiKey;
+    if (payload?.apiKey && payload?.company === 'google') env.GEMINI_API_KEY = payload.apiKey;
+    if (payload?.apiKey && payload?.company === 'anthropic') env.ANTHROPIC_API_KEY = payload.apiKey;
+    if (payload?.apiKey && payload?.company === 'xai') env.XAI_API_KEY = payload.apiKey;
+
+    const child = spawn(command, args, {
+      cwd: projectRoot,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
     child.stdin.setDefaultEncoding && child.stdin.setDefaultEncoding('utf8');
     child.stdout.setEncoding && child.stdout.setEncoding('utf8');
     child.stderr.setEncoding && child.stderr.setEncoding('utf8');
 
-  const req = { question: String(question || ''), context: String(context || ''), lang: (lang === 'en' ? 'en' : 'zh') };
-    child.stdin.write(JSON.stringify(req) + '\n');
+    const requestPayload = {
+      question: String(payload?.question || ''),
+      context: String(payload?.context || ''),
+      lang: payload?.lang === 'en' ? 'en' : 'zh',
+      history: payload?.history || [],
+      collection: payload?.collection || null,
+      translatedJsonPath: payload?.translatedJsonPath || null,
+      source: payload?.source || null,
+      topK: payload?.topK || payload?.top_k || undefined,
+    };
+
+    child.stdin.write(JSON.stringify(requestPayload) + '\n');
     child.stdin.end();
 
     let out = '';
@@ -550,15 +660,31 @@ ipcMain.handle('chat:ask', async (_event, payload) => {
     if (code !== 0) {
       return { ok: false, error: err || `Python 退出碼 ${code}` };
     }
-    // 取最後一行 JSON 為回覆
+
     const lines = out.split(/\r?\n/).filter(Boolean);
-    if (!lines.length) return { ok: false, error: '聊天腳本無輸出' };
+    if (!lines.length) {
+      return { ok: false, error: '聊天腳本無輸出' };
+    }
+
     let resp;
-    try { resp = JSON.parse(lines[lines.length - 1]); } catch (e) {
+    try {
+      resp = JSON.parse(lines[lines.length - 1]);
+    } catch (e) {
       return { ok: false, error: '聊天腳本輸出非 JSON' };
     }
-    const text = resp?.text ?? '';
-    return { ok: true, text: String(text) };
+
+    if (resp?.success === False) {
+      return { ok: false, error: resp?.error || '聊天腳本回傳錯誤' };
+    }
+
+    return {
+      ok: true,
+      text: String(resp?.answer ?? resp?.text ?? ''),
+      answer: resp?.answer ?? resp?.text ?? '',
+      sources: resp?.sources || [],
+      followups: resp?.followups || [],
+      collection: resp?.collection || requestPayload.collection || null,
+    };
   } catch (e) {
     console.error('chat:ask 失敗:', e);
     return { ok: false, error: '聊天失敗，請稍後再試' };

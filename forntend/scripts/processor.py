@@ -4,7 +4,7 @@ import os
 import sys
 import time
 import traceback
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from pdfhelper_bridge import run_pipeline
 
@@ -20,10 +20,8 @@ try:
     # 強制設置 UTF-8 編碼
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
     else:
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")  # type: ignore[assignment]
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")  # type: ignore[assignment]
     
     # 設置環境變數確保正確的編碼
     os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -83,178 +81,171 @@ def main() -> int:
             "verbose": os.getenv("PDFHELPER_VERBOSE", "0") not in {"0", "false", "False"},
         }
 
+        def clean_settings(options: Dict[str, Optional[Any]]) -> Dict[str, Any]:
+            return {key: value for key, value in options.items() if value not in (None, "", [], {})}
+
+        translator_api_key = os.getenv("PDFHELPER_TRANSLATOR_KEY") or os.getenv("PDFHELPER_API_KEY")
+        translator_settings = clean_settings({
+            "provider": (company or "").strip().lower() or None,
+            "model": model,
+            "api_key": translator_api_key,
+        })
+        embedding_settings = clean_settings({
+            "provider": (os.getenv("PDFHELPER_EMBED_SERVICE") or None),
+            "model": os.getenv("PDFHELPER_EMBED_MODEL"),
+            "api_key": os.getenv("PDFHELPER_EMBED_API_KEY"),
+        })
+        rag_settings = clean_settings({
+            "provider": (os.getenv("PDFHELPER_RAG_SERVICE") or None),
+            "model": os.getenv("PDFHELPER_RAG_MODEL"),
+        })
+
+        pipeline_kwargs.update({
+            "translator_settings": translator_settings,
+            "embedding_settings": embedding_settings,
+            "rag_settings": rag_settings,
+        })
+
         progress(session_id, 5, "準備 PDFHelper 後端…", f"處理檔案: {os.path.basename(file_path)}")
         
         start_time = time.time()
         log_output(session_id, f"[INFO] 開始處理 PDF 檔案: {os.path.basename(file_path)}")
         log_output(session_id, f"[INFO] 使用參數 - 方法: {method}, 語言: {lang}, 設備: {device}")
+        if translator_settings.get("provider"):
+            provider_label = translator_settings.get("provider")
+            model_label = translator_settings.get("model") or "default"
+            log_output(session_id, f"[INFO] 翻譯服務: {provider_label} / {model_label}")
         
-        # 追蹤處理進度 - 重點放在 PDFHelper 後端處理
+        # 追蹤處理進度 - 依照後端回報階段更新
         current_progress = 8  # 前端準備只佔 8%
-        last_progress_update = time.time()
-        progress_keywords_found = set()  # 使用 set 避免重複
-        mineru_started = False
-        phase_timestamps = {}  # 記錄各階段時間
-        
-        # 增強版輸出回調，根據 MinerU 輸出更新進度
-        def enhanced_output_callback(line: str):
-            nonlocal current_progress, last_progress_update, progress_keywords_found, mineru_started, phase_timestamps
-            try:
-                current_time = time.time()
-                
-                # 確保 line 是 UTF-8 編碼的字串
-                if isinstance(line, bytes):
-                    line = line.decode('utf-8', errors='replace')
-                
-                line_lower = line.lower()
-                progress_updated = False
-                
-                # 階段 1: 啟動檢測 (8%-18%)
-                startup_keywords = ["開始執行", "開始處理", "執行命令", "mineru", "processing", "start"]
-                if any(keyword in line_lower for keyword in startup_keywords):
-                    if not mineru_started:
-                        mineru_started = True
-                        phase_timestamps['startup'] = current_time
-                        current_progress = 18
-                        progress(session_id, current_progress, "啟動 PDFHelper MinerU…", f"引擎啟動: {line[:30]}...")
-                        progress_updated = True
-                
-                # 階段 2: 模型載入 (18%-35%)
-                loading_keywords = ["loading", "載入", "初始化", "initialize", "model", "weight", "config"]
-                if any(keyword in line_lower for keyword in loading_keywords) and mineru_started:
-                    if "loading" not in progress_keywords_found:
-                        phase_timestamps['loading'] = current_time
-                        current_progress = max(current_progress, 35)
-                        progress(session_id, current_progress, "載入 AI 模型…", f"模型準備: {line[:30]}...")
-                        progress_keywords_found.add("loading")
-                        progress_updated = True
-                        
-                # 階段 3: PDF 解析和分析 (35%-65%)
-                parsing_keywords = ["解析", "分析", "parsing", "analyzing", "processing", "page", "document", "pdf"]
-                if any(keyword in line_lower for keyword in parsing_keywords) and current_progress >= 18:
-                    if "parsing" not in progress_keywords_found:
-                        phase_timestamps['parsing'] = current_time
-                        current_progress = max(current_progress, 45)
-                        progress(session_id, current_progress, "PDFHelper 文檔解析…", f"分析結構: {line[:30]}...")
-                        progress_keywords_found.add("parsing")
-                        progress_updated = True
-                    elif current_progress < 65:
-                        # 解析過程中的持續更新
-                        increment = min(2, 65 - current_progress)
-                        current_progress += increment
-                        progress(session_id, int(current_progress), "深度解析進行中…", f"處理: {line[:30]}...")
-                        progress_updated = True
-                
-                # 階段 4: 內容提取和識別 (65%-80%)
-                extraction_keywords = ["提取", "extract", "detecting", "識別", "recognition", "detect", "table", "image"]
-                if any(keyword in line_lower for keyword in extraction_keywords) and current_progress >= 35:
-                    if "extraction" not in progress_keywords_found:
-                        phase_timestamps['extraction'] = current_time
-                        current_progress = max(current_progress, 70)
-                        progress(session_id, current_progress, "智能內容提取…", f"識別元素: {line[:30]}...")
-                        progress_keywords_found.add("extraction")
-                        progress_updated = True
-                    elif current_progress < 80:
-                        # 提取過程中的更新
-                        increment = min(1.5, 80 - current_progress)
-                        current_progress += increment
-                        progress(session_id, int(current_progress), "提取結構內容…", f"處理: {line[:30]}...")
-                        progress_updated = True
-                
-                # 階段 5: 格式轉換和生成 (80%-92%)
-                conversion_keywords = ["轉換", "convert", "generate", "生成", "markdown", "format", "output", "save"]
-                if any(keyword in line_lower for keyword in conversion_keywords) and current_progress >= 65:
-                    if "conversion" not in progress_keywords_found:
-                        phase_timestamps['conversion'] = current_time
-                        current_progress = max(current_progress, 85)
-                        progress(session_id, current_progress, "生成 Markdown…", f"格式轉換: {line[:30]}...")
-                        progress_keywords_found.add("conversion")
-                        progress_updated = True
-                    elif current_progress < 92:
-                        current_progress = max(current_progress, 88)
-                        progress(session_id, int(current_progress), "最終格式化…", f"輸出: {line[:30]}...")
-                        progress_updated = True
-                
-                # 階段 6: 完成 (92%-95%)
-                completion_keywords = ["完成", "complete", "finished", "success", "successfully", "done"]
-                if any(keyword in line_lower for keyword in completion_keywords) and current_progress >= 80:
-                    current_progress = max(current_progress, 95)
-                    progress(session_id, current_progress, "PDFHelper 處理完成…", "整理輸出結果")
-                    progress_updated = True
-                    
-                elif any(keyword in line_lower for keyword in ["error", "錯誤", "failed", "exception", "traceback"]):
-                    # 發現錯誤時保持當前進度，但更新狀態
-                    error_detail = line[:60] + ("..." if len(line) > 60 else "")
-                    progress(session_id, current_progress, "處理中遇到問題", error_detail)
-                    progress_updated = True
-                
-                # 時間基礎的進度更新 - 避免長時間無進度更新
-                elif current_progress < 90 and current_time - last_progress_update > 8:  # 8秒沒更新就推進
-                    if mineru_started:
-                        # 根據當前階段決定推進量
-                        if current_progress < 40:
-                            increment = 2  # 初期階段快一點
-                        elif current_progress < 70:
-                            increment = 1.5  # 中期穩定推進
-                        else:
-                            increment = 0.8  # 後期小幅推進
-                        
-                        increment = min(increment, 90 - current_progress)
-                        if increment > 0:
-                            current_progress += increment
-                            elapsed_time = int(current_time - start_time)
-                            
-                            # 根據進度階段顯示不同狀態
-                            if current_progress < 40:
-                                status = "PDFHelper 初始化中…"
-                            elif current_progress < 70:
-                                status = "AI 深度分析中…"
-                            else:
-                                status = "生成結果中…"
-                                
-                            progress(session_id, int(current_progress), status, f"處理進行中 ({elapsed_time}s)")
-                            progress_updated = True
-                
-                # 更新最後進度更新時間
-                if progress_updated:
-                    last_progress_update = current_time
-                
-                # 發送到前端 (所有日誌)
-                log_output(session_id, line)
-                
-                # 同時輸出到控制台/終端機
-                safe_line = line.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-                print(f"[PDFHelper] {safe_line}", flush=True, file=sys.stderr)
-                
-            except Exception as e:
-                error_msg = f"輸出編碼錯誤: {str(e)}"
-                print(f"[PDFHelper-ERROR] {error_msg}", flush=True, file=sys.stderr)
-                log_output(session_id, f"[ERROR] {error_msg}")
-        
-        # 更新 pipeline_kwargs 使用增強版回調
-        pipeline_kwargs["output_callback"] = enhanced_output_callback
+
+        def advance_progress(target: int, status_text: str, detail: Optional[str] = None) -> None:
+            nonlocal current_progress
+            target = int(target)
+            if target < current_progress:
+                target = current_progress
+            if target > 99:
+                target = 99
+            current_progress = target
+            progress(session_id, current_progress, status_text, detail)
+
+        def pipeline_status_handler(update: Dict[str, Any]) -> None:
+            if not isinstance(update, dict):
+                return
+
+            stage = update.get("stage")
+            event = update.get("event")
+
+            if stage == "mineru":
+                if event == "start":
+                    detail = update.get("message") or (f"檔案: {update.get('file')}" if update.get("file") else "啟動 MinerU")
+                    log_output(session_id, f"[INFO] MinerU 啟動: {detail}")
+                    advance_progress(12, "啟動 PDFHelper MinerU…", detail)
+                elif event == "complete":
+                    seconds = update.get("seconds")
+                    pieces = []
+                    if update.get("markdown"):
+                        pieces.append(f"Markdown: {update['markdown']}")
+                    if update.get("json"):
+                        pieces.append(f"JSON: {update['json']}")
+                    if isinstance(seconds, (int, float)):
+                        pieces.append(f"耗時 {seconds:.2f} 秒")
+                    detail = "；".join(pieces) or "MinerU 完成"
+                    log_output(session_id, f"[INFO] MinerU 完成: {detail}")
+                    advance_progress(60, "PDF 解析完成", detail)
+                return
+
+            if stage == "translation":
+                seconds = update.get("seconds")
+                if event == "start":
+                    base_detail = update.get("message") or "準備翻譯 JSON"
+                    path = update.get("path")
+                    detail = f"{base_detail}（{path}）" if path else base_detail
+                    log_output(session_id, f"[INFO] 翻譯開始: {detail}")
+                    advance_progress(70, "翻譯 JSON…", detail)
+                elif event == "complete":
+                    base_detail = update.get("message") or "翻譯完成"
+                    if isinstance(seconds, (int, float)):
+                        base_detail += f"（{seconds:.2f} 秒）"
+                    path = update.get("path")
+                    detail = f"{base_detail} -> {path}" if path else base_detail
+                    log_output(session_id, f"[INFO] {detail}")
+                    advance_progress(80, "翻譯完成", detail)
+                return
+
+            if stage == "markdown":
+                language = (update.get("language") or "").upper()
+                if event == "start":
+                    msg = f"準備重建 {language or 'Markdown'}"
+                    log_output(session_id, f"[INFO] {msg}")
+                elif event == "complete":
+                    path = update.get("path")
+                    detail = path or "重建完成"
+                    log_output(session_id, f"[INFO] 已重建 {language or 'Markdown'}: {detail}")
+                    target = 83 if language == "ZH" else 86 if language == "EN" else 82
+                    advance_progress(target, f"{language or 'Markdown'} 重建完成", detail)
+                elif event == "failed":
+                    warn_msg = update.get("message") or "重建失敗"
+                    log_output(session_id, f"[WARNING] {language or 'Markdown'} 重建失敗: {warn_msg}")
+                return
+
+            if stage == "rag":
+                seconds = update.get("seconds")
+                if event == "start":
+                    collection = update.get("collection")
+                    detail = f"集合: {collection}" if collection else "準備建立向量索引"
+                    log_output(session_id, f"[INFO] RAG 處理開始: {detail}")
+                    advance_progress(88, "建立向量資料庫…", detail)
+                elif event == "complete":
+                    collection = update.get("collection")
+                    detail = f"集合 {collection} 已準備就緒" if collection else (update.get("message") or "RAG 處理完成")
+                    if isinstance(seconds, (int, float)):
+                        detail += f"（{seconds:.2f} 秒）"
+                    log_output(session_id, f"[INFO] RAG 完成: {detail}")
+                    advance_progress(96, "RAG 準備完成", detail)
+
+        pipeline_kwargs["status_callback"] = pipeline_status_handler
         
         result = run_pipeline(file_path, **pipeline_kwargs)
         
         processing_time = time.time() - start_time
         log_output(session_id, f"[INFO] PDF 處理完成，總耗時: {processing_time:.2f} 秒")
         
-        markdown = result.get("markdown_text") or "# PDFHelper 處理完成\n\n(尚未取得 Markdown 內容)"
+        fallback_markdown = "# PDFHelper 處理完成\n\n(尚未取得 Markdown 內容)"
+        markdown_en = result.get("markdown_text_en") or result.get("markdown_text") or fallback_markdown
+        markdown_zh = result.get("markdown_text_zh")
+        primary_markdown = markdown_zh or markdown_en or fallback_markdown
         image_count = len(result.get("images", []))
-        
-        progress(session_id, 100, "完成", f"已產生 Markdown，包含 {image_count} 個圖片")
-        log_output(session_id, f"[SUCCESS] 成功產生 Markdown，包含 {image_count} 個圖片")
+
+        final_notes = []
+        translation_info = result.get("translation", {}) or {}
+        rag_info = result.get("rag", {}) or {}
+        if translation_info.get("json_path"):
+            final_notes.append("翻譯完成")
+        if rag_info.get("collection"):
+            final_notes.append(f"RAG 集合 {rag_info.get('collection')}")
+        final_notes.append(f"圖片 {image_count} 張")
+
+        progress(session_id, 100, "完成", "；".join(final_notes))
+        log_output(session_id, f"[SUCCESS] 處理完成，{'；'.join(final_notes)}")
 
         emit({
             "type": "done",
             "sessionId": session_id,
-            "content": markdown,
-            "contentEn": markdown,
+            "content": primary_markdown,
+            "contentZh": markdown_zh,
+            "contentEn": markdown_en,
             "metadata": {
                 "source": result.get("display_name"),
                 "processingTime": result.get("processing_time"),
                 "markdownPath": result.get("markdown_path"),
+                "markdownPathZh": result.get("markdown_path_zh"),
+                "markdownPathEn": result.get("markdown_path_en") or result.get("markdown_path"),
                 "jsonPath": result.get("json_path"),
+                "translatedJsonPath": result.get("translated_json_path"),
+                "ragCollection": result.get("rag_collection"),
+                "translation": translation_info,
+                "rag": rag_info,
                 "images": result.get("images", []),
                 "company": company,
                 "model": model,

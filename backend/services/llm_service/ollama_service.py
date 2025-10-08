@@ -1,5 +1,5 @@
 import requests
-from typing import Optional, Generator, List
+from typing import Optional, Generator, List, Union
 import os
 import subprocess
 from dataclasses import dataclass
@@ -139,7 +139,7 @@ class OllamaService():
                 yield None
         return generate()
 
-    def send_single_request(self, prompt: str, stream: bool = False) -> Optional[str] | Generator[OllamaStreamResponse, None, None]:
+    def send_single_request(self, prompt: str, stream: bool = False) -> Union[Optional[str], Generator[OllamaStreamResponse, None, None]]:
         """
         發送請求到Ollama服務
 

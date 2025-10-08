@@ -2,7 +2,7 @@
 Embedding服務 - 基於Ollama的向量化服務
 """
 import time
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union
 
 from ..llm_service import OllamaService
 from ..llm_service.gemini_service import GeminiService
@@ -63,7 +63,7 @@ class EmbeddingService:
         """檢查Embedding服務是否可用"""
         return self.embedding_service.is_available()
 
-    def _get_single_embedding_with_retry(self, text: str | List[str], store: bool) -> Optional[List[float] | List[List[float]]]:
+    def _get_single_embedding_with_retry(self, text: Union[str, List[str]], store: bool) -> Optional[Union[List[float], List[List[float]]]]:
         """
         附帶重試機制的單個embedding處理
         

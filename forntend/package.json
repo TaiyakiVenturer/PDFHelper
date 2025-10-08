@@ -4,7 +4,7 @@
   "description": "顯示文字的簡易 Electron App",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "chcp 65001 >NUL && electron ."
   },
   "devDependencies": {
     "electron": "^38.1.2"

@@ -1,44 +1,102 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-合作方聊天腳本樣板：
-從 stdin 讀取一行 JSON：{"question": "...", "context": "..."}
-輸出一行 JSON：{"text": "回覆內容"}
+"""RAG 聊天腳本：從 stdin 接收 JSON，回傳 PDFHelper RAG 的問答結果。"""
 
-請在此整合你的後端邏輯，例如呼叫本地/遠端服務並把回覆文本填入 text。
-"""
-import sys
+from __future__ import annotations
+
 import json
+import sys
+from typing import Any, Dict
 
-def main():
+from pdfhelper_rag import ask_question as rag_ask
+
+
+def _configure_stdio() -> None:
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except Exception:
+            continue
+
+
+def _read_request() -> Dict[str, Any]:
+    raw = sys.stdin.readline()
+    if not raw:
+        return {}
     try:
-        sys.stdin.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+
+
+def _make_followups(answer: str) -> list[str]:
+    suggestions: list[str] = []
+    if not answer:
+        return suggestions
+    if "例如" in answer or "例如" in answer:
+        suggestions.append("可以再提供更多範例嗎？")
+    suggestions.append("這份文件的核心結論是什麼？")
+    suggestions.append("還有哪些段落與上述問題相關？")
+    # 保持唯一且最多三個
+    deduped: list[str] = []
+    seen = set()
+    for item in suggestions:
+        item = item.strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+        if len(deduped) >= 3:
+            break
+    return deduped
+
+
+def main() -> int:
+    _configure_stdio()
+
+    request = _read_request()
+    question = str(request.get("question") or "").strip()
+    if not question:
+        print(json.dumps({"success": False, "error": "缺少問題內容"}, ensure_ascii=False))
+        return 0
+
+    collection = request.get("collection") or None
+    translated_json_path = request.get("translatedJsonPath") or None
+    source = request.get("source") or None
+    top_k = request.get("topK") or request.get("top_k")
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
+        top_k_int = int(top_k) if top_k is not None else 7
+    except (TypeError, ValueError):
+        top_k_int = 7
 
-    line = sys.stdin.readline()
-    try:
-        data = json.loads(line or '{}')
-    except Exception:
-        print(json.dumps({"text": "無法解析輸入 JSON"}, ensure_ascii=False))
-        sys.exit(0)
+    rag_response = rag_ask(
+        question,
+        collection=collection,
+        translated_json_path=translated_json_path,
+        source=source,
+        top_k=top_k_int,
+        include_sources=True,
+    )
 
-    question = str(data.get('question') or '')
-    context = str(data.get('context') or '')
-    lang = (data.get('lang') or 'zh').lower()
+    if not rag_response.get("success"):
+        print(json.dumps({
+            "success": False,
+            "error": rag_response.get("error") or "RAG 問答失敗",
+        }, ensure_ascii=False))
+        return 0
 
-    # TODO: 這裡串接你的後端，得到回覆文字 reply
-    # 目前示範：回聲 + 簡單格式
-    if lang == 'en':
-        reply = f"You asked: {question}\n(Context length: {len(context)})"
-    else:
-        reply = f"你問：{question}\n（附帶上下文長度：{len(context)}）"
+    answer = str(rag_response.get("answer") or "")
+    payload = {
+        "success": True,
+        "answer": answer,
+        "text": answer,
+        "sources": rag_response.get("sources") or [],
+        "collection": rag_response.get("collection"),
+        "followups": _make_followups(answer),
+    }
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
 
-    print(json.dumps({"text": reply}, ensure_ascii=False))
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    sys.exit(main())

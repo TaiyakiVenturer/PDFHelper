@@ -215,6 +215,15 @@
   .chat-input { display:flex; align-items:flex-end; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
   .chat-input textarea { flex: 1; resize: vertical; min-height: 44px; max-height: 160px; border-radius: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--text); padding: 8px 10px; outline: none; }
   .chat-input textarea:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px rgba(2,132,199,0.25); }
+  .msg-content { line-height: 1.6; font-size: 14px; }
+  .msg-content code { background: var(--surface-2); border: 1px solid var(--border); padding: 0 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace; }
+  .msg-content pre { background: var(--surface-2); border: 1px solid var(--border); padding: 8px; border-radius: 8px; overflow: auto; }
+  .msg-content pre code { background: none; border: none; padding: 0; }
+  .msg-references { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .reference-chip { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--accent-border); background: rgba(14,165,233,0.2); color: var(--accent-bg); font-size: 12px; cursor: pointer; }
+  .followup-list { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .followup-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); cursor: pointer; font-size: 12px; }
+  .followup-btn:hover { background: var(--button-hover-bg); color: var(--text); }
   @media (max-width: 980px) { .result-wrap { grid-template-columns: 1fr; } }
   /* Processing 日誌區域 */
   .proc-log { margin-top: 14px; max-height: 300px; overflow: auto; text-align: left; border: 1px dashed var(--border); border-radius: 10px; padding: 12px; color: var(--muted); background: var(--surface-2); }
@@ -233,6 +242,218 @@
     font-size: 13px !important;
     line-height: 1.6 !important;
     margin-bottom: 2px;
+  }
+
+  /* ─── Reader Layout Enhancements ─────────────────────────────────────────── */
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  .result-header .title { margin: 0; font-size: 22px; }
+  .result-header .header-left { display: flex; flex-direction: column; gap: 4px; }
+  .doc-meta { font-size: 12px; color: var(--muted); }
+  .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .reader-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .search-group { display: flex; align-items: center; gap: 8px; flex: 1; }
+  .search-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--button-bg);
+    color: var(--text);
+    min-width: 0;
+  }
+  .search-controls { display: inline-flex; align-items: center; gap: 6px; }
+  .search-counter { font-size: 12px; color: var(--muted); min-width: 54px; text-align: right; }
+  .btn-icon {
+    -webkit-app-region: no-drag;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--button-bg);
+    color: var(--muted);
+    cursor: pointer;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease;
+  }
+  .btn-icon:hover { background: var(--button-hover-bg); color: var(--text); transform: translateY(-1px); }
+  .btn-icon.active { background: rgba(14,165,233,0.18); border-color: var(--accent-border); color: var(--text); }
+  .context-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .toolbar-right { display: flex; align-items: center; gap: 12px; }
+  .nav-controls { display: inline-flex; gap: 6px; }
+  .context-chip {
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--accent-border);
+    background: rgba(14,165,233,0.12);
+    color: var(--accent-bg);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .reader-content {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 16px;
+    height: 100%;
+    min-height: 0;
+  }
+  .reader-content.toc-hidden { grid-template-columns: 1fr; }
+  .toc {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+  }
+  .toc.hidden { display: none; }
+  .toc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; }
+  .toc-list { flex: 1; overflow: auto; padding-right: 4px; }
+  .toc-item { display: block; padding: 6px 8px; border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .toc-item:hover, .toc-item.active { background: rgba(14,165,233,0.15); color: var(--text); }
+  .toc-level-2 { padding-left: 16px; }
+  .toc-level-3 { padding-left: 28px; }
+  .toc-level-4 { padding-left: 40px; }
+
+  .reader-panels {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-height: 0;
+  }
+  .reader-panels[data-split="true"] { grid-template-columns: 1fr 1fr; }
+  .markdown-panel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .markdown-panel .markdown { padding: 16px; overflow: auto; flex: 1; }
+  .markdown-panel.secondary[hidden] { display: none; }
+  .panel-header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+
+  /* ─── Aside Sections ─────────────────────────────────────────────────────── */
+  .aside-section {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-1);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .section-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .section-header h3 { margin: 0; font-size: 15px; }
+  .section-actions { display: flex; gap: 6px; }
+  .section-body { display: flex; flex-direction: column; gap: 12px; }
+  .subsection { display: flex; flex-direction: column; gap: 8px; }
+  .subsection-header { display: flex; justify-content: space-between; align-items: center; }
+  .subsection-header h4 { margin: 0; font-size: 13px; color: var(--muted); }
+
+  .bookmark-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow: auto; }
+  .bookmark-item { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; border: 1px solid transparent; background: var(--surface-2); cursor: pointer; }
+  .bookmark-item:hover { border-color: var(--accent-border); }
+  .bookmark-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .bookmark-actions { display: flex; gap: 6px; }
+
+  .note-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow: auto; }
+  .note-card { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; }
+  .note-meta { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; }
+  .note-actions { display: flex; gap: 6px; }
+  .note-snippet { font-size: 12px; color: var(--muted); }
+  .note-composer { border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; }
+  .composer-context { font-size: 12px; color: var(--muted); }
+  .composer-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+  .chat-section { flex: 1; min-height: 0; }
+  .suggestion-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .suggestion-item { padding: 6px 10px; border-radius: 999px; background: rgba(14,165,233,0.15); color: var(--accent-bg); cursor: pointer; font-size: 12px; border: 1px solid transparent; }
+  .suggestion-item:hover { border-color: var(--accent-border); }
+  .chat-actions { display: flex; gap: 6px; }
+  .chat-input textarea { width: 100%; }
+
+  /* ─── Inline Tools ───────────────────────────────────────────────────────── */
+  .selection-popover {
+    position: fixed;
+    z-index: 1200;
+    display: flex;
+    gap: 6px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 12px 24px rgba(0,0,0,0.35);
+  }
+  .selection-popover button {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--button-bg);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .selection-popover button:hover { background: var(--button-hover-bg); color: var(--text); }
+
+  .reference-trail {
+    position: fixed;
+    left: 16px;
+    bottom: 60px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    max-width: 320px;
+    box-shadow: 0 14px 24px rgba(0,0,0,0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .trail-item { font-size: 12px; color: var(--muted); cursor: pointer; }
+
+  .history-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--surface-2); }
+  .history-item { border: 1px solid transparent; border-radius: 8px; padding: 8px; margin-bottom: 6px; cursor: pointer; }
+  .history-item.active { border-color: var(--accent-border); background: rgba(14,165,233,0.12); }
+
+  .search-hit { background: rgba(14,165,233,0.35); color: inherit; border-radius: 4px; padding: 0 2px; }
+  .search-hit.active-hit { outline: 2px solid var(--accent-border); }
+  .annotation-highlight { background: rgba(249,115,22,0.25); padding: 0 2px; border-radius: 4px; }
+
+  @media (max-width: 1280px) {
+    .reader-content { grid-template-columns: 1fr; }
+    .toc { order: -1; flex-direction: row; align-items: flex-start; overflow-x: auto; }
+    .toc-list { display: flex; flex-direction: row; gap: 6px; }
+    .toc-item { white-space: nowrap; }
+  }
+  @media (max-width: 1080px) {
+    .result-wrap { grid-template-columns: 1fr; }
+    .result-aside { order: -1; }
+  }
+  @media (max-width: 640px) {
+    .reader-toolbar { flex-direction: column; align-items: stretch; }
+    .chat-actions { flex-direction: column; }
+    .header-actions { justify-content: flex-end; }
   }
     </style>
   </head>
@@ -307,31 +528,121 @@
     <div id="resultView" style="display:none; position: absolute; inset: 36px 0 48px 0;">
       <div class="result-wrap">
         <div class="result-main">
-          <div style="display:flex; justify-content: space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:12px; gap: 8px;">
-            <h2 style="margin:0;">分析結果</h2>
-            <div style="display:flex; align-items:center; gap:8px;">
+          <div class="result-header">
+            <div class="header-left">
+              <h2 class="title">分析結果</h2>
+              <div id="docMetaSummary" class="doc-meta" role="status" aria-live="polite"></div>
+            </div>
+            <div class="header-actions">
               <div class="segmented" id="langToggle" aria-label="語言切換">
                 <input id="langZh" type="radio" name="lang" value="zh" checked />
                 <label for="langZh">中文</label>
                 <input id="langEn" type="radio" name="lang" value="en" />
                 <label for="langEn">English</label>
               </div>
+              <button id="btnToggleToc" class="btn" type="button" title="切換目錄面板">顯示目錄</button>
+              <button id="btnToggleSplit" class="btn" type="button" title="切換分割檢視">分割視窗</button>
+              <button id="btnOpenNewWindow" class="btn" type="button" title="開啟新視窗">新視窗</button>
               <button id="btnNewFile" class="btn" title="處理另一個檔案">新檔案</button>
             </div>
           </div>
-          <div class="result-content">
-            <div id="mdContainer" class="markdown"></div>
+          <div class="reader-toolbar">
+            <div class="search-group">
+              <input id="searchInput" class="search-input" type="search" placeholder="全文搜尋…" aria-label="全文搜尋" />
+              <div class="search-controls" role="group" aria-label="搜尋導覽">
+                <span id="searchCounter" class="search-counter">0 / 0</span>
+                <button id="btnSearchPrev" class="btn-icon" type="button" title="上一個結果">▲</button>
+                <button id="btnSearchNext" class="btn-icon" type="button" title="下一個結果">▼</button>
+                <button id="btnSearchClear" class="btn-icon" type="button" title="清除搜尋">✕</button>
+              </div>
+            </div>
+            <div class="toolbar-right">
+              <div id="contextChips" class="context-chips" aria-live="polite"></div>
+              <div class="nav-controls" role="group" aria-label="章節導覽">
+                <button id="btnPrevSection" class="btn-icon" type="button" title="上一節">←</button>
+                <button id="btnNextSection" class="btn-icon" type="button" title="下一節">→</button>
+              </div>
+            </div>
+          </div>
+          <div class="reader-content toc-hidden">
+            <nav id="tocSidebar" class="toc hidden" aria-label="文件目錄">
+              <div class="toc-header">
+                <span>目錄</span>
+                <div class="toc-actions">
+                  <button id="btnTocExpand" class="btn-icon" type="button" title="展開全部">＋</button>
+                  <button id="btnTocCollapse" class="btn-icon" type="button" title="摺疊全部">－</button>
+                </div>
+              </div>
+              <div id="tocList" class="toc-list"></div>
+            </nav>
+            <div id="readerPanels" class="reader-panels" data-split="false">
+              <section class="markdown-panel primary" aria-label="主要內容">
+                <div id="mdContainer" class="markdown"></div>
+              </section>
+              <section id="secondaryPanel" class="markdown-panel secondary" aria-label="次要內容" hidden>
+                <div class="panel-header">
+                  <select id="secondarySource" class="select" aria-label="次視窗起始位置">
+                    <option value="">選擇目標節點</option>
+                  </select>
+                  <button id="btnSyncScroll" class="btn-icon" type="button" title="同步滾動">⇆</button>
+                </div>
+                <div id="mdContainerSecondary" class="markdown"></div>
+              </section>
+            </div>
           </div>
         </div>
         <aside class="result-aside">
-          <div class="chat-header">
-            <h3>聊天</h3>
-          </div>
-          <div id="chatList" class="chat-list" aria-live="polite"></div>
-          <div class="chat-input">
-            <textarea id="chatInput" placeholder="輸入訊息（Shift+Enter 換行）"></textarea>
-            <button id="btnChatSend" class="btn btn-primary" type="button" style="min-width:90px;">送出</button>
-          </div>
+          <section class="aside-section" aria-labelledby="markNoteTitle">
+            <div class="section-header">
+              <h3 id="markNoteTitle">書籤與筆記</h3>
+              <div class="section-actions">
+                <button id="btnAddBookmark" class="btn-icon" type="button" title="加入書籤">＋</button>
+                <button id="btnExportBookmarks" class="btn-icon" type="button" title="匯出書籤">⇩</button>
+                <button id="btnCreateNote" class="btn" type="button" title="新增筆記">新增筆記</button>
+              </div>
+            </div>
+            <div class="section-body">
+              <div class="subsection" aria-labelledby="bookmarkTitle">
+                <div class="subsection-header">
+                  <h4 id="bookmarkTitle">書籤</h4>
+                </div>
+                <ul id="bookmarkList" class="bookmark-list"></ul>
+              </div>
+              <div class="subsection" aria-labelledby="noteTitle">
+                <div class="subsection-header">
+                  <h4 id="noteTitle">筆記</h4>
+                </div>
+                <div id="noteList" class="note-list"></div>
+                <div id="noteComposer" class="note-composer" hidden>
+                  <div class="composer-context" id="noteComposerContext"></div>
+                  <textarea id="noteComposerInput" placeholder="撰寫筆記…" rows="3"></textarea>
+                  <div class="composer-actions">
+                    <button id="btnNoteCancel" class="btn" type="button">取消</button>
+                    <button id="btnNoteSave" class="btn btn-primary" type="button">儲存</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="aside-section chat-section" aria-labelledby="chatTitle">
+            <div class="section-header">
+              <h3 id="chatTitle">聊天</h3>
+              <div class="section-actions">
+                <button id="btnChatNew" class="btn-icon" type="button" title="新對話">＋</button>
+                <button id="btnChatHistory" class="btn-icon" type="button" title="聊天歷史">🕘</button>
+                <button id="btnVoiceInput" class="btn-icon" type="button" title="語音輸入">🎙️</button>
+                <button id="btnVoiceOutput" class="btn-icon" type="button" title="語音播放">🔊</button>
+              </div>
+            </div>
+            <div id="suggestedQuestions" class="suggestion-list" aria-live="polite"></div>
+            <div id="chatList" class="chat-list" aria-live="polite"></div>
+            <div class="chat-input">
+              <textarea id="chatInput" placeholder="輸入訊息（Shift+Enter 換行）" aria-label="輸入問題"></textarea>
+              <div class="chat-actions">
+                <button id="btnChatSend" class="btn btn-primary" type="button">送出</button>
+              </div>
+            </div>
+          </section>
         </aside>
       </div>
     </div>
@@ -415,7 +726,26 @@
         </div>
       </div>
     </div>
-
+    <div id="selectionPopover" class="selection-popover" hidden>
+      <button id="btnHighlightSelection" type="button">標註</button>
+      <button id="btnRemoveHighlight" type="button" hidden>取消標註</button>
+      <button id="btnNoteSelection" type="button">筆記</button>
+      <button id="btnAskSelection" type="button">就此提問</button>
+    </div>
+    <div id="referenceTrail" class="reference-trail" aria-live="polite" hidden></div>
+    <div id="chatHistoryBackdrop" class="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="chatHistoryTitle">
+        <button id="btnChatHistoryClose" class="close" aria-label="關閉">✕</button>
+        <h2 id="chatHistoryTitle">聊天歷史</h2>
+        <div id="chatHistoryList" class="history-list"></div>
+        <div class="modal-actions">
+          <button id="btnChatHistoryDelete" class="btn" type="button" title="刪除選取">刪除</button>
+          <div class="spacer"></div>
+          <button id="btnChatHistoryLoad" class="btn btn-primary" type="button">載入</button>
+          <button id="btnChatHistoryClose2" class="btn" type="button">關閉</button>
+        </div>
+      </div>
+    </div>
     <!-- Toast -->
     <div id="toast" class="toast"></div>
     <!-- Markdown 解析器 -->

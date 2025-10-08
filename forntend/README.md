@@ -118,25 +118,60 @@ frontend/                      # Electron 前端應用
 
 ### Python 環境設定
 
-前端需要 Python 環境來運行橋接腳本。系統會自動檢測：
+前端需要 Python 環境來運行橋接腳本。`main.js` 會依下列優先順序尋找可用的 Python：
 
-1. **Anaconda**: `C:\Users\User\anaconda3\python.exe`
-2. **系統環境**: `PYTHON` 環境變數
-3. **PATH 中的 python**
+1. 環境變數 `PDFHELPER_PYTHON`、`PYTHON`、`PYTHON_PATH` 指定的可執行檔或命令。
+2. 當前啟用的虛擬環境（`VIRTUAL_ENV` 或 `CONDA_PREFIX`），自動使用其中的 `Scripts/python.exe`（Windows）或 `bin/python`（macOS/Linux）。
+3. Windows Python Launcher：`py -3`、`py`。
+4. 一般系統命令：`python3`、`python`。
+5. （為相容舊版）`C:\Users\User\anaconda3\python.exe`。
 
-#### 手動指定 Python 路徑
-如果自動檢測失敗，請在 `main.js` 中修改：
+#### 建議做法
 
-```javascript
-// 在 main.js 中修改 Python 路徑
-const py = process.env.PYTHON || '你的Python路徑/python.exe';
-```
+- 若使用 venv 或 conda，只要在啟用該環境後執行 `npm start`，應用就會自動使用對應的 Python。
+- 若需明確指定執行檔，建議透過環境變數而非修改原始碼：
 
-#### 環境變數設定
 ```powershell
-# 設置 Python 路徑
-$env:PYTHON = "C:\Users\YourName\anaconda3\python.exe"
+# Windows PowerShell：設定當前工作階段的 Python
+$env:PDFHELPER_PYTHON = "$env:USERPROFILE\.venv\Scripts\python.exe"
+npm start
 ```
+
+```bash
+# macOS / Linux：設定當前工作階段的 Python
+export PDFHELPER_PYTHON="$HOME/.venv/bin/python"
+npm start
+```
+
+若想永久保留設定，可改用 `setx PDFHELPER_PYTHON "..."`（Windows）或將 `export` 指令寫入 shell 啟動腳本。
+
+### MinerU 路徑設定
+
+`scripts/pdfhelper_bridge.py` 會按以下優先順序尋找 MinerU CLI：
+
+1. 環境變數 `PDFHELPER_MINERU_EXE` 指定的執行檔。
+2. 環境變數 `PDFHELPER_MINERU_PATH` 指定的資料夾（會自動加入 PATH）。
+3. 目前啟用的 venv / conda 環境內的 `Scripts/` 或 `bin/`。
+4. 系統 PATH 中的 `mineru` 指令。
+5. （相容舊版）曾經硬編碼的 Anaconda Scripts 目錄。
+
+#### 範例設定
+
+```powershell
+# 直接指定 MinerU 可執行檔
+$env:PDFHELPER_MINERU_EXE = "$env:USERPROFILE\.venv\Scripts\mineru.exe"
+
+# 或指定包含 mineru 的資料夾
+$env:PDFHELPER_MINERU_PATH = "$env:USERPROFILE\.venv\Scripts"
+```
+
+```bash
+export PDFHELPER_MINERU_EXE="$HOME/.venv/bin/mineru"
+# 或
+export PDFHELPER_MINERU_PATH="$HOME/.venv/bin"
+```
+
+設定完成後重新啟動 Electron 應用，橋接腳本會自動使用指定位置。若仍找不到，請確認在終端機中執行 `mineru --version` 是否成功。
 
 ### 後端路徑配置
 

@@ -42,7 +42,7 @@ def test_basic_rag_functionality():
     # 3. 測試向量數據庫
     print("\n3. 測試向量數據庫...")
     try:
-        db_info = rag.vector_store.get_collection_info("SiLU_translated.json")
+        db_info = rag.vector_store.get_collection_info("3_11_translated.json")
         print(f"✅ 向量數據庫信息: {db_info}")
     except Exception as e:
         print(f"❌ 向量數據庫測試失敗: {e}")
@@ -51,7 +51,7 @@ def test_basic_rag_functionality():
     # 4. 測試文檔索引 (如果有測試文檔)
     print("\n4. 檢查測試文檔...")
     test_content_paths = [
-        "SiLU_translated.json"
+        "3_11_translated.json"
     ]
     
     for content_path in test_content_paths:
@@ -63,7 +63,7 @@ def test_basic_rag_functionality():
                 
                 # 測試搜索功能
                 print("   測試搜索功能...")
-                search_results = rag.search("這個文件的主題?", "SiLU_translated.json", top_k=3)
+                search_results = rag.search("這個文件的主題?", "3_11_translated.json", top_k=3)
                 print(f"   ✅ 搜索完成，找到 {len(search_results)} 個結果")
                 
                 if search_results:
@@ -122,7 +122,7 @@ def test_document_processor():
     
     # 查找測試文檔
     test_paths = [
-        "SiLU_translated.json"
+        "3_11_translated.json"
     ]
     
     for test_path in test_paths:

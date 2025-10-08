@@ -27,11 +27,11 @@ def test_pdf_helper():
     print("1. 測試完整流程")
     # respond = pdf_helper.process_pdf_to_json(test_document)
     # respond = pdf_helper.from_pdf_to_rag(test_document)
-    respond = pdf_helper.add_json_to_rag("doc_f6a48d55_translated.json")
+    respond = pdf_helper.add_json_to_rag("3_11_translated.json")
     print(respond)
 
     # collection_name = respond.data.get("collection_name")
-    collection_name = "doc_f6a48d55_translated.json"
+    collection_name = "3_11_translated.json"
 
     # 2. 測試問答功能
     print("2. 測試問答功能")

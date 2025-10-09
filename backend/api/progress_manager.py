@@ -3,13 +3,20 @@
 用於管理非同步任務的進度狀態，避免循環導入問題
 """
 from threading import Lock
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Literal
 
 import logging
 from backend.api import setup_project_logger  # 導入日誌設置函數
 
 setup_project_logger(verbose=True)  # 設置全局日誌記錄器
 logger = logging.getLogger(__name__)
+
+STAGE_DISPLAY_NAMES = {
+    "idle": "閒置",
+    "processing-pdf": "處理 PDF",
+    "translating-json": "翻譯 JSON",
+    "adding-to-rag": "加入 RAG 資料庫"
+}
 
 class ProgressManager:
     """進度管理器類別，封裝進度管理功能"""
@@ -79,14 +86,14 @@ class ProgressManager:
         logger.info("[進度完成] 處理完成")
 
     @classmethod
-    def progress_update(cls, progress: float, message: str, stage: str):
+    def progress_update(cls, progress: float, message: str, stage: Literal["idle", "processing-pdf", "translating-json", "adding-to-rag"]):
         """
         更新進度
         
         Args:
             progress: 進度百分比 (0-100)
             message: 狀態訊息
-            stage: 當前階段 ("idle", "process-pdf", "translating-json", "adding-to-rag")
+            stage: 當前階段 ("idle", "processing-pdf", "translating-json", "adding-to-rag")
         """
         if cls._instance is None:
             logger.warning("[進度更新] ProgressManager 未初始化，忽略更新")
@@ -95,7 +102,9 @@ class ProgressManager:
         if cls._instance._state["is_processing"] is False:
             logger.warning(f"[進度更新被拒絕] 當前沒有任務在處理中，無法更新進度")
             return
-        
+
+        progress = round(progress, 2)
+        stage = STAGE_DISPLAY_NAMES.get(stage, "未知階段")
         with cls._instance._lock:
             cls._instance._state["progress"] = progress
             cls._instance._state["message"] = message

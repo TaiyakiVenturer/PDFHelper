@@ -151,7 +151,7 @@ class PDFHelper:
         Returns:
             HelperResult: 包含處理結果的統一格式
         """
-        ProgressManager.progress_update(13, f"正在處理 PDF (可能需要幾分鐘，請耐心等候)", "process-pdf")
+        ProgressManager.progress_update(13, f"正在處理 PDF (可能需要幾分鐘，請耐心等候)", "processing-pdf")
         if self.verbose:
             logger.info(f"開始處理 PDF: {pdf_name}，方法: {method}, 語言: {lang}, 設備: {device}")
 
@@ -162,7 +162,7 @@ class PDFHelper:
             device=device
         )
         if mineru_results["success"]:
-            ProgressManager.progress_update(28, "PDF處理完成", "process-pdf")
+            ProgressManager.progress_update(28, "PDF處理完成", "processing-pdf")
             if self.verbose:
                 logger.info(f"PDF '{pdf_name}' 處理完成，輸出路徑: {mineru_results['output_path']}")
                 logger.info(f"生成的檔案: {json.dumps(mineru_results['output_file_paths'], indent=2, ensure_ascii=False, sort_keys=True)}")
@@ -261,7 +261,7 @@ class PDFHelper:
             HelperResult: 包含是否成功加入向量資料庫及加入資料庫集合名稱的統一格式
         """
         logger.info(f"[from_pdf_to_rag 開始] is_processing={ProgressManager.get_state().get('is_processing')}")
-        ProgressManager.progress_update(8, "準備處理提取PDF", "process-pdf")
+        ProgressManager.progress_update(8, "準備處理提取PDF", "processing-pdf")
 
         # 提取PDF成JSON格式
         mineru_results = self.process_pdf_to_json(

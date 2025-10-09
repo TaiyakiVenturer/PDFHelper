@@ -8,7 +8,7 @@ import time
 import requests
 from pathlib import Path
 
-from backend.api.api import progress_update
+from backend.api import ProgressManager
 
 import logging
 logger = logging.getLogger(__name__)
@@ -238,7 +238,7 @@ class TranslatorBase:
         last_progress = 36  # 初始進度
         per_progress = 30 / len(content_list)  # 30%分配給翻譯
         for index, item in enumerate(content_list):
-            progress_update(last_progress + per_progress * index, f"正在翻譯第 {index+1}/{len(content_list)} 個段落", "translating-json")
+            ProgressManager.progress_update(last_progress + per_progress * index, f"正在翻譯第 {index+1}/{len(content_list)} 個段落", "translating-json")
             if item.get('translation_metadata', {}) != {}:
                 continue
             if not (item.get('type') == 'text' and item.get('text')):

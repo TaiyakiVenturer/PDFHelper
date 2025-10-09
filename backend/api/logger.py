@@ -46,6 +46,11 @@ def setup_project_logger(verbose: bool = False):
     Args:
         verbose: 是否啟用詳細日誌 (預設為False)
     """
+    # 🛡️ 防止重複設置：如果已經有 handler，直接返回
+    root_logger = logging.getLogger()
+    if root_logger.hasHandlers():
+        return
+    
     log_level = logging.DEBUG if verbose else logging.INFO
 
     # 設定log路徑固定為專案根目錄/logs

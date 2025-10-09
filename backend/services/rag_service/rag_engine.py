@@ -11,7 +11,7 @@ from .chroma_database import ChromaVectorStore
 
 from ..llm_service import OllamaService, GeminiService
 
-from backend.api.api import progress_update
+from backend.api import ProgressManager  # 導入進度管理器
 
 import logging
 logger = logging.getLogger(__name__)
@@ -135,7 +135,7 @@ class RAGEngine:
             if not chunks:
                 logger.error("未讀取到翻譯JSON文件或文件內容為空")
                 return False
-            progress_update(75, "文件片段生成完成，開始向量化並儲存到資料庫", "adding-to-rag")
+            ProgressManager.progress_update(75, "文件片段生成完成，開始向量化並儲存到資料庫", "adding-to-rag")
 
             # 檢查embedding服務可用性
             if not self.embedding_service.is_available():
@@ -145,7 +145,7 @@ class RAGEngine:
             # 生成embedding向量
             texts = [chunk.content for chunk in chunks]
             embeddings = self.embedding_service.get_embeddings(texts, store=True)
-            progress_update(96, "向量化完成，正在儲存到向量資料庫", "adding-to-rag")
+            ProgressManager.progress_update(96, "向量化完成，正在儲存到向量資料庫", "adding-to-rag")
 
             # 如果文件已存在，先刪除
             collection_name = '_'.join(json_file_name.split("_")[:-1])
@@ -154,7 +154,7 @@ class RAGEngine:
 
             # 新增到向量資料庫
             success = self.vector_store.add_chunks(chunks, embeddings, collection_name=collection_name)
-            progress_update(99, "文件成功儲存到向量資料庫", "idle")
+            ProgressManager.progress_update(99, "文件成功儲存到向量資料庫", "idle")
 
             if success:
                 if self.verbose:

@@ -12,7 +12,8 @@ from backend.services.pdf_service import MinerUProcessor # 導入MinerU文件處
 from backend.services.translation_service import OllamaTranslator, GeminiTranslator # 導入翻譯器
 from backend.services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine # 導入RAG引擎
 from backend.services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
-from backend.api.api import progress_update, progress_fail, progress_complete # 導入進度更新函數
+
+from backend.api import ProgressManager # 導入進度管理器
 
 from .config import Config # 導入配置管理
 
@@ -150,7 +151,7 @@ class PDFHelper:
         Returns:
             HelperResult: 包含處理結果的統一格式
         """
-        progress_update(13, f"正在處理 PDF (可能需要幾分鐘，請耐心等候)", "processing_pdf")
+        ProgressManager.progress_update(13, f"正在處理 PDF (可能需要幾分鐘，請耐心等候)", "process-pdf")
         if self.verbose:
             logger.info(f"開始處理 PDF: {pdf_name}，方法: {method}, 語言: {lang}, 設備: {device}")
 
@@ -161,7 +162,7 @@ class PDFHelper:
             device=device
         )
         if mineru_results["success"]:
-            progress_update(28, "PDF處理完成", "processing_pdf")
+            ProgressManager.progress_update(28, "PDF處理完成", "process-pdf")
             if self.verbose:
                 logger.info(f"PDF '{pdf_name}' 處理完成，輸出路徑: {mineru_results['output_path']}")
                 logger.info(f"生成的檔案: {json.dumps(mineru_results['output_file_paths'], indent=2, ensure_ascii=False, sort_keys=True)}")
@@ -259,7 +260,8 @@ class PDFHelper:
         Returns:
             HelperResult: 包含是否成功加入向量資料庫及加入資料庫集合名稱的統一格式
         """
-        progress_update(8, "準備處理提取PDF", "processing-pdf")
+        logger.info(f"[from_pdf_to_rag 開始] is_processing={ProgressManager.get_state().get('is_processing')}")
+        ProgressManager.progress_update(8, "準備處理提取PDF", "process-pdf")
 
         # 提取PDF成JSON格式
         mineru_results = self.process_pdf_to_json(
@@ -269,58 +271,58 @@ class PDFHelper:
             device=device
         )
         if not mineru_results.success:
-            progress_fail("PDF處理失敗")
+            ProgressManager.progress_fail("PDF處理失敗")
             return mineru_results
 
-        progress_update(30, "PDF處理完成，開始翻譯JSON內容", "translating-json")
+        ProgressManager.progress_update(30, "PDF處理完成，開始翻譯JSON內容", "translating-json")
         # 獲取生成的JSON檔案路徑
         json_path = mineru_results.data.get("output_file_paths").get("json")
         if not json_path:
             logger.error("未找到生成的JSON檔案，無法進行後續操作")
-            progress_fail("未找到生成的JSON檔案")
+            ProgressManager.progress_fail("未找到生成的JSON檔案")
             return HelperResult(
                 success=False,
                 message="未找到生成的JSON檔案"
             )
-        progress_update(33, "已獲取生成的JSON檔案", "translating-json")
+        ProgressManager.progress_update(33, "已獲取生成的JSON檔案", "translating-json")
         
         if not os.path.exists(json_path):
             logger.error(f"生成的JSON檔案不存在: {json_path}，無法進行後續操作")
-            progress_fail("生成的JSON檔案不存在")
+            ProgressManager.progress_fail("生成的JSON檔案不存在")
             return HelperResult(
                 success=False,
                 message="生成的JSON檔案不存在"
             )
-        progress_update(36, "開始翻譯JSON內容", "translating-json")
+        ProgressManager.progress_update(36, "開始翻譯JSON內容", "translating-json")
         
         # 翻譯JSON內容
         translated_path = self.translate_json_content(json_path)
         if not translated_path.success:
-            progress_fail("翻譯JSON內容遇到錯誤")
+            ProgressManager.progress_fail("翻譯JSON內容遇到錯誤")
             return HelperResult(
                 success=False,
                 message="翻譯JSON內容失敗"
             )
-        progress_update(67, "JSON內容翻譯完成，開始加入RAG引擎", "adding-to-rag")
+        ProgressManager.progress_update(67, "JSON內容翻譯完成，開始加入RAG引擎", "adding-to-rag")
         
         translated_json_path = translated_path.data.get("translated_file_path")
         if not os.path.exists(translated_json_path):
-            progress_fail("未找到翻譯後的JSON檔案")
+            ProgressManager.progress_fail("未找到翻譯後的JSON檔案")
             logger.error(f"未找到翻譯後的JSON檔案 {translated_json_path}，無法進行後續操作")
             return HelperResult(
                 success=False,
                 message="未找到翻譯後的JSON檔案"
             )
-        progress_update(70, "已獲取翻譯後的JSON檔案，開始加入RAG引擎", "adding-to-rag")
+        ProgressManager.progress_update(70, "已獲取翻譯後的JSON檔案，開始加入RAG引擎", "adding-to-rag")
 
         # 將翻譯後的JSON加入RAG引擎
         translated_json_name = Path(translated_json_path).name
         rag_result = self.add_json_to_rag(translated_json_name)
         if not rag_result.success:
-            progress_fail("加入RAG引擎遇到錯誤")
+            ProgressManager.progress_fail("加入RAG引擎遇到錯誤")
             logger.error(f"加入RAG引擎失敗: {rag_result.message}")
         else:
-            progress_complete({
+            ProgressManager.progress_complete({
                 "collection_name": rag_result.data.get("collection_name")
             })
             logger.info(f"文件成功加入RAG引擎: {translated_json_name}, 集合名稱: {rag_result.data.get('collection_name')}")

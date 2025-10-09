@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from typing import Literal, Dict, Any, Optional
 from threading import Lock, Thread
 
 import sys
@@ -11,14 +10,31 @@ project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+import logging
+from backend.api import setup_project_logger  # 導入日誌設置函數
+setup_project_logger(verbose=True)  # 設置全局日誌記錄器
+logger = logging.getLogger(__name__)
+
 # 現在可以安全地使用絕對導入
 from backend.api.pdf_helper import PDFHelper
 from backend.api.config import Config, MinerUConfig, TranslatorConfig, EmbeddingServiceConfig, RAGConfig
 
+from backend.api import ProgressManager  # 導入進度管理器
 
 app = Flask(__name__)
 CORS(app)
 
+# 全域進度變數 - 保留在 api.py 中
+current_progress = {
+    "is_processing": False,
+    "progress": float(0),
+    "stage": "idle",  # 初始階段為 idle
+    "message": "",
+    "error": None,
+    "result": None
+}
+
+# PDFHelper 實例 - 直接初始化（不再需要延遲載入）
 pdf_helper = PDFHelper(
     config=Config(
         mineru_config=MinerUConfig(verbose=True),
@@ -32,60 +48,9 @@ pdf_helper = PDFHelper(
     verbose=True
 )
 
-# 全域進度變數
-current_progress = {
-    "is_processing": False,
-    "progress": float(0),
-    "stage": Literal["idle", "process-pdf", "translating-json", "adding-to-rag"],
-    "message": "",
-    "error": None,
-    "result": None
-}
-# 進度鎖，確保資料一致性
+# 初始化進度管理器
 progress_lock = Lock()
-
-# ==================== 進度更新 ====================
-
-def progress_start() -> bool:
-    """標記處理開始"""
-    if current_progress["is_processing"]:
-        return False  # 已有任務在跑，拒絕新的請求
-    with progress_lock:
-        current_progress["is_processing"] = True
-        current_progress["progress"] = 0
-        current_progress["error"] = None
-    return True
-
-def progress_complete(result: Optional[Dict[str, Any]] = None):
-    """
-    標記處理完成
-    
-    Args:
-        result (Optional[Dict[str, Any]]): 處理結果，可選 例如`{"collection_name": "doc_name"}`
-    """
-    with progress_lock:
-        current_progress["is_processing"] = False
-        current_progress["progress"] = 100
-        current_progress["message"] = "處理完成"
-        current_progress["stage"] = "idle"
-        current_progress["result"] = result
-
-def progress_update(progress, message, stage):
-    """更新進度"""
-    if not current_progress["is_processing"]:
-        return  # 沒有任務在跑，忽略更新
-    with progress_lock:
-        current_progress["progress"] = progress
-        current_progress["message"] = message
-        current_progress["stage"] = stage
-
-def progress_fail(error_message):
-    """標記處理失敗"""
-    with progress_lock:
-        current_progress["is_processing"] = False
-        current_progress["message"] = "處理遇到錯誤"
-        current_progress["stage"] = "idle"
-        current_progress["error"] = error_message
+manager = ProgressManager(current_progress, progress_lock)  # 初始化時傳入進度及鎖
 
 # ==================== API 端點 ====================
 
@@ -97,7 +62,9 @@ def get_progress_endpoint():
 
 @app.route('/api/full-process-async', methods=['POST'])
 def full_process_async_endpoint():
-    if not progress_start():
+    """非同步處理 PDF 到 RAG 的完整流程"""
+    allow = ProgressManager.progress_start()
+    if not allow:
         return jsonify({"success": False, "message": "已有任務在處理中，請稍後再試"}), 429  # Too Many Requests
 
     data = request.json

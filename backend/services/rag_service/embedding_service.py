@@ -7,7 +7,7 @@ from typing import List, Optional, Literal, Union
 from ..llm_service import OllamaService
 from ..llm_service import GeminiService
 
-from backend.api.api import progress_update
+from backend.api import ProgressManager
 
 import logging
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ class EmbeddingService:
         embeddings = []
         error_counter = 0
         for index, text in enumerate(texts):
-            progress_update(last_progress + per_progress * index , f"正在處理第 {index + 1} 條，共 {len(texts)} 條", "adding-to-rag")
+            ProgressManager.progress_update(last_progress + per_progress * index , f"正在處理第 {index + 1} 條，共 {len(texts)} 條", "adding-to-rag")
             embedding = self._get_single_embedding_with_retry(text, store=store)
 
             # 紀錄embedding獲取失敗的字串，並過濾掉失敗的結果

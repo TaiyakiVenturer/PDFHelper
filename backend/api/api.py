@@ -34,7 +34,7 @@ current_progress = {
     "result": None
 }
 
-# PDFHelper 實例 - 直接初始化（不再需要延遲載入）
+# PDFHelper 實例
 pdf_helper = PDFHelper(
     config=Config(
         mineru_config=MinerUConfig(verbose=True),
@@ -48,9 +48,9 @@ pdf_helper = PDFHelper(
     verbose=True
 )
 
-# 初始化進度管理器
+# 初始化進度管理器 （單例模式，不需要保存實例引用）
 progress_lock = Lock()
-manager = ProgressManager(current_progress, progress_lock)  # 初始化時傳入進度及鎖
+ProgressManager(current_progress, progress_lock)
 
 # ==================== API 端點 ====================
 

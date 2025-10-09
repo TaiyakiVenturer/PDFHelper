@@ -11,6 +11,9 @@ from pathlib import Path
 from backend.api import ProgressManager
 
 import logging
+from backend.api import setup_project_logger  # 導入日誌設置函數
+
+setup_project_logger(verbose=True)  # 設置全局日誌記錄器
 logger = logging.getLogger(__name__)
 
 class TranslatorBase:

@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from threading import Lock, Thread
+import os
 
 import sys
 from pathlib import Path
@@ -235,5 +236,6 @@ def system_health_endpoint():
 
 if __name__ == '__main__':
     host = "localhost"
-    port = 13635
-    app.run(host=host, port=port, debug=True)
+    port = os.getenv("FLASK_PORT", 13635)
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host=host, port=port, debug=debug)

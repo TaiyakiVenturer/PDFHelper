@@ -1,5 +1,12 @@
+import sys
+from pathlib import Path
 
-from api import PDFHelper, Config, MinerUConfig, TranslatorConfig, EmbeddingServiceConfig, RAGConfig
+# 🔧 自動修正 PYTHONPATH - 確保無論如何執行都能找到模組
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from backend.api import PDFHelper, Config, MinerUConfig, TranslatorConfig, EmbeddingServiceConfig, RAGConfig
 import pprint as pp
 
 def test_pdf_helper():

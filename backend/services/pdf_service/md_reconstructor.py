@@ -50,7 +50,7 @@ class MarkdownReconstructor:
         Returns:
             str: 重組後的.md檔案路徑，失敗則回傳None
         """
-        # 
+        # 讀取翻譯後的Json檔案
         translated_file_path = os.path.join(self.instance_path, "translated_files", file_name)
         if not os.path.exists(translated_file_path):
             logger.error(f"找不到翻譯後的檔案: {translated_file_path}")

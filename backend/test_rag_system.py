@@ -1,6 +1,13 @@
 """
 RAG系統測試文件 - 驗證基礎功能
 """
+import sys
+from pathlib import Path
+
+# 🔧 自動修正 PYTHONPATH - 確保無論如何執行都能找到模組
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from services.rag_service import RAGEngine
 

@@ -734,7 +734,7 @@ def run_pipeline(
 		for language in ("zh", "en"):
 			emit_status("markdown", "start", language=language)
 			reconstruct_result: HelperResult = helper.reconstruct_markdown(
-				file_name=translated_json_path.name,
+				json_name=translated_json_path.name,
 				method=method,
 				language=language,  # type: ignore[arg-type]
 			)

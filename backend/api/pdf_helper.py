@@ -323,7 +323,8 @@ class PDFHelper:
             logger.error(f"加入RAG引擎失敗: {rag_result.message}")
         else:
             ProgressManager.progress_complete({
-                "collection_name": rag_result.data.get("collection_name")
+                "collection_name": rag_result.data.get("collection_name"),
+                "translated_json_name": translated_json_name
             })
             logger.info(f"文件成功加入RAG引擎: {translated_json_name}, 集合名稱: {rag_result.data.get('collection_name')}")
 
@@ -373,7 +374,7 @@ class PDFHelper:
         )
 
     def reconstruct_markdown(self, 
-            file_name: str, 
+            json_name: str, 
             method: Literal['auto', 'ocr', 'text'],
             language: Literal['zh', 'en'] = 'zh'
         ) -> HelperResult:
@@ -389,7 +390,7 @@ class PDFHelper:
             HelperResult: 包含重組後的.md檔案路徑的統一格式
         """
         finished_path = self.md_constructor.reconstruct(
-            file_name=file_name,
+            json_name=json_name,
             method=method,
             language=language
         )
@@ -417,3 +418,80 @@ class PDFHelper:
             message="系統健康狀態獲取完成",
             data=health_status
         )
+
+    def update_llm_service(self, service: Literal['translator', 'embedding', 'rag'], api_key: str, model_name: str) -> HelperResult:
+        """
+        更新API金鑰
+        
+        Args:
+            service: 要更新API金鑰的服務 (translator/embedding/rag)
+            api_key: 新的API金鑰
+            model_name: 模型名稱
+        
+        Returns:
+            HelperResult: 包含是否成功更新API金鑰的統一格式
+        """
+        if service == "translator":
+            if hasattr(self.translator, 'update_config'):
+                if self.translator.update_config(api_key=api_key, model_name=model_name):
+                    logger.info("翻譯器API金鑰更新成功並且服務可用")
+                    return HelperResult(
+                        success=True,
+                        message="翻譯器API金鑰更新成功"
+                    )
+                else:
+                    logger.warning("翻譯器API金鑰更新失敗，請檢查金鑰或模型名稱是否正確")
+                    return HelperResult(
+                        success=False,
+                        message="翻譯器API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+                    )
+            else:
+                return HelperResult(
+                    success=False,
+                    message="當前翻譯器不支援API金鑰更新 (可能使用 Ollama)"
+                )
+        elif service == "embedding":
+            # 檢查 llm_service 是否支援 update_config 方法
+            if hasattr(self.rag_engine.embedding_service.llm_service, 'update_config'):
+                if self.rag_engine.embedding_service.llm_service.update_config(api_key=api_key, model_name=model_name):
+                    logger.info("Embedding服務API金鑰更新成功並且服務可用")
+                    return HelperResult(
+                        success=True,
+                        message="Embedding服務API金鑰更新成功"
+                    )
+                else:
+                    logger.warning("Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確")
+                    return HelperResult(
+                        success=False,
+                        message="Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+                    )
+            else:
+                return HelperResult(
+                    success=False,
+                    message="當前Embedding服務不支援API金鑰更新 (可能使用 Ollama)"
+                )
+        elif service == "rag":
+            # 檢查 llm_service 是否支援 update_config 方法
+            if hasattr(self.rag_engine.llm_service, 'update_config'):
+                if self.rag_engine.llm_service.update_config(api_key=api_key, model_name=model_name):
+                    logger.info("RAG LLM服務API金鑰更新成功並且服務可用")
+                    return HelperResult(
+                        success=True,
+                        message="RAG LLM服務API金鑰更新成功"
+                    )
+                else:
+                    logger.warning("RAG LLM服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確")
+                    return HelperResult(
+                        success=False,
+                        message="RAG LLM服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+                    )
+            else:
+                return HelperResult(
+                    success=False,
+                    message="當前RAG LLM服務不支援API金鑰更新 (可能使用 Ollama)"
+                )
+        else:
+            return HelperResult(
+                success=False,
+                message="不支援的服務類型"
+            )

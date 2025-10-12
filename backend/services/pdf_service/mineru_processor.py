@@ -140,6 +140,7 @@ class MinerUProcessor:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,  # 將 stderr 重定向到 stdout
                 text=True,
+                encoding='utf-8',  # 明確指定 UTF-8 編碼
                 cwd=os.path.dirname(__file__),
                 universal_newlines=True,
                 bufsize=1,

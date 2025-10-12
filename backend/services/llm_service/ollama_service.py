@@ -51,8 +51,8 @@ class OllamaService():
         if self.verbose:
             logger.info("Ollama服務初始化完成")
 
-    def is_available(self) -> bool:
-        """檢查Ollama服務是否可用"""
+    def is_available(self, model_name: str = None) -> bool:
+        """檢查Ollama服務是否可用 (model_name 參數目前未使用)"""
         try:
             # 嘗試連接服務
             # if not self._create_service(background=False):

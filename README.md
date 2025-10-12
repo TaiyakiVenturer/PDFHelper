@@ -18,16 +18,17 @@ PDFHelper 是一個基於 AI 的智能 PDF 處理系統，提供 PDF 解析、�
 
 ### 後端
 - **Python 3.10+**
+- **Flask** - RESTful API 框架
 - **MinerU** - PDF 解析引擎
 - **ChromaDB** - 向量資料庫
 - **PyTorch** - 機器學習框架
-- **Flask** - Web API 框架
 
-### 前端 (正在開發中)
-- **React 19**
-- **TypeScript**
-- **Material-UI**
-- **Vite** - 建構工具
+### 前端
+- **Node.js 18+**
+- **Electron** - 跨平台桌面應用框架
+- **JavaScript (ES6+)** - 主要開發語言
+- **Marked.js** - Markdown 渲染引擎
+- **KaTeX** - LaTeX 數學公式渲染
 
 ## 🚀 快速開始
 
@@ -103,11 +104,32 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {
 - MinerU - AGPL-3.0
 - ChromaDB - Apache-2.0
 - PyTorch - BSD-3-Clause
-- React - MIT
 
 ## 📞 聯絡資訊
 
 - **作者**: [TaiyakiVenturer](https://github.com/TaiyakiVenturer)
+
+## � 專案結構
+
+```
+PDFHelper/
+├── backend/                 # Python 後端服務
+│   ├── api/                # Flask API 與核心邏輯
+│   └── services/           # PDF、翻譯、RAG 服務
+├── frontend/               # Electron 前端應用
+│   ├── modules/            # 編譯後的 TypeScript 模組
+│   ├── instance/           # 本地資料（設定、歷史記錄）
+│   └── scripts/            # ⚠️ 已棄用（保留供歷史參考）
+└── docs/                   # 專案文件
+```
+
+### ⚠️ 重要說明
+
+**`frontend/scripts/` 資料夾已棄用**
+- 此資料夾包含早期的 Python 腳本實作（chat.py, processor.py 等）
+- 自 2025-10-13 起，所有功能已完全遷移至 Flask HTTP API
+- 保留此資料夾僅供歷史參考，請勿使用其中的腳本
+- 詳見：[API 遷移說明](./docs/TODO.md#階段二統一api介面整合)
 
 ## 📋 TODO
 

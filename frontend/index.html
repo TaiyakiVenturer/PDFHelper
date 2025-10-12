@@ -122,10 +122,31 @@
   /* 讓標題列可在設定開啟時仍可操作：保留上方 36px（titlebar 高度）不覆蓋 */
   .modal-backdrop { position: fixed; left: 0; right: 0; top: 36px; bottom: 0; background: rgba(2,6,23,0.55); display: none; align-items: center; justify-content: center; z-index: 1000; -webkit-app-region: no-drag; opacity: 0; transition: opacity 200ms ease; }
   .modal-backdrop.show { opacity: 1; }
-  .modal { width: 560px; max-width: calc(100% - 24px); background: var(--surface-1); border: 1px solid var(--outline-strong); border-radius: 16px; padding: 16px 16px 12px; color: var(--text); position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.45); transform: translateY(8px) scale(0.98); opacity: 0; transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, transform 200ms ease, opacity 200ms ease; }
+  .modal { 
+    width: 560px; 
+    max-width: calc(100% - 24px); 
+    max-height: calc(100vh - 72px); /* 留出上下間距 */
+    background: var(--surface-1); 
+    border: 1px solid var(--outline-strong); 
+    border-radius: 16px; 
+    padding: 16px 16px 12px; 
+    color: var(--text); 
+    position: relative; 
+    box-shadow: 0 30px 60px rgba(0,0,0,0.45); 
+    transform: translateY(8px) scale(0.98); 
+    opacity: 0; 
+    transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, transform 200ms ease, opacity 200ms ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
   .modal.open { transform: none; opacity: 1; }
   .modal .close { position: absolute; right: 10px; top: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); border-radius: 6px; width: 32px; height: 28px; cursor: pointer; }
-  .modal h2 { margin: 4px 0 14px; font-size: 20px; }
+  .modal h2 { margin: 4px 0 14px; font-size: 20px; flex-shrink: 0; }
+  .modal-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+  .section { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .modal h2 { margin: 4px 0 14px; font-size: 20px; flex-shrink: 0; }
+  .modal-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
   .section { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
   .section-title { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
   .field { margin-bottom: 10px; }
@@ -136,7 +157,7 @@
   /* 讓輸入框為了 suffix 按鈕預留空間，避免文字被遮或造成視覺溢出 */
   .input-group input { padding-right: 96px; }
   .input-group .suffix-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 32px; padding: 0 10px; width: 84px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-      .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-shrink: 0; }
   .btn-primary { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); font-weight: 700; }
   .btn-primary:hover { background: var(--accent-hover-bg); }
 
@@ -660,53 +681,119 @@
       <div class="modal">
         <button id="btnModalClose" class="close" title="關閉">×</button>
         <h2>設定</h2>
-        <div class="section">
-          <div class="section-title">連線設定</div>
-          <div class="field">
-            <label for="selCompany">公司 <span id="providerBadge" class="provider-badge" aria-hidden="true"></span></label>
-            <select id="selCompany" class="select">
-              <option value="">請選擇</option>
-              <option value="openai">OpenAI</option>
-              <option value="google">Google</option>
-              <option value="xai">xAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="ollama">Ollama</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="selModel">模型</label>
-            <select id="selModel" class="select">
-              <option value="">請先選公司</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="txtApiKey">API Key</label>
-            <div class="input-group">
-              <input id="txtApiKey" class="input" type="password" placeholder="輸入你的 API Key" />
-              <button id="btnToggleKey" class="suffix-btn" type="button">顯示</button>
+        
+        <div class="modal-body">
+          <!-- 翻譯器設定 -->
+          <div class="section">
+            <div class="section-title">翻譯器設定 (Translator)</div>
+            <div class="field">
+              <label for="selTranslatorCompany">公司 <span id="translatorProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
+              <select id="selTranslatorCompany" class="select">
+                <option value="">請選擇</option>
+                <option value="openai">OpenAI</option>
+                <option value="google">Google</option>
+                <option value="xai">xAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="selTranslatorModel">模型</label>
+              <select id="selTranslatorModel" class="select">
+                <option value="">請先選公司</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="txtTranslatorApiKey">API Key</label>
+              <div class="input-group">
+                <input id="txtTranslatorApiKey" class="input" type="password" placeholder="輸入 Translator API Key" />
+                <button id="btnToggleTranslatorKey" class="suffix-btn" type="button">顯示</button>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="section">
-          <div class="section-title">外觀與更新</div>
-          <div class="field">
-            <label>主題</label>
-            <div class="segmented">
-              <input id="themeDark" type="radio" name="theme" value="dark" />
-              <label for="themeDark">深色</label>
-              <input id="themeLight" type="radio" name="theme" value="light" />
-              <label for="themeLight">淺色</label>
-              <input id="themeSystem" type="radio" name="theme" value="system" />
-              <label for="themeSystem">系統</label>
+
+          <!-- Embedding 設定 -->
+          <div class="section">
+            <div class="section-title">Embedding 設定</div>
+            <div class="field">
+              <label for="selEmbeddingCompany">公司 <span id="embeddingProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
+              <select id="selEmbeddingCompany" class="select">
+                <option value="">請選擇</option>
+                <option value="openai">OpenAI</option>
+                <option value="google">Google</option>
+                <option value="xai">xAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="selEmbeddingModel">模型</label>
+              <select id="selEmbeddingModel" class="select">
+                <option value="">請先選公司</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="txtEmbeddingApiKey">API Key</label>
+              <div class="input-group">
+                <input id="txtEmbeddingApiKey" class="input" type="password" placeholder="輸入 Embedding API Key" />
+                <button id="btnToggleEmbeddingKey" class="suffix-btn" type="button">顯示</button>
+              </div>
             </div>
           </div>
-          <div class="field" style="display:flex; justify-content: space-between; align-items:center;">
-            <div style="color:var(--muted)">目前版本：<span id="lblVersion">-</span></div>
-            <button id="btnUpdateInModal" class="btn" type="button">檢查更新</button>
+
+          <!-- RAG 設定 -->
+          <div class="section">
+            <div class="section-title">RAG 設定</div>
+            <div class="field">
+              <label for="selRagCompany">公司 <span id="ragProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
+              <select id="selRagCompany" class="select">
+                <option value="">請選擇</option>
+                <option value="openai">OpenAI</option>
+                <option value="google">Google</option>
+                <option value="xai">xAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="selRagModel">模型</label>
+              <select id="selRagModel" class="select">
+                <option value="">請先選公司</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="txtRagApiKey">API Key</label>
+              <div class="input-group">
+                <input id="txtRagApiKey" class="input" type="password" placeholder="輸入 RAG API Key" />
+                <button id="btnToggleRagKey" class="suffix-btn" type="button">顯示</button>
+              </div>
+            </div>
           </div>
-          <div id="updateStatus" class="update-status" aria-live="polite"></div>
+
+          <!-- 外觀與更新 -->
+          <div class="section">
+            <div class="section-title">外觀與更新</div>
+            <div class="field">
+              <label>主題</label>
+              <div class="segmented">
+                <input id="themeDark" type="radio" name="theme" value="dark" />
+                <label for="themeDark">深色</label>
+                <input id="themeLight" type="radio" name="theme" value="light" />
+                <label for="themeLight">淺色</label>
+                <input id="themeSystem" type="radio" name="theme" value="system" />
+                <label for="themeSystem">系統</label>
+              </div>
+            </div>
+            <div class="field" style="display:flex; justify-content: space-between; align-items:center;">
+              <div style="color:var(--muted)">目前版本：<span id="lblVersion">-</span></div>
+              <button id="btnUpdateInModal" class="btn" type="button">檢查更新</button>
+            </div>
+            <div id="updateStatus" class="update-status" aria-live="polite"></div>
+          </div>
         </div>
+
         <div class="modal-actions">
+          <button id="btnSaveSettings" class="btn btn-primary">儲存設定</button>
           <button id="btnCancelSettings" class="btn">關閉</button>
         </div>
       </div>

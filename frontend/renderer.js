@@ -1559,13 +1559,23 @@ btnStart?.addEventListener('click', async () => {
 
   let startedSuccessfully = false;
   try {
-    // 讀取設定中的公司與模型
+    // 讀取設定（新版巢狀結構，不再傳遞給後端）
     const s = await window.electronAPI?.loadSettings?.();
-    const company = s?.company || '';
-    const model = s?.model || '';
-    const apiKey = s?.apiKey || '';
-    if (!company || !model) {
-      showToast('請先在「設定」選擇公司與模型', 'error', 2200);
+    
+    // 驗證配置（後端會從 settings.json 讀取，這裡只做前端驗證）
+    const translatorConfig = s?.translator || {};
+    const embeddingConfig = s?.embedding || {};
+    
+    if (!translatorConfig.company || !translatorConfig.model) {
+      showToast('請先在「設定」配置翻譯器（公司與模型）', 'error', 2500);
+      if (processingView) processingView.style.display = 'none';
+      if (wrapUpload) wrapUpload.style.display = '';
+      resetProcessingLogsUI();
+      return;
+    }
+    
+    if (!embeddingConfig.company || !embeddingConfig.model) {
+      showToast('請先在「設定」配置 Embedding 服務（公司與模型）', 'error', 2500);
       if (processingView) processingView.style.display = 'none';
       if (wrapUpload) wrapUpload.style.display = '';
       resetProcessingLogsUI();
@@ -1576,7 +1586,10 @@ btnStart?.addEventListener('click', async () => {
     currentFileDir = pathDirname(filePath);
     // 產生本次處理的 sessionId，讓事件可以對應
     const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-    const result = await window.electronAPI?.startProcessing?.({ filePath, company, model, apiKey, sessionId });
+    
+    // 只傳遞 filePath 和 sessionId，後端會從 settings.json 讀取配置
+    const result = await window.electronAPI?.startProcessing?.({ filePath, sessionId });
+    
     if (result?.ok) {
       startedSuccessfully = true;
       showToast('已開始處理', 'info', 1500);
@@ -2495,8 +2508,28 @@ btnHistoryClear?.addEventListener('click', async () => {
 });
 
 
-// 刪除檔案按鈕：清空選取
-btnDeleteFile?.addEventListener('click', () => {
+// 刪除檔案按鈕：清空選取並刪除後端檔案
+btnDeleteFile?.addEventListener('click', async () => {
+  // 如果有檔案，先刪除後端的檔案
+  if (pendingPdfPaths.length > 0) {
+    try {
+      const filePath = pendingPdfPaths[0];
+      const fileName = pathBasename(filePath);
+      const result = await window.electronAPI?.deleteFile?.(fileName);
+      
+      if (result && !result.ok) {
+        console.warn('刪除後端檔案失敗:', result.error);
+        showToast('清除檔案時發生警告，但已清除介面', 'warning', 2000);
+      } else {
+        console.log('已刪除後端檔案:', fileName);
+      }
+    } catch (err) {
+      console.error('刪除後端檔案時發生錯誤:', err);
+      showToast('清除檔案時發生錯誤，但已清除介面', 'error', 2000);
+    }
+  }
+  
+  // 清空前端狀態
   clearSelection();
   pendingPdfPaths = [];
   showFiles([]);
@@ -2528,24 +2561,48 @@ btnNewFile?.addEventListener('click', () => {
 // 設定 Modal
 const modalBackdrop = document.getElementById('modalBackdrop');
 const btnSettings = document.getElementById('btnSettings');
+const btnSaveSettings = document.getElementById('btnSaveSettings');
 const btnCancelSettings = document.getElementById('btnCancelSettings');
-const selCompany = document.getElementById('selCompany');
-const selModel = document.getElementById('selModel');
-const txtApiKey = document.getElementById('txtApiKey');
+const btnModalClose = document.getElementById('btnModalClose');
 const lblVersion = document.getElementById('lblVersion');
 const btnUpdateInModal = document.getElementById('btnUpdateInModal');
-const btnModalClose = document.getElementById('btnModalClose');
-const btnToggleKey = document.getElementById('btnToggleKey');
-const providerBadge = document.getElementById('providerBadge');
 const updateStatus = document.getElementById('updateStatus');
 
-function updateApiKeyFieldVisibility(company) {
+// 三組服務的 DOM 元素
+const translatorElements = {
+  company: document.getElementById('selTranslatorCompany'),
+  model: document.getElementById('selTranslatorModel'),
+  apiKey: document.getElementById('txtTranslatorApiKey'),
+  toggleBtn: document.getElementById('btnToggleTranslatorKey'),
+  badge: document.getElementById('translatorProviderBadge'),
+  modelType: 'language' // 翻譯器使用語言模型
+};
+
+const embeddingElements = {
+  company: document.getElementById('selEmbeddingCompany'),
+  model: document.getElementById('selEmbeddingModel'),
+  apiKey: document.getElementById('txtEmbeddingApiKey'),
+  toggleBtn: document.getElementById('btnToggleEmbeddingKey'),
+  badge: document.getElementById('embeddingProviderBadge'),
+  modelType: 'embedding' // Embedding 服務使用 embedding 模型
+};
+
+const ragElements = {
+  company: document.getElementById('selRagCompany'),
+  model: document.getElementById('selRagModel'),
+  apiKey: document.getElementById('txtRagApiKey'),
+  toggleBtn: document.getElementById('btnToggleRagKey'),
+  badge: document.getElementById('ragProviderBadge'),
+  modelType: 'language' // RAG 使用語言模型
+};
+
+function updateApiKeyFieldVisibility(elements, company) {
   // Ollama 不需要 API Key，隱藏並停用欄位
   const isOllama = company === 'ollama';
-  const fieldEl = txtApiKey ? txtApiKey.closest('.field') : null;
+  const fieldEl = elements.apiKey ? elements.apiKey.closest('.field') : null;
   if (fieldEl) fieldEl.style.display = isOllama ? 'none' : '';
-  if (txtApiKey) txtApiKey.disabled = isOllama;
-  if (btnToggleKey) btnToggleKey.style.display = isOllama ? 'none' : '';
+  if (elements.apiKey) elements.apiKey.disabled = isOllama;
+  if (elements.toggleBtn) elements.toggleBtn.style.display = isOllama ? 'none' : '';
 }
 
 function openModal() {
@@ -2557,6 +2614,7 @@ function openModal() {
     modal?.classList.add('open');
   });
 }
+
 function closeModal() {
   if (!modalBackdrop) return;
   const modal = modalBackdrop.querySelector('.modal');
@@ -2566,42 +2624,79 @@ function closeModal() {
   setTimeout(() => { if (modalBackdrop) modalBackdrop.style.display = 'none'; }, 220);
 }
 
-function setProviderBadge(company) {
-  if (!providerBadge) return;
-  providerBadge.className = 'provider-badge';
+function setProviderBadge(badgeEl, company) {
+  if (!badgeEl) return;
+  badgeEl.className = 'provider-badge';
   const map = { openai: 'OpenAI', google: 'Google', xai: 'xAI', anthropic: 'Anthropic', ollama: 'Ollama' };
-  if (!company) { providerBadge.textContent = ''; return; }
-  providerBadge.textContent = map[company] || '';
-  providerBadge.classList.add(company);
+  if (!company) { badgeEl.textContent = ''; return; }
+  badgeEl.textContent = map[company] || '';
+  badgeEl.classList.add(company);
 }
 
-async function loadModels(company) {
-  if (!selModel) return;
-  setProviderBadge(company);
+async function loadModels(elements, company) {
+  if (!elements.model) return;
+  setProviderBadge(elements.badge, company);
   if (!company) {
-    selModel.innerHTML = '<option value="">請先選公司</option>';
+    elements.model.innerHTML = '<option value="">請先選公司</option>';
     return;
   }
-  selModel.innerHTML = '<option value="">載入中…</option>';
-  const res = await window.electronAPI?.listModels?.(company);
+  elements.model.innerHTML = '<option value="">載入中…</option>';
+  
+  // 讀取當前輸入的 API Key（如果有的話）
+  const currentApiKey = elements.apiKey?.value || '';
+  // 傳遞 modelType 以區分語言模型和 embedding 模型
+  const modelType = elements.modelType || 'language';
+  const res = await window.electronAPI?.listModels?.(company, currentApiKey, modelType);
+  
   const list = res?.models || [];
   const error = res?.error;
   if (error) {
-    selModel.innerHTML = `<option value="">${error}</option>`;
+    elements.model.innerHTML = `<option value="">${error}</option>`;
     return;
   }
   if (!list.length) {
-    selModel.innerHTML = '<option value="">未取得任何模型，請確認 API Key 或權限</option>';
+    const typeStr = modelType === 'embedding' ? 'Embedding 模型' : '語言模型';
+    elements.model.innerHTML = `<option value="">未取得任何${typeStr}，請確認 API Key 或權限</option>`;
     return;
   }
   const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
-  selModel.innerHTML = `<option value=\"\">請選擇模型</option>${opts}`;
+  elements.model.innerHTML = `<option value="">請選擇模型</option>${opts}`;
 }
 
-selCompany?.addEventListener('change', async () => {
-  await loadModels(selCompany.value);
-});
+// 綁定每個服務的 company change 事件
+function bindServiceEvents(elements) {
+  elements.company?.addEventListener('change', async () => {
+    updateApiKeyFieldVisibility(elements, elements.company.value);
+    await loadModels(elements, elements.company.value);
+  });
 
+  // API Key 輸入時，如果已選擇公司就重新載入模型（即時驗證）
+  elements.apiKey?.addEventListener('input', () => {
+    const company = elements.company?.value;
+    if (company && company !== 'ollama') {
+      // 防抖：延遲 500ms 後才驗證，避免每次按鍵都查詢
+      clearTimeout(elements._debounceTimer);
+      elements._debounceTimer = setTimeout(() => {
+        loadModels(elements, company);
+      }, 500);
+    }
+  });
+
+  // API Key 顯示/隱藏切換
+  elements.toggleBtn?.addEventListener('click', () => {
+    if (!(elements.apiKey instanceof HTMLInputElement)) return;
+    const isPwd = elements.apiKey.type === 'password';
+    elements.apiKey.type = isPwd ? 'text' : 'password';
+    elements.toggleBtn.textContent = isPwd ? '隱藏' : '顯示';
+  });
+}
+
+// 初始化所有服務
+bindServiceEvents(translatorElements);
+bindServiceEvents(embeddingElements);
+bindServiceEvents(ragElements);
+
+// 開啟設定視窗，載入當前設定
 btnSettings?.addEventListener('click', async () => {
   let s;
   try {
@@ -2609,23 +2704,76 @@ btnSettings?.addEventListener('click', async () => {
   } catch (e) {
     showToast(`讀取設定失敗`, 'error');
   }
+  
   if (s) {
-    if (selCompany) selCompany.value = s.company || '';
-    await loadModels(s.company || '');
-    if (selModel) selModel.value = s.model || '';
-    if (txtApiKey) txtApiKey.value = s.apiKey || '';
-    updateApiKeyFieldVisibility(s.company || '');
+    // 載入 Translator 設定
+    if (translatorElements.company) translatorElements.company.value = s.translator?.company || '';
+    await loadModels(translatorElements, s.translator?.company || '');
+    if (translatorElements.model) translatorElements.model.value = s.translator?.model || '';
+    if (translatorElements.apiKey) translatorElements.apiKey.value = s.translator?.apiKey || '';
+    updateApiKeyFieldVisibility(translatorElements, s.translator?.company || '');
+
+    // 載入 Embedding 設定
+    if (embeddingElements.company) embeddingElements.company.value = s.embedding?.company || '';
+    await loadModels(embeddingElements, s.embedding?.company || '');
+    if (embeddingElements.model) embeddingElements.model.value = s.embedding?.model || '';
+    if (embeddingElements.apiKey) embeddingElements.apiKey.value = s.embedding?.apiKey || '';
+    updateApiKeyFieldVisibility(embeddingElements, s.embedding?.company || '');
+
+    // 載入 RAG 設定
+    if (ragElements.company) ragElements.company.value = s.rag?.company || '';
+    await loadModels(ragElements, s.rag?.company || '');
+    if (ragElements.model) ragElements.model.value = s.rag?.model || '';
+    if (ragElements.apiKey) ragElements.apiKey.value = s.rag?.apiKey || '';
+    updateApiKeyFieldVisibility(ragElements, s.rag?.company || '');
   }
+  
   // 主題 radio
   const theme = (s && s.theme) ? s.theme : 'dark';
   document.querySelectorAll('input[name="theme"]').forEach((el) => {
     if (el instanceof HTMLInputElement) el.checked = (el.value === theme);
   });
+  
   // 顯示版本
   const res = await window.electronAPI?.checkUpdates?.();
   if (lblVersion && res) lblVersion.textContent = res.currentVersion;
   openModal();
 });
+
+// 儲存設定按鈕
+btnSaveSettings?.addEventListener('click', async () => {
+  try {
+    const theme = document.querySelector('input[name="theme"]:checked')?.value || 'dark';
+    
+    const data = {
+      translator: {
+        company: translatorElements.company?.value || '',
+        model: translatorElements.model?.value || '',
+        apiKey: translatorElements.apiKey?.value || ''
+      },
+      embedding: {
+        company: embeddingElements.company?.value || '',
+        model: embeddingElements.model?.value || '',
+        apiKey: embeddingElements.apiKey?.value || ''
+      },
+      rag: {
+        company: ragElements.company?.value || '',
+        model: ragElements.model?.value || '',
+        apiKey: ragElements.apiKey?.value || ''
+      },
+      theme,
+      lang: 'zh' // 可以之後擴充語言設定
+    };
+
+    await window.electronAPI?.saveSettings?.(data);
+    showToast('設定已儲存', 'success', 1500);
+    closeModal();
+  } catch (err) {
+    console.error('儲存設定失敗', err);
+    showToast('儲存失敗，請稍後重試', 'error', 2000);
+  }
+});
+
 btnCancelSettings?.addEventListener('click', () => closeModal());
 btnModalClose?.addEventListener('click', () => closeModal());
 modalBackdrop?.addEventListener('click', (e) => {
@@ -2663,6 +2811,7 @@ btnUpdateInModal?.addEventListener('click', async () => {
   }
 });
 
+// 主題套用函數
 async function applyTheme(theme) {
   // 先讓 UI 立即看到效果（非 system 可直接切換）
   if (theme === 'dark' || theme === 'light') {
@@ -2680,55 +2829,6 @@ async function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', finalMode);
   try { window.electronAPI?.setTheme?.(theme); } catch {}
 }
-
-// 自動儲存：公司/模型/API Key 變更即儲存（成功靜默，失敗顯示）
-let autosaveTimer;
-async function autosaveSettings(patch = {}) {
-  clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(async () => {
-    try {
-      const existed = await window.electronAPI?.loadSettings?.();
-      const data = {
-        company: selCompany?.value ?? existed?.company ?? '',
-        model: selModel?.value ?? existed?.model ?? '',
-        apiKey: txtApiKey?.value ?? existed?.apiKey ?? '',
-        theme: (document.querySelector('input[name="theme"]:checked')?.value) || existed?.theme || 'dark',
-        ...patch
-      };
-      await window.electronAPI?.saveSettings?.(data);
-      // 成功靜默
-    } catch (err) {
-      console.error('自動儲存失敗', err);
-      showToast('儲存失敗，請稍後重試', 'error', 1800);
-    }
-  }, 250); // 短暫防抖，避免連續觸發
-}
-
-selCompany?.addEventListener('change', async () => {
-  updateApiKeyFieldVisibility(selCompany.value);
-  await loadModels(selCompany.value);
-  autosaveSettings({ company: selCompany.value });
-});
-selModel?.addEventListener('change', () => {
-  autosaveSettings({ model: selModel.value });
-});
-txtApiKey?.addEventListener('input', () => {
-  autosaveSettings({ apiKey: txtApiKey.value });
-  // API Key 改變時，如果已選擇公司就即時重新載入模型
-  const company = selCompany?.value;
-  if (company) {
-    // 稍微延遲以等待 autosave 完成寫入
-    setTimeout(() => loadModels(company), 350);
-  }
-});
-
-// API Key 顯示/隱藏切換
-btnToggleKey?.addEventListener('click', () => {
-  if (!(txtApiKey instanceof HTMLInputElement)) return;
-  const isPwd = txtApiKey.type === 'password';
-  txtApiKey.type = isPwd ? 'text' : 'password';
-  btnToggleKey.textContent = isPwd ? '隱藏' : '顯示';
-});
 
 // 啟動時讀取設定，套用主題
 (async () => {
@@ -2789,19 +2889,10 @@ function bindThemeListenersOnce() {
       const value = input.value; // 'dark' | 'light' | 'system'
       try {
         await applyTheme(value); // 立即預覽
-        // 立即儲存（僅保存主題，不關閉視窗）
-        const existed = await window.electronAPI?.loadSettings?.();
-        const data = {
-          company: selCompany?.value ?? existed?.company ?? '',
-          model: selModel?.value ?? existed?.model ?? '',
-          apiKey: txtApiKey?.value ?? existed?.apiKey ?? '',
-          theme: value
-        };
-        await window.electronAPI?.saveSettings?.(data);
-        showToast('主題已套用並儲存', 'success', 1500);
+        // 注意：主題變更會在儲存設定按鈕按下時一起儲存
+        // 這裡只做即時預覽，不自動儲存
       } catch (err) {
-        console.error('即時套用/儲存主題失敗', err);
-        showToast('主題已套用，但儲存失敗', 'error', 2000);
+        console.error('即時套用主題失敗', err);
       }
     });
   });

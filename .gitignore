@@ -44,6 +44,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Instance folders - 包含使用者資料
+frontend/instance/*
 backend/instance/chroma_db/*
 backend/instance/mineru_outputs/*
 backend/instance/pdfs/*

@@ -16,7 +16,7 @@ class GeminiService():
 
     def __init__(self, 
             model_name: str,
-            api_key: str = "", 
+            api_key: str = None, 
             verbose: bool = False
         ):
         """
@@ -27,7 +27,8 @@ class GeminiService():
             api_key: Google Gemini API的API密鑰 (無輸入則使用環境變量中的API_KEY)
             verbose: 是否啟用詳細模式 (預設為False)
         """
-        self.client = genai.Client(api_key="AIzaSyCsZf8TurUWon1mjbIRoDNQxhp0gsEJTQ8")
+        print("[DEBUG] API Key:", api_key)
+        self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
         self.verbose = verbose
 
@@ -37,11 +38,11 @@ class GeminiService():
         if self.verbose:
             logger.info("Gemini服務初始化完成")
 
-    def is_available(self) -> bool:
+    def is_available(self, model_name: str = None) -> bool:
         """檢查Gemini服務是否可用"""
         try:
             # 使用當前實例的模型名稱進行檢查，而非硬編碼模型名稱
-            response = self.client.models.get(model=self.model_name)
+            response = self.client.models.get(model=model_name or self.model_name)
             if response:
                 if self.verbose:
                     logger.info("Gemini服務可用")
@@ -51,6 +52,30 @@ class GeminiService():
                 return False
         except Exception as e:
             logger.error(f"檢查Gemini服務可用性時出錯: {e}")
+            return False
+
+    def update_config(self, api_key: str, model_name: str) -> bool:
+        """動態更新API密鑰和模型名稱"""
+        try:
+            # 創建新的 client 並測試
+            new_client = genai.Client(api_key=api_key)
+            
+            # 用新 client 測試模型是否可用
+            response = new_client.models.get(model=model_name)
+            
+            if response:
+                # 測試成功，更新配置
+                self.client = new_client
+                self.model_name = model_name
+                if self.verbose:
+                    logger.info(f"Gemini服務配置更新成功: 模型 {self.model_name}")
+                return True
+            else:
+                logger.warning(f"無法更新Gemini服務配置，模型 {model_name} 不存在或無法訪問")
+                return False
+                
+        except Exception as e:
+            logger.error(f"更新Gemini服務配置時出錯: {e}")
             return False
 
     def send_single_request(self, prompt: str, system_prompt: Optional[str] = None, stream: bool = False) -> Optional[str]:

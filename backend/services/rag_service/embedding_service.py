@@ -38,24 +38,23 @@ class EmbeddingService:
             retry_delay: 重試延遲時間（秒）
             verbose: 是否啟用詳細日誌
         """
-        self.llm_service = llm_service
-        self.embedding_service = None
+        self.llm_service = None
         if llm_service == "ollama":
             assert model_name != "", "請提供Ollama的模型名稱"
-            self.embedding_service = OllamaService(
+            self.llm_service = OllamaService(
                 model_name=model_name,
                 verbose=verbose
             )
         elif llm_service == "gemini":
             assert model_name != "", "請提供Gemini的模型名稱"
-            self.embedding_service = GeminiService(
+            self.llm_service = GeminiService(
                 model_name=model_name,
                 api_key=api_key,
                 verbose=verbose
             )
         else:
             raise ValueError(f"不支援的llm_service: {llm_service}")
-        self.model_name = self.embedding_service.model_name
+        self.model_name = self.llm_service.model_name
         
         if not self.is_available():
             raise ConnectionError(f"無法連接到 {llm_service} 服務，請檢查配置")
@@ -64,9 +63,9 @@ class EmbeddingService:
         self.retry_delay = retry_delay
         self.verbose = verbose
 
-    def is_available(self) -> bool:
+    def is_available(self, model_name: str = None) -> bool:
         """檢查Embedding服務是否可用"""
-        return self.embedding_service.is_available()
+        return self.llm_service.is_available(model_name=model_name)
 
     def _get_single_embedding_with_retry(self, text: Union[str, List[str]], store: bool) -> Optional[Union[List[float], List[List[float]]]]:
         """
@@ -80,7 +79,7 @@ class EmbeddingService:
             List[float]: 向量化結果 (出現錯誤則返回 None)
         """
         for attempt in range(self.max_retries):
-            embedding = self.embedding_service.send_embedding_request(text, store=store)
+            embedding = self.llm_service.send_embedding_request(text, store=store)
             if embedding is not None:
                 if self.verbose:
                     logger.info("成功獲取embedding")
@@ -121,7 +120,7 @@ class EmbeddingService:
         Returns:
             List[Optional[List[float]]]: 向量化結果列表
         """
-        buffer_time = 1 if self.llm_service == "gemini" else 0
+        buffer_time = 1 if hasattr(self.llm_service, 'api_key') else 0
 
         last_progress = 75
         per_progress = 20 / len(texts)

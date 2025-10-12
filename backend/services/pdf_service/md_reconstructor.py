@@ -35,7 +35,7 @@ class MarkdownReconstructor:
             logger.info(f"輸出目錄: {os.path.join(self.instance_path, 'reconstructed_files')}")
 
     def reconstruct(self, 
-            file_name: str, 
+            json_name: str, 
             method: Literal['auto', 'ocr', 'text'], 
             language: Literal['zh', 'en'] = 'zh'
         ) -> Optional[str]:
@@ -51,7 +51,7 @@ class MarkdownReconstructor:
             str: 重組後的.md檔案路徑，失敗則回傳None
         """
         # 讀取翻譯後的Json檔案
-        translated_file_path = os.path.join(self.instance_path, "translated_files", file_name)
+        translated_file_path = os.path.join(self.instance_path, "translated_files", json_name)
         if not os.path.exists(translated_file_path):
             logger.error(f"找不到翻譯後的檔案: {translated_file_path}")
             return None
@@ -62,8 +62,8 @@ class MarkdownReconstructor:
             logger.info(f"讀取翻譯後的檔案: {translated_file_path}")
 
         # 組合完整PDF路徑
-        file_name = file_name.replace("_translated.json", "")
-        pdf_path = os.path.join(self.pdf_path, file_name, method)
+        json_name = json_name.replace("_translated.json", "")
+        pdf_path = os.path.join(self.pdf_path, json_name, method)
 
         md_lines = ['<a id="content"></a>']
         for item in content_list:
@@ -87,7 +87,7 @@ class MarkdownReconstructor:
                 md_lines.append(content_value)
 
         md_content = "\n\n".join(md_lines)
-        md_file_path = os.path.join(self.instance_path, "reconstructed_files", file_name, f"{file_name}.md")
+        md_file_path = os.path.join(self.instance_path, "reconstructed_files", json_name, f"{json_name}.md")
         os.makedirs(os.path.dirname(md_file_path), exist_ok=True)
         with open(md_file_path, 'w', encoding='utf-8') as f:
             f.write(md_content)

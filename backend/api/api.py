@@ -45,6 +45,7 @@ pdf_helper = PDFHelper(
             verbose=True
         ),
         rag_config=RAGConfig(verbose=True),
+        markdown_reconstructor_config=MinerUConfig(verbose=True)
     ), 
     verbose=True
 )
@@ -66,6 +67,7 @@ def full_process_async_endpoint():
     """非同步處理 PDF 到 RAG 的完整流程"""
     allow = ProgressManager.progress_start()
     if not allow:
+        logger.warning("[WARNING] Full Process 目前已有任務在處理中")
         return jsonify({"success": False, "message": "已有任務在處理中，請稍後再試"}), 429  # Too Many Requests
 
     data = request.json
@@ -199,17 +201,17 @@ def reconstruct_markdown_endpoint():
     """重建 Markdown 檔案"""
     try:
         data = request.json
-        file_name = data.get('file_name')
+        json_name = data.get('json_name')
         method = data.get('method', 'auto')
-        lang = data.get('lang', 'zh')
-        
-        if not file_name:
-            return jsonify({"success": False, "message": "缺少 file_name 參數"}), 400
+        language = data.get('lang', 'zh')
+
+        if not json_name:
+            return jsonify({"success": False, "message": "缺少 json_name 參數"}), 400
 
         result = pdf_helper.reconstruct_markdown(
-            file_name=file_name,
+            json_name=json_name,
             method=method,
-            lang=lang
+            language=language
         )
         
         return jsonify({
@@ -218,6 +220,27 @@ def reconstruct_markdown_endpoint():
             'data': result.data
         })
     except Exception as e:
+        return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
+
+@app.route('/api/reset-progress', methods=['POST'])
+def reset_progress_endpoint():
+    """重置進度狀態（用於除錯或清除卡住的任務）"""
+    try:
+        if ProgressManager._instance is None:
+            return jsonify({"success": False, "message": "ProgressManager 未初始化"}), 500
+        
+        with ProgressManager._instance._lock:
+            ProgressManager._instance._state["is_processing"] = False
+            ProgressManager._instance._state["progress"] = 0
+            ProgressManager._instance._state["stage"] = "idle"
+            ProgressManager._instance._state["message"] = "已重置"
+            ProgressManager._instance._state["error"] = None
+            ProgressManager._instance._state["result"] = None
+        
+        logger.info("[WARNING] 進度狀態已手動重置")
+        return jsonify({"success": True, "message": "進度狀態已重置"})
+    except Exception as e:
+        logger.error(f"[WARNING] 重置進度失敗: {str(e)}")
         return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
 
 @app.route('/api/system-health', methods=['GET'])
@@ -231,6 +254,36 @@ def system_health_endpoint():
             'message': result.message,
             'data': result.data
         })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
+
+@app.route('/api/update-api-key', methods=['POST'])
+def update_api_key_endpoint():
+    """更新 API 金鑰"""
+    try:
+        data = request.json
+        service = data.get('service')
+        api_key = data.get('api_key')
+        model_name = data.get('model_name')
+        
+        if not service or not api_key:
+            return jsonify({"success": False, "message": "缺少 service 或 api_key 參數"}), 400
+
+        result = pdf_helper.update_llm_service(service, api_key, model_name)
+        
+        return jsonify({
+            'success': result.success,
+            'message': result.message,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
+
+@app.route('/api/shutdown', methods=['POST'])
+def shutdown_endpoint():
+    """關閉伺服器"""
+    try:
+        
+        return jsonify({"success": True, "message": "伺服器關閉中..."}), 200
     except Exception as e:
         return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
 

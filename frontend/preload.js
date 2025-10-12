@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openFileDialog: (options) => ipcRenderer.invoke('dialog:open-file', options),
   sendFilePath: (filePath) => ipcRenderer.send('file:chosen', filePath),
+  deleteFile: (fileName) => ipcRenderer.invoke('file:delete', fileName),
   startProcessing: (payload) => ipcRenderer.invoke('process:start', payload),
   onProcessEvent: (callback) => {
     const listener = (_e, evt) => callback(evt);
@@ -29,7 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
   },
   checkUpdates: () => ipcRenderer.invoke('app:check-updates')
-  ,listModels: (company) => ipcRenderer.invoke('models:list', company)
+  ,listModels: (company, apiKey, modelType) => ipcRenderer.invoke('models:list', company, apiKey, modelType)
   ,historyList: () => ipcRenderer.invoke('history:list')
   ,historyClear: () => ipcRenderer.invoke('history:clear')
   ,getNativeTheme: () => ({

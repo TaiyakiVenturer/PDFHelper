@@ -27,7 +27,7 @@ class APIClient {
                 let errorMsg = `HTTP error! status: ${response.status}`;
                 try {
                     const errorData = await response.json();
-                    if (errorData && errorData.message)
+                    if (errorData.message)
                         errorMsg = errorData.message;
                 }
                 catch (error) {
@@ -194,6 +194,8 @@ class APIClient {
     /**
      * 更新 LLM 服務的 API Key
      * @param service
+     * @param provider
+     * @param model_name
      * @param api_key
      * @returns Promise<HelperResult<null>>
      */

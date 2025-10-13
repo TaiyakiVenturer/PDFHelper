@@ -79,10 +79,12 @@ declare class APIClient {
     /**
      * 更新 LLM 服務的 API Key
      * @param service
+     * @param provider
+     * @param model_name
      * @param api_key
      * @returns Promise<HelperResult<null>>
      */
-    updateAPIKey(service: "translator" | "embedding" | "rag", provider: "Ollama" | "Google" | "OpenAI", api_key: string, model_name: string): Promise<HelperResult<null>>;
+    updateAPIKey(service: "translator" | "embedding" | "rag", provider: "ollama" | "google" | "openai", api_key: string, model_name: string): Promise<HelperResult<null>>;
 }
 export declare const apiClient: APIClient;
 export {};

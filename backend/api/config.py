@@ -24,14 +24,8 @@ class TranslatorConfig:
     翻譯器設定
     
     Args:
-        llm_service (Literal["ollama", "google", "openai"]): 翻譯請求使用的LLM服務
-        model_name (str): 使用的模型名稱
-        api_key (str): API金鑰
         verbose (bool): 是否啟用詳細日誌
     """
-    llm_service: Literal["ollama", "google", "openai"]
-    model_name: str
-    api_key: str
     verbose: bool = False
 
 @dataclass
@@ -55,18 +49,10 @@ class EmbeddingServiceConfig:
     Embedding 服務設定
 
     Args:
-        llm_service (Literal["ollama", "gemini"]): 使用的LLM服務 (預設使用 Gemini，強烈建議用Ollama)
-        model_name (str): 嵌入處理使用的模型名稱 (如未設定，則依服務自動選擇，可能選擇失敗)
-            - Ollama 預設為 "nomic-embed-v2-text-moe" (為自訂模型，須依使用者修改使用模型名稱)
-            - Gemini 預設為 "gemini-embedding-001"
-        api_key (str): API金鑰（預設從環境變數取得，也可手動設定）
         max_retries (int): 最大重試次數
         retry_delay (int): 重試延遲時間（秒）
         verbose (bool): 是否啟用詳細日誌
     """
-    llm_service: Literal["ollama", "gemini"] = "gemini"
-    model_name: str = None
-    api_key: str = None
     max_retries: int = 3
     retry_delay: int = 1  # 秒
     verbose: bool = False
@@ -93,15 +79,8 @@ class RAGConfig:
     RAG 引擎設定
 
     Args:
-        llm_service (Literal["ollama", "gemini"]): 回答使用的LLM服務 (預設使用 Gemini)
-        model_name (str): 回答使用的模型名稱 (如未設定，則依服務自動選擇，可能選擇失敗)
-            - Ollama 預設為 "yi-chat" (為自訂模型，須依使用者修改使用模型名稱)
-            - Gemini 預設為 "gemini-2.5-flash-lite"
         verbose (bool): 是否啟用詳細日誌
     """
-    llm_service: Literal["ollama", "gemini"] = "gemini"
-    model_name: str = None
-    api_key: str = None
     verbose: bool = False
 
 @dataclass

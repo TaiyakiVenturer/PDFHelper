@@ -223,7 +223,7 @@ class PDFHelper:
             start = time.time()
             translated_file_path = self.translator.translate_content_list(
                 content_list_path=json_path,
-                buffer_time=1.8 if self.config.translator_config.llm_service != "ollama" else 0.3,
+                buffer_time=0.3 if "Ollama" in self.translator.__class__.__name__ else 1.8,
             )
             if self.verbose:
                 logger.info(f"JSON '{json_path}' 翻譯完成，輸出路徑: {translated_file_path}")

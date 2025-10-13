@@ -36,45 +36,13 @@ current_progress = {
     "result": None
 }
 
-# 從環境變數獲取設定
-translator_service = os.getenv("PDFHELPER_TRANSLATOR_PROVIDER")
-translator_model = os.getenv("PDFHELPER_TRANSLATOR_MODEL")
-translator_key = os.getenv("PDFHELPER_TRANSLATOR_KEY")
-
-embedding_service = os.getenv("PDFHELPER_EMBEDDING_PROVIDER")
-embedding_model = os.getenv("PDFHELPER_EMBEDDING_MODEL")
-embedding_key = os.getenv("PDFHELPER_EMBEDDING_KEY")
-
-rag_service = os.getenv("PDFHELPER_RAG_PROVIDER")
-rag_model = os.getenv("PDFHELPER_RAG_MODEL")
-rag_key = os.getenv("PDFHELPER_RAG_KEY")
-
-print(f"Translator: {translator_service}, Model: {translator_model}")
-print(f"Embedding: {embedding_service}, Model: {embedding_model}")
-print(f"RAG: {rag_service}, Model: {rag_model}")
-
 # PDFHelper 實例
 pdf_helper = PDFHelper(
     config=Config(
         mineru_config=MinerUConfig(verbose=True),
-        translator_config=TranslatorConfig(
-            llm_service=translator_service,
-            model_name=translator_model,
-            api_key=translator_key,
-            verbose=True
-        ),
-        embedding_service_config=EmbeddingServiceConfig(
-            llm_service=embedding_service,
-            model_name=embedding_model,
-            api_key=embedding_key,
-            verbose=True
-        ),
-        rag_config=RAGConfig(
-            llm_service=rag_service,
-            model_name=rag_model,
-            api_key=rag_key,
-            verbose=True
-        ),
+        translator_config=TranslatorConfig(verbose=True),
+        embedding_service_config=EmbeddingServiceConfig(verbose=True),
+        rag_config=RAGConfig(verbose=True),
         markdown_reconstructor_config=MinerUConfig(verbose=True)
     ), 
     verbose=True

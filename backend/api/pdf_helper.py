@@ -8,8 +8,9 @@ from pathlib import Path
 from dataclasses import dataclass
 import json
 
+import backend.services.llm_service as llm_services  # 導入所有LLM服務
 from backend.services.pdf_service import MinerUProcessor # 導入MinerU文件處理器
-from backend.services.translation_service import OllamaTranslator, GeminiTranslator # 導入翻譯器
+from backend.services.translation_service import Translator # 導入翻譯器
 from backend.services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine # 導入RAG引擎
 from backend.services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
 
@@ -61,21 +62,11 @@ class PDFHelper:
         if self.verbose:
             logger.info("PDF處理器初始化完成")
 
-        if self.config.translator_config.llm_service == "ollama":
-            self.translator = OllamaTranslator(
-                instance_path=self.config.instance_path,
-                model_name=self.config.translator_config.model_name,
-                verbose=self.config.translator_config.verbose
-            )
-        elif self.config.translator_config.llm_service == "gemini":
-            self.translator = GeminiTranslator(
-                instance_path=self.config.instance_path,
-                model_name=self.config.translator_config.model_name,
-                api_key=self.config.translator_config.api_key,
-                verbose=self.config.translator_config.verbose
-            )
-        else:
-            raise ValueError(f"不支援的翻譯服務: {self.config.translator_config.llm_service}")
+        self.translator = Translator(
+            instance_path=self.config.instance_path, 
+            llm_service_obj=None,
+            verbose=self.config.translator_config.verbose
+        )
         if self.verbose:
             logger.info("翻譯器初始化完成")
 
@@ -90,9 +81,7 @@ class PDFHelper:
             logger.info("文件處理器初始化完成")
 
         embedding_service = EmbeddingService(
-            llm_service=self.config.embedding_service_config.llm_service,
-            model_name=self.config.embedding_service_config.model_name,
-            api_key=self.config.embedding_service_config.api_key,
+            llm_service_obj=None,
             max_retries=self.config.embedding_service_config.max_retries,
             retry_delay=self.config.embedding_service_config.retry_delay,
             verbose=self.config.embedding_service_config.verbose
@@ -113,8 +102,7 @@ class PDFHelper:
             document_processor_obj=document_processor,
             embedding_service_obj=embedding_service,
             chromadb_obj=vector_store,
-            llm_service=self.config.rag_config.llm_service,
-            model_name=self.config.rag_config.model_name,
+            llm_service_obj=None,
             verbose=self.config.rag_config.verbose
         )
         if self.verbose:
@@ -132,6 +120,44 @@ class PDFHelper:
             logger.info("當前設定細項:")
             for line in self.config.__repr__():
                 logger.info(f"{line}")
+
+    def _create_llm_service(self, 
+            provider: Literal["ollama", "google", "openai"], 
+            model_name: str, 
+            api_key: str, 
+            verbose: bool
+        ) -> llm_services.base_service.BaseLLMService:
+        """
+        根據服務名稱創建對應的LLM服務實例
+
+        Args:
+            service (str): 服務名稱 ("ollama", "google", "openai")
+            model_name (str): 模型名稱
+            api_key (str): API密鑰 (如果需要)
+            verbose (bool): 是否啟用詳細日誌
+
+        Returns:
+            Any: 返回創建的LLM服務實例
+        """
+        if provider == "ollama":
+            return llm_services.ollama_service.OllamaService(
+                model_name=model_name,
+                verbose=verbose
+            )
+        elif provider == "google":
+            return llm_services.google_service.GoogleService(
+                model_name=model_name,
+                api_key=api_key,
+                verbose=verbose
+            )
+        elif provider == "openai":
+            return llm_services.openai_service.OpenAIService(
+                model_name=model_name,
+                api_key=api_key,
+                verbose=verbose
+            )
+        else:
+            logger.error(f"不支援的LLM服務: {provider}, {model_name}")
 
     def process_pdf_to_json(self, 
             pdf_name: str, 
@@ -197,7 +223,7 @@ class PDFHelper:
             start = time.time()
             translated_file_path = self.translator.translate_content_list(
                 content_list_path=json_path,
-                buffer_time=1.8 if self.config.translator_config.llm_service == "gemini" else 0.3,
+                buffer_time=1.8 if self.config.translator_config.llm_service != "ollama" else 0.3,
             )
             if self.verbose:
                 logger.info(f"JSON '{json_path}' 翻譯完成，輸出路徑: {translated_file_path}")
@@ -410,7 +436,7 @@ class PDFHelper:
 
         health_status = {
             "pdf_processor": True,  # 假設PDF處理器總是可用
-            "translator": self.translator.is_available(),
+            "translator": self.translator.is_available() if self.translator.llm_service else "未設定",
             "rag_engine": self.rag_engine.get_system_info(),
         }
         return HelperResult(
@@ -419,7 +445,12 @@ class PDFHelper:
             data=health_status
         )
 
-    def update_llm_service(self, service: Literal['translator', 'embedding', 'rag'], api_key: str, model_name: str) -> HelperResult:
+    def update_llm_service(self, 
+            service: Literal['translator', 'embedding', 'rag'], 
+            provider: Literal["ollama", "google", "openai"],
+            api_key: str, 
+            model_name: str
+        ) -> HelperResult:
         """
         更新API金鑰
         
@@ -431,65 +462,40 @@ class PDFHelper:
         Returns:
             HelperResult: 包含是否成功更新API金鑰的統一格式
         """
+        logger.info(f"[update_llm_service] {service}, {provider}, {model_name}")
         if service == "translator":
-            if hasattr(self.translator, 'update_config'):
-                if self.translator.update_config(api_key=api_key, model_name=model_name):
-                    logger.info("翻譯器API金鑰更新成功並且服務可用")
-                    return HelperResult(
-                        success=True,
-                        message="翻譯器API金鑰更新成功"
-                    )
-                else:
-                    logger.warning("翻譯器API金鑰更新失敗，請檢查金鑰或模型名稱是否正確")
-                    return HelperResult(
-                        success=False,
-                        message="翻譯器API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
-                    )
-            else:
-                return HelperResult(
-                    success=False,
-                    message="當前翻譯器不支援API金鑰更新 (可能使用 Ollama)"
-                )
+            self.translator.llm_service = self._create_llm_service(
+                provider=provider, 
+                model_name=model_name, 
+                api_key=api_key,
+                verbose=self.translator.verbose
+            )
+            return HelperResult(
+                success=self.translator.llm_service.is_available(),
+                message="翻譯服務API金鑰更新成功" if self.translator.llm_service.is_available() else "翻譯服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+            )
         elif service == "embedding":
-            # 檢查 llm_service 是否支援 update_config 方法
-            if hasattr(self.rag_engine.embedding_service.llm_service, 'update_config'):
-                if self.rag_engine.embedding_service.llm_service.update_config(api_key=api_key, model_name=model_name):
-                    logger.info("Embedding服務API金鑰更新成功並且服務可用")
-                    return HelperResult(
-                        success=True,
-                        message="Embedding服務API金鑰更新成功"
-                    )
-                else:
-                    logger.warning("Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確")
-                    return HelperResult(
-                        success=False,
-                        message="Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
-                    )
-            else:
-                return HelperResult(
-                    success=False,
-                    message="當前Embedding服務不支援API金鑰更新 (可能使用 Ollama)"
-                )
+            self.rag_engine.embedding_service.llm_service = self._create_llm_service(
+                provider=provider, 
+                model_name=model_name, 
+                api_key=api_key,
+                verbose=self.rag_engine.embedding_service.verbose
+            )
+            return HelperResult(
+                success=self.rag_engine.embedding_service.llm_service.is_available(),
+                message="Embedding服務API金鑰更新成功" if self.rag_engine.embedding_service.llm_service.is_available() else "Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+            )
         elif service == "rag":
-            # 檢查 llm_service 是否支援 update_config 方法
-            if hasattr(self.rag_engine.llm_service, 'update_config'):
-                if self.rag_engine.llm_service.update_config(api_key=api_key, model_name=model_name):
-                    logger.info("RAG LLM服務API金鑰更新成功並且服務可用")
-                    return HelperResult(
-                        success=True,
-                        message="RAG LLM服務API金鑰更新成功"
-                    )
-                else:
-                    logger.warning("RAG LLM服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確")
-                    return HelperResult(
-                        success=False,
-                        message="RAG LLM服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
-                    )
-            else:
-                return HelperResult(
-                    success=False,
-                    message="當前RAG LLM服務不支援API金鑰更新 (可能使用 Ollama)"
-                )
+            self.rag_engine.llm_service = self._create_llm_service(
+                provider=provider, 
+                model_name=model_name, 
+                api_key=api_key,
+                verbose=self.rag_engine.verbose
+            )
+            return HelperResult(
+                success=self.rag_engine.llm_service.is_available(),
+                message="RAG服務API金鑰更新成功" if self.rag_engine.llm_service.is_available() else "RAG服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+            )
         else:
             return HelperResult(
                 success=False,

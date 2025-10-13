@@ -197,7 +197,7 @@ class APIClient {
      * @param api_key
      * @returns Promise<HelperResult<null>>
      */
-    async updateAPIKey(service, api_key, model_name) {
+    async updateAPIKey(service, provider, api_key, model_name) {
         return this.request(config_1.API_ENDPOINTS.UPDATE_API_KEY, {
             method: "POST",
             headers: {
@@ -205,6 +205,7 @@ class APIClient {
             },
             body: JSON.stringify({
                 service: service,
+                provider: provider,
                 api_key: api_key,
                 model_name: model_name
             })

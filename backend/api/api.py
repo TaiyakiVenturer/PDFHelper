@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from threading import Lock, Thread
 import os
+import json
 
 import sys
 from pathlib import Path
@@ -35,16 +36,45 @@ current_progress = {
     "result": None
 }
 
+# 從環境變數獲取設定
+translator_service = os.getenv("PDFHELPER_TRANSLATOR_PROVIDER")
+translator_model = os.getenv("PDFHELPER_TRANSLATOR_MODEL")
+translator_key = os.getenv("PDFHELPER_TRANSLATOR_KEY")
+
+embedding_service = os.getenv("PDFHELPER_EMBEDDING_PROVIDER")
+embedding_model = os.getenv("PDFHELPER_EMBEDDING_MODEL")
+embedding_key = os.getenv("PDFHELPER_EMBEDDING_KEY")
+
+rag_service = os.getenv("PDFHELPER_RAG_PROVIDER")
+rag_model = os.getenv("PDFHELPER_RAG_MODEL")
+rag_key = os.getenv("PDFHELPER_RAG_KEY")
+
+print(f"Translator: {translator_service}, Model: {translator_model}")
+print(f"Embedding: {embedding_service}, Model: {embedding_model}")
+print(f"RAG: {rag_service}, Model: {rag_model}")
+
 # PDFHelper 實例
 pdf_helper = PDFHelper(
     config=Config(
         mineru_config=MinerUConfig(verbose=True),
-        translator_config=TranslatorConfig(verbose=True),
-        embedding_service_config=EmbeddingServiceConfig(
-            llm_service="ollama",
+        translator_config=TranslatorConfig(
+            llm_service=translator_service,
+            model_name=translator_model,
+            api_key=translator_key,
             verbose=True
         ),
-        rag_config=RAGConfig(verbose=True),
+        embedding_service_config=EmbeddingServiceConfig(
+            llm_service=embedding_service,
+            model_name=embedding_model,
+            api_key=embedding_key,
+            verbose=True
+        ),
+        rag_config=RAGConfig(
+            llm_service=rag_service,
+            model_name=rag_model,
+            api_key=rag_key,
+            verbose=True
+        ),
         markdown_reconstructor_config=MinerUConfig(verbose=True)
     ), 
     verbose=True
@@ -75,6 +105,8 @@ def full_process_async_endpoint():
     method = data.get('method')
     lang = data.get('lang')
     device = data.get('device')
+    logger.info(f"[full_process_async_endpoint] 收到請求: pdf_name={pdf_name}, method={method}, lang={lang}, device={device}")
+    logger.debug(json.dumps(pdf_helper.get_system_health().data, indent=2, ensure_ascii=False, sort_keys=True))  # 預先檢查系統健康狀態
 
     # 在這裡啟動一個新線程來處理請求
     Thread(
@@ -177,13 +209,11 @@ def ask_question_endpoint():
             include_sources=include_sources
         )
         
-        # 注意: answer 可能是 Generator,需要轉成字串
-        answer_text = ""
-        if result.success and result.data:
-            answer_generator = result.data.get('answer')
-            if answer_generator:
-                # 收集所有 chunk
-                answer_text = "".join([chunk.text for chunk in answer_generator])
+        # result.data['answer'] 是一個生成器，將其內容合併成一個完整的字串
+        if result.success and result.data.get('answer'):
+            answer_text = "".join([chunk for chunk in result.data.get('answer')])
+        else:
+            answer_text = "請求失敗或無回應"
         
         return jsonify({
             'success': result.success,
@@ -263,27 +293,19 @@ def update_api_key_endpoint():
     try:
         data = request.json
         service = data.get('service')
+        provider = data.get('provider')
         api_key = data.get('api_key')
         model_name = data.get('model_name')
         
-        if not service or not api_key:
-            return jsonify({"success": False, "message": "缺少 service 或 api_key 參數"}), 400
+        if not service or not provider or not model_name:
+            return jsonify({"success": False, "message": "缺少 service 或 provider 或 model_name 參數"}), 400
 
-        result = pdf_helper.update_llm_service(service, api_key, model_name)
+        result = pdf_helper.update_llm_service(service, provider, api_key, model_name)
         
         return jsonify({
             'success': result.success,
             'message': result.message,
         })
-    except Exception as e:
-        return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
-
-@app.route('/api/shutdown', methods=['POST'])
-def shutdown_endpoint():
-    """關閉伺服器"""
-    try:
-        
-        return jsonify({"success": True, "message": "伺服器關閉中..."}), 200
     except Exception as e:
         return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
 

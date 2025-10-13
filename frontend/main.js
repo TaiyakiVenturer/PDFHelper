@@ -83,7 +83,7 @@ app.whenReady().then(async() => {
   console.log("[INFO] 正在啟動後端伺服器...");
 
   const started = await serverManager.startServer({
-    timeout: 30000,
+    timeout: 40000,
     debug: true
   });
   // 檢查是否啟動成功
@@ -334,19 +334,6 @@ ipcMain.handle('process:start', async (event, payload) => {
     }
     
     const win = BrowserWindow.fromWebContents(event.sender);
-    
-    // 檢查進度狀態，如果有卡住的任務則重置
-    try {
-      const progressResult = await apiClient.getProcessingProgress();
-      if (progressResult && progressResult.is_processing) {
-        console.warn('[process:start] 檢測到卡住的任務，正在重置...');
-        await apiClient.resetProcess();
-        console.log('[process:start] 進度狀態已重置');
-      }
-    } catch (err) {
-      console.warn('[process:start] 無法檢查進度狀態:', err.message);
-    }
-    
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -365,18 +352,10 @@ ipcMain.handle('process:start', async (event, payload) => {
       timestamp: Date.now()
     });
 
-    // 更新環境變數（分開設定）
-    process.env.PDFHELPER_TRANSLATOR_KEY = translatorConfig.apiKey || '';
-    process.env.PDFHELPER_TRANSLATOR_PROVIDER = translatorConfig.company;
-    process.env.PDFHELPER_TRANSLATOR_MODEL = translatorConfig.model;
-
-    process.env.PDFHELPER_EMBEDDING_KEY = embeddingConfig.apiKey || '';
-    process.env.PDFHELPER_EMBEDDING_PROVIDER = embeddingConfig.company;
-    process.env.PDFHELPER_EMBEDDING_MODEL = embeddingConfig.model;
-
     // 更新後端的 API Key 和模型（分開更新）
-    await apiClient.updateAPIKey("translator", translatorConfig.apiKey || "", translatorConfig.model);
-    await apiClient.updateAPIKey("embedding", embeddingConfig.apiKey || "", embeddingConfig.model);
+    await apiClient.updateAPIKey("translator", translatorConfig.company, translatorConfig.apiKey, translatorConfig.model);
+    await apiClient.updateAPIKey("embedding", embeddingConfig.company, embeddingConfig.apiKey, embeddingConfig.model);
+    await apiClient.updateAPIKey("rag", settings.rag.company, settings.rag.apiKey, settings.rag.model);
 
     // 啟動非同步處理
     console.log('[process:start] 呼叫 API: startFullProcessAsync', { 
@@ -643,34 +622,22 @@ ipcMain.handle('settings:save', async (_event, data) => {
     
     // 更新翻譯器配置
     if (translatorConfig.apiKey && translatorConfig.company && translatorConfig.model) {
-      process.env.PDFHELPER_TRANSLATOR_KEY = translatorConfig.apiKey;
-      process.env.PDFHELPER_TRANSLATOR_PROVIDER = translatorConfig.company;
-      process.env.PDFHELPER_TRANSLATOR_MODEL = translatorConfig.model;
-      
       // 更新後端 API Key
-      await apiClient.updateAPIKey("translator", translatorConfig.apiKey, translatorConfig.model);
+      await apiClient.updateAPIKey("translator", translatorConfig.company, translatorConfig.apiKey, translatorConfig.model);
       console.log('[settings:save] 已更新翻譯器配置:', translatorConfig.company, translatorConfig.model);
     }
     
     // 更新 Embedding 配置
     if (embeddingConfig.apiKey && embeddingConfig.company && embeddingConfig.model) {
-      process.env.PDFHELPER_EMBEDDING_KEY = embeddingConfig.apiKey;
-      process.env.PDFHELPER_EMBEDDING_PROVIDER = embeddingConfig.company;
-      process.env.PDFHELPER_EMBEDDING_MODEL = embeddingConfig.model;
-      
       // 更新後端 API Key
-      await apiClient.updateAPIKey("embedding", embeddingConfig.apiKey, embeddingConfig.model);
+      await apiClient.updateAPIKey("embedding", embeddingConfig.company, embeddingConfig.apiKey, embeddingConfig.model);
       console.log('[settings:save] 已更新 Embedding 配置:', embeddingConfig.company, embeddingConfig.model);
     }
 
     // 更新 RAG 配置
     if (ragConfig.apiKey && ragConfig.company && ragConfig.model) {
-      process.env.PDFHELPER_RAG_KEY = ragConfig.apiKey;
-      process.env.PDFHELPER_RAG_PROVIDER = ragConfig.company;
-      process.env.PDFHELPER_RAG_MODEL = ragConfig.model;
-
       // 更新後端 API Key
-      await apiClient.updateAPIKey("rag", ragConfig.apiKey, ragConfig.model);
+      await apiClient.updateAPIKey("rag", ragConfig.company, ragConfig.apiKey, ragConfig.model);
       console.log('[settings:save] 已更新 RAG 配置:', ragConfig.company, ragConfig.model);
     }
     

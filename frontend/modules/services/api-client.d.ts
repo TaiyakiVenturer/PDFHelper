@@ -82,7 +82,7 @@ declare class APIClient {
      * @param api_key
      * @returns Promise<HelperResult<null>>
      */
-    updateAPIKey(service: "translator" | "embedding" | "rag", api_key: string, model_name: string): Promise<HelperResult<null>>;
+    updateAPIKey(service: "translator" | "embedding" | "rag", provider: "Ollama" | "Google" | "OpenAI", api_key: string, model_name: string): Promise<HelperResult<null>>;
 }
 export declare const apiClient: APIClient;
 export {};

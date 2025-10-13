@@ -1,9 +1,9 @@
 import requests
 from typing import Optional, Generator, List, Union
 import os
-import subprocess
-from dataclasses import dataclass
 import json
+
+from .base_service import BaseLLMService
 
 import logging
 from backend.api import setup_project_logger  # 導入日誌設置函數
@@ -11,21 +11,9 @@ from backend.api import setup_project_logger  # 導入日誌設置函數
 setup_project_logger(verbose=True)  # 設置全局日誌記錄器
 logger = logging.getLogger(__name__)
 
-@dataclass
-class OllamaStreamResponse:
+class OllamaService(BaseLLMService):
     """
-    流式回應結構
-
-    Args:
-        text (str): 回應文本
-        done (bool): 是否結束 (預設為False)
-    """
-    text: str
-    done: bool = False
-
-class OllamaService():
-    """
-    ### 基本的Ollama服務
+    ### Ollama LLM服務
     """
     def __init__(self,
             model_name: str,
@@ -38,12 +26,10 @@ class OllamaService():
             model_name: 使用的模型名稱
             verbose: 是否顯示詳細日誌
         """
-        self.model_name = model_name
+        super().__init__(model_name=model_name, api_key=None, verbose=verbose)
 
-        self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.session = requests.Session()
-
-        self.verbose = verbose
+        self.base_url = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
         self._in_multi_turn = False  # 是否處於多輪對話中
         self._chat = None
@@ -54,11 +40,7 @@ class OllamaService():
     def is_available(self, model_name: str = None) -> bool:
         """檢查Ollama服務是否可用 (model_name 參數目前未使用)"""
         try:
-            # 嘗試連接服務
-            # if not self._create_service(background=False):
-            #     return False
-
-            response = self.session.get(f"{self.ollama_host}/api/tags", timeout=5)
+            response = self.session.get(f"{self.base_url}/api/tags", timeout=5)
             if response.status_code == 200:
                 if self.verbose:
                     logger.info("Ollama服務可用")
@@ -75,45 +57,29 @@ class OllamaService():
         except Exception as e:
             logger.error(f"檢查Ollama服務可用性時出錯: {e}")
             return False
-    
-    def _create_service(self, background: bool = True) -> bool:
+
+    def update_config(self, api_key: str = None, model_name: str = None) -> bool:
         """
-        啟動Ollama服務 (目前暫時不使用)
+        更新Ollama服務配置 (Ollama目前不需要API Key)
 
         Args:
-            background: 是否在背景啟動服務 (預設為True)
-        
+            api_key: API密鑰 (Ollama不使用此參數)
+            model_name: 要使用的模型名稱
+
         Returns:
-            bool: 服務是否成功啟動
+            bool: 配置是否更新成功且服務可用
         """
-        env = os.environ.copy()
-        env['OLLAMA_HOST'] = self.ollama_host.strip("http://")          # 設定服務PORT
-        env['OLLAMA_NUM_PARALLEL'] = '4' if self.is_embedding else '2'      # 設定併發數
-        env['OLLAMA_MAX_LOADED_MODELS'] = '1' if self.is_embedding else '2' # 設定最大加載模型數
-        env['OLLAMA_KEEP_ALIVE'] = '1m' if self.is_embedding else '3m'  # 設定模型保持活躍時間
-
-        try:
-            window_form = None
-            if background:
-                window_form = subprocess.CREATE_NO_WINDOW
-            else:
-                window_form = subprocess.CREATE_NEW_CONSOLE
-
-            subprocess.Popen(
-                ["ollama", "serve"], 
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                creationflags=window_form,
-                env=env
-            )
+        if self.is_available():
+            if model_name:
+                self.model_name = model_name
             if self.verbose:
-                print(f"✅ Ollama服務 {self.ollama_host} 已啟動")
+                logger.info(f"Ollama服務配置更新成功: 模型 {self.model_name}")
             return True
-        except Exception as e:
-            print(f"❌ 啟動Ollama服務 {self.ollama_host} 時出錯: {e}")
+        else:
+            logger.error("Ollama服務不可用，無法更新配置")
             return False
 
-    def _handle_stream_response(self, response: requests.Response) -> Generator[OllamaStreamResponse, None, None]:
+    def _handle_stream_response(self, response: requests.Response) -> Generator[str, None, None]:
         """
         處理Ollama的流式回應
 
@@ -123,7 +89,7 @@ class OllamaService():
         Returns:
             str: 模型回覆的文本 (若失敗則返回None)
         """
-        def generate() -> Generator[OllamaStreamResponse, None, None]:
+        def generate() -> Generator[str, None, None]:
             try:
                 for line in response.iter_lines():
                     if not line:
@@ -135,19 +101,24 @@ class OllamaService():
                     if 'response' in data:
                         chunk = data['response']
                         if chunk:
-                            yield OllamaStreamResponse(text=chunk, done=False)
-                yield OllamaStreamResponse(text="", done=True)  # 流結束標
+                            yield chunk
+                yield ""
             except Exception as e:
                 logger.error(f"處理流式回應時出錯: {e}")
                 yield None
         return generate()
 
-    def send_single_request(self, prompt: str, stream: bool = False) -> Union[Optional[str], Generator[OllamaStreamResponse, None, None]]:
+    def send_single_request(self, 
+            prompt: str, 
+            system_prompt: Optional[str] = None, 
+            stream: bool = False
+        ) -> Union[Optional[str], Generator[str, None, None]]:
         """
         發送請求到Ollama服務
 
         Args:
             prompt: 要發送的文本
+            system_prompt: 系統提示文本 (Ollama目前不支持此參數)
             stream: 是否使用流式回應
 
         Returns:
@@ -162,21 +133,34 @@ class OllamaService():
 
         # 發送請求
         try:
-            response = self.session.post(
-                f"{self.ollama_host}/api/generate",
-                json={
-                    "model": self.model_name,
-                    "prompt": prompt,
-                    "stream": stream
-                },
-                stream=stream,
-                timeout=90 if not stream else 30  # 增加超時時間以適應自定義模型
-            )
+            if not self._in_multi_turn:
+                response = self.session.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.model_name,
+                        "prompt": prompt,
+                        "stream": stream
+                    },
+                    stream=stream,
+                    timeout=90 if not stream else 30  # 增加超時時間以適應自定義模型
+                )
+            else:
+                self._chat.append({"role": "user", "content": prompt})
+                response = self.session.post(
+                    f"{self.base_url}/api/chat",
+                    json={
+                        "model": self.model_name,
+                        "messages": self._chat,
+                        "stream": stream
+                    },
+                    stream=stream,
+                    timeout=90 if not stream else 30  # 增加超時時間以適應自定義模型
+                )
             if stream:
                 if response.status_code == 200:
                     return self._handle_stream_response(response)
                 else:
-                    logger.error(f"流式回應錯誤: {response.status_code} - {response.text}")
+                    logger.error(f"Ollama流式回應錯誤: {response.status_code} - {response.text}")
                     return None
 
             if response.status_code == 200:
@@ -184,26 +168,29 @@ class OllamaService():
                 respond_text = result.get("response", "").strip()
                 if respond_text:
                     if self.verbose:
-                        logger.info("獲取回覆成功")
+                        logger.info("Ollama獲取回覆成功")
                     return respond_text
                 else:
-                    logger.error(f"未獲取到回覆，響應數據: {result}")
+                    logger.error(f"Ollama未獲取到回覆，響應數據: {result}")
                     return None
             elif response.status_code == 429:
-                logger.warning("請求過於頻繁")
+                logger.warning("Ollama請求過於頻繁")
             else:
-                logger.error(f"請求錯誤: {response.status_code} - {response.text}")
+                logger.error(f"Ollama請求錯誤: {response.status_code} - {response.text}")
 
         except requests.exceptions.Timeout:
-            logger.error("請求超時")
+            logger.error("Ollama請求超時")
         except requests.exceptions.RequestException as e:
-            logger.error(f"請求錯誤: {e}")
+            logger.error(f"Ollama請求錯誤: {e}")
         except Exception as e:
-            logger.error(f"未知錯誤: {e}")
+            logger.error(f"Ollama未知錯誤: {e}")
 
         return None
 
-    def send_multi_request(self, prompt: str, end_chat: bool = False) -> Optional[str]:
+    def send_multi_request(self, 
+            prompt: str, 
+            end_chat: bool = False
+        ) -> Optional[str]:
         """
         發送多輪請求到Ollama服務
 
@@ -219,7 +206,7 @@ class OllamaService():
             return None
         else:
             if self.verbose:
-                logger.info(f"發送請求到Ollama服務，模型: {self.model_name}, 流式: {True}")
+                logger.info(f"Ollama發送請求，模型: {self.model_name}, 流式: {True}")
         
         if end_chat:
             if self.verbose:
@@ -255,7 +242,7 @@ class OllamaService():
         """
         try:
             response = self.session.post(
-                f"{self.ollama_host}/api/embeddings",
+                f"{self.base_url}/api/embeddings",
                 json={
                     "model": self.model_name,
                     "prompt": text,

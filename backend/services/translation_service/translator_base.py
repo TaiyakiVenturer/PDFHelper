@@ -8,6 +8,7 @@ import time
 import requests
 from pathlib import Path
 
+from backend.services.llm_service import BaseLLMService
 from backend.api import ProgressManager
 
 import logging
@@ -16,27 +17,23 @@ from backend.api import setup_project_logger  # 導入日誌設置函數
 setup_project_logger(verbose=True)  # 設置全局日誌記錄器
 logger = logging.getLogger(__name__)
 
-class TranslatorBase:
+class Translator():
     """
-    ### 翻譯器基類
+    ### 翻譯器
 
     定義了翻譯器的基本接口和通用方法
-    
-    ### 繼承需實現以下方法：
-    - is_available(self) -> bool: 檢查翻譯器是否可用
-    - send_translate_request(self, prompt: str) -> str: 發送翻譯請求
     """
-    def __init__(self, instance_path: str, model_name: str, verbose: bool = False):
+    def __init__(self, instance_path: str, llm_service_obj: BaseLLMService, verbose: bool = False):
         """
-        初始化翻譯器基類
+        初始化翻譯器
 
         Args:
             instance_path: 存放PDF的資料夾路徑
-            model_name: 使用的模型名稱 (用於保存翻譯進度及辨識翻譯器類型)
+            llm_services_obj: LLM服務實例
             verbose: 是否啟用詳細模式
         """
+        self.llm_service = llm_service_obj
 
-        self.model_name = model_name
         self.verbose = verbose
         self.term_dictionary = {}
 
@@ -46,21 +43,48 @@ class TranslatorBase:
         self.is_reference = False
 
     def is_available(self) -> bool:
-        """
-        檢查翻譯器是否可用
-        """
-        raise NotImplementedError("此方法需由子類別實作")
+        """檢查翻譯器是否可用"""
+        return self.llm_service.is_available()
 
-    def send_translate_request(self, prompt: str) -> str:
-        """
-        發送翻譯請求 (需要子類別實作)
-        Args:
-            prompt: 要翻譯的提示詞
+    def _get_system_prompt(self) -> str:
+        """獲取系統提示詞"""
+        return """
+你是專業的學術論文翻譯專家，專精於英文學術文獻的繁體中文翻譯。
 
-        Returns:
-            翻譯結果 (如果出現錯誤，返回空字串)
-        """
-        raise NotImplementedError("此方法需由子類別實作")
+## 翻譯原則與分類處理
+### 內容類型：
+- **標題 (title)**: 簡潔準確，突出研究核心，避免冗長表達
+- **摘要 (abstract)**: 保持邏輯完整性，維持學術嚴謹性和結構層次
+- **正文 (body)**: 邏輯清晰，術語準確，表達自然流暢
+- **參考文獻 (reference)**: 保持格式，僅需翻譯論文標題
+
+### 專業術語與格式要求：
+1. **術語一致性**：建立術語對照，確保全文統一翻譯
+2. **首次術語**：中文翻譯（英文原文），如：認知無線電 (Cognitive Radio)
+3. **保持原文**：數學公式、變數名、符號、公認縮寫 (AI、IoT、5G等)
+
+### 翻譯品質控制：
+- 優先意譯確保語義完整，避免生硬直譯
+- 維持原文邏輯層次和段落結構
+- 確保中文表達符合學術寫作習慣
+- 保持專業性與可讀性的平衡
+
+### 處理格式：
+上下文：{context}
+內容類型：{content_type}
+翻譯內容：{text}  
+翻譯輸出：{respond}
+
+**重要：僅輸出翻譯結果，無需額外說明；上下文僅供參考，請勿將上下文內容複製到回答中**
+"""
+
+    def send_translate_request(self, prompt: str, end_chat: bool) -> str:
+        """發送翻譯請求給翻譯器"""
+        return self.llm_service.send_multi_request(
+            prompt, 
+            self._get_system_prompt(), 
+            end_chat=end_chat
+        )
     
     def _get_term_dictionary(self) -> dict:
         """
@@ -145,7 +169,7 @@ class TranslatorBase:
 
         for attempt in range(1, max_retries + 1):
             try:
-                translation = self.send_translate_request(prompt)
+                translation = self.send_translate_request(prompt, end_chat=False)
                 if not translation:
                     logger.warning(f"翻譯出現錯誤，重新嘗試 (嘗試 {attempt}/{max_retries})")
                     continue
@@ -184,15 +208,15 @@ class TranslatorBase:
             logger.info("超過最大重試次數")
         return ""
 
-    def translate_content_list(self, content_list_path: str, 
-            output_path: Optional[str] = None, buffer_time: float = 0.5
+    def translate_content_list(self, 
+            content_list_path: str, 
+            buffer_time: float = 0.5
         ) -> str:
         """
         翻譯content_list.json檔案
         
         Args:
             content_list_path: content_list.json檔案路徑
-            output_path: 輸出檔案路徑（可選，默認為原檔名_translated.json）
             buffer_time: 每次請求後的緩衝時間，避免過於頻繁請求
             
         Returns:
@@ -279,7 +303,7 @@ class TranslatorBase:
             item['text_en'] = original_text
             item['text_zh'] = translated_text
             item['translation_metadata'] = {
-                'model': self.model_name,
+                'model': self.llm_service.model_name,
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'content_type': content_type
             }
@@ -300,10 +324,7 @@ class TranslatorBase:
             item.pop('text', None)
 
         # 保存翻譯結果
-        if output_path is None:
-            output_path = os.path.join(os.path.dirname(self.progress_path), f"{file_name}_translated.json")
-        else:
-            output_path = Path(output_path)
+        output_path = os.path.join(os.path.dirname(self.progress_path), f"{file_name}_translated.json")
         
         # 確保輸出目錄存在
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -364,7 +385,7 @@ class TranslatorBase:
             "content_list": progress_data,  # 原始翻譯數據
             "save_time": time.strftime('%Y-%m-%d %H:%M:%S'),
             "term_dictionary": self.term_dictionary.copy(),  # 創建副本
-            "translator_type": self.model_name
+            "translator_type": self.llm_service.model_name
         }
 
         try:

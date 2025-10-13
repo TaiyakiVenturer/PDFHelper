@@ -7,12 +7,12 @@ from typing import Optional
 
 import requests
 
-from .translator_base import TranslatorBase
+from .translator_base import Translator
 
 logger = logging.getLogger(__name__)
 
 
-class ClaudeTranslator(TranslatorBase):
+class ClaudeTranslator(Translator):
     """使用 Anthropic Claude API 的翻譯器實作。"""
 
     def __init__(

@@ -7,12 +7,12 @@ from typing import Optional
 
 import requests
 
-from .translator_base import TranslatorBase
+from .translator_base import Translator
 
 logger = logging.getLogger(__name__)
 
 
-class XaiTranslator(TranslatorBase):
+class XaiTranslator(Translator):
     """使用 xAI Grok Chat Completions API 的翻譯器實作。"""
 
     def __init__(

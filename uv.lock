@@ -1983,7 +1983,7 @@ wheels = [
 
 [[package]]
 name = "mineru"
-version = "2.5.2"
+version = "2.5.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -2012,7 +2012,7 @@ dependencies = [
     { name = "tqdm" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/03/061da10bfe711beda2daf0bc0cef114b14b317cc2fb3d93e61c5d3e890e3/mineru-2.5.2-py3-none-any.whl", hash = "sha256:49ac858f5ed7c13422c89903381e2ec69b5a99c356a3a109c859d24603c9ba63", size = 1289419, upload-time = "2025-09-19T08:52:37.639Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/41/34dc45a773113db690946d1258c34c221c5d066deeff9f65dcb0f741fb40/mineru-2.5.4-py3-none-any.whl", hash = "sha256:684457de783bf7b44c8e18ffee9f321ce774165941e6cd5d907c12ed2a30a5e4", size = 1290632, upload-time = "2025-09-25T22:00:55.163Z" },
 ]
 
 [package.optional-dependencies]
@@ -2040,7 +2040,7 @@ core = [
 
 [[package]]
 name = "mineru-vl-utils"
-version = "0.1.8"
+version = "0.1.13"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -2048,9 +2048,9 @@ dependencies = [
     { name = "pillow" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/f8/7cd4b9764a74472240e33fd574d9db975b49d92a73a0b54d65f69fa87a4f/mineru_vl_utils-0.1.8.tar.gz", hash = "sha256:e67a83d93297b5bdaf20ccc45de82ec10e4794af8db96294ccedeeea44114ef6", size = 43141, upload-time = "2025-09-19T11:02:06.112Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/8d/e5f019d8e35e9fbd2302b127f9f0ebf90a118ccff3768ec86f9e3b9f7eb1/mineru_vl_utils-0.1.13.tar.gz", hash = "sha256:f1463c101381cd2bdb4de1d547e3d48289a79c2e91d2ab7e2915ac9e3075cc28", size = 44824, upload-time = "2025-10-09T02:31:19.968Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/85/bd494b08767c6eade704e45dac388852bd3b2e5a9e0d7da4c4a1b54ef3a2/mineru_vl_utils-0.1.8-py3-none-any.whl", hash = "sha256:6e98dd3ae87323379f62de44d3f8f7c027f0574043524c81ae76c979eea490a4", size = 49646, upload-time = "2025-09-19T11:02:04.459Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/23/c11c32a9722604070f1a19d3e461b8d198347abb3effbd7933fc4f43bdbf/mineru_vl_utils-0.1.13-py3-none-any.whl", hash = "sha256:95383e2018ea08a5ffd6e6b59cd639cdbb2747ef0b8e1bf957e3b6d0a7619c2e", size = 51848, upload-time = "2025-10-09T02:31:18.737Z" },
 ]
 
 [[package]]
@@ -2871,6 +2871,7 @@ dependencies = [
     { name = "flask-cors" },
     { name = "google-genai" },
     { name = "mineru", extra = ["core"] },
+    { name = "openai" },
     { name = "python-dotenv" },
     { name = "torch" },
     { name = "torchaudio" },
@@ -2883,7 +2884,8 @@ requires-dist = [
     { name = "flask", specifier = ">=3.1.2" },
     { name = "flask-cors", specifier = ">=6.0.1" },
     { name = "google-genai", specifier = ">=1.32.0" },
-    { name = "mineru", extras = ["core"], specifier = ">=2.5.2" },
+    { name = "mineru", extras = ["core"], specifier = "==2.5.4" },
+    { name = "openai", specifier = ">=1.108.1" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "torch", specifier = ">=2.7.1" },
     { name = "torchaudio", specifier = ">=2.7.1" },

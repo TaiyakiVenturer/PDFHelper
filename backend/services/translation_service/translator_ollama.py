@@ -3,10 +3,10 @@ Ollama翻譯器 - 基於OllamaService進行文本翻譯
 """
 from typing import Optional
 
-from .translator_base import TranslatorBase
+from .translator_base import Translator
 from ..llm_service import OllamaService
 
-class OllamaTranslator(TranslatorBase, OllamaService):
+class OllamaTranslator(Translator, OllamaService):
     """
     ### 基於Ollama的本地學術論文翻譯器
     """
@@ -24,7 +24,7 @@ class OllamaTranslator(TranslatorBase, OllamaService):
             model_name: 使用的模型名稱 (建議使用自定義的TranslateHelper模型)
             verbose: 是否顯示詳細日誌
         """
-        TranslatorBase.__init__(self, instance_path=instance_path, model_name=model_name, verbose=verbose)
+        Translator.__init__(self, instance_path=instance_path, model_name=model_name, verbose=verbose)
         OllamaService.__init__(self, model_name=model_name, model_uses="translate", verbose=verbose)
 
     def is_available(self) -> bool:

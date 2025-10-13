@@ -9,7 +9,7 @@ from .document_processor import DocumentProcessor
 from .embedding_service import EmbeddingService
 from .chroma_database import ChromaVectorStore
 
-from ..llm_service import OllamaService, GeminiService
+from ..llm_service import BaseLLMService
 
 from backend.api import ProgressManager  # 導入進度管理器
 
@@ -63,8 +63,7 @@ class RAGEngine:
             document_processor_obj: DocumentProcessor,
             embedding_service_obj: EmbeddingService,
             chromadb_obj: ChromaVectorStore,
-            llm_service: Literal['ollama', 'gemini'],
-            model_name: str = None,
+            llm_service_obj: BaseLLMService,
             verbose: bool = False,
         ):
         """
@@ -86,33 +85,9 @@ class RAGEngine:
         
         # 初始化各個組件
         self.document_processor = document_processor_obj
-        assert self.document_processor, "請提供DocumentProcessor物件或確保能夠初始化"
-
         self.embedding_service = embedding_service_obj
-        assert self.embedding_service, "請提供EmbeddingService物件或確保能夠初始化"
-
         self.vector_store = chromadb_obj
-        assert self.vector_store, "請提供ChromaVectorStore物件或確保能夠初始化"
-
-        # 根據選擇的LLM服務初始化
-        self.llm_service = None
-        if llm_service == 'ollama':
-            self.llm_service = OllamaService(
-                model_name or "yi-chat",
-                model_uses="chat",
-                verbose=self.verbose
-            )
-            if not self.llm_service.is_available():
-                raise ValueError("⚠️ Ollama服務不可用，請檢查設定")
-        elif llm_service == 'gemini':
-            self.llm_service = GeminiService(
-                model_name or "gemini-2.5-flash-lite", 
-                verbose=self.verbose
-            )
-            if not self.llm_service.is_available():
-                logger.error("⚠️ Gemini服務不可用 (未設定API Key之前可忽略)")
-        else:
-            raise ValueError(f"不支援的LLM服務: {llm_service}")
+        self.llm_service = llm_service_obj
 
         if self.verbose:
             logger.info("RAG引擎初始化完成")
@@ -363,7 +338,7 @@ class RAGEngine:
         """
         return {
             "vector_store_info": self.vector_store.list_collections() or "未指定集合",
-            "embedding_model": self.embedding_service.model_name,
+            "embedding_model": self.embedding_service.llm_service.model_name if self.embedding_service.llm_service else "未設定",
             "llm_service": self.llm_service.model_name if self.llm_service else "未設定",
             "document_processor": {
                 "min_chunk_size": self.document_processor.min_chunk_size,

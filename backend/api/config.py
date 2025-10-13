@@ -24,28 +24,15 @@ class TranslatorConfig:
     翻譯器設定
     
     Args:
-        llm_service (Literal["ollama", "gemini"]): 翻譯請求使用的LLM服務 (預設使用 Gemini)
+        llm_service (Literal["ollama", "google", "openai"]): 翻譯請求使用的LLM服務
         model_name (str): 使用的模型名稱
-            - Ollama 預設為 "TranslateHelper" (為自訂模型，須依使用者修改使用模型名稱)
-            - Gemini 預設為 "gemini-2.5-flash-lite"
-        api_key (str): API金鑰（預設從環境變數取得，也可手動設定）
+        api_key (str): API金鑰
         verbose (bool): 是否啟用詳細日誌
     """
-    llm_service: Literal["ollama", "gemini"] = "gemini"
-    model_name: str = None
-    api_key: str = None
+    llm_service: Literal["ollama", "google", "openai"]
+    model_name: str
+    api_key: str
     verbose: bool = False
-
-    def __post_init__(self):
-        # 添加驗證
-        if self.llm_service not in ["ollama", "gemini"]:
-            raise ValueError(f"不支援的LLM服務: {self.llm_service}")
-        
-        # 依照服務設定預設模型名稱
-        if self.llm_service == "ollama" and self.model_name is None:
-            self.model_name = "TranslateHelper"
-        if self.llm_service == "gemini" and self.model_name is None:
-            self.model_name = "gemini-2.5-flash-lite"
 
 @dataclass
 class DocumentProcessorConfig:
@@ -84,17 +71,6 @@ class EmbeddingServiceConfig:
     retry_delay: int = 1  # 秒
     verbose: bool = False
 
-    def __post_init__(self):
-        # 添加驗證
-        if self.llm_service not in ["ollama", "gemini"]:
-            raise ValueError(f"不支援的LLM服務: {self.llm_service}")
-        
-        # 依照服務設定預設模型名稱
-        if self.llm_service == "ollama" and self.model_name is None:
-            self.model_name = "nomic-embed-v2-text-moe"
-        if self.llm_service == "gemini" and self.model_name is None:
-            self.model_name = "gemini-embedding-001"
-
 @dataclass
 class ChromaDBConfig:
     """
@@ -125,18 +101,8 @@ class RAGConfig:
     """
     llm_service: Literal["ollama", "gemini"] = "gemini"
     model_name: str = None
+    api_key: str = None
     verbose: bool = False
-
-    def __post_init__(self):
-        # 添加驗證
-        if self.llm_service not in ["ollama", "gemini"]:
-            raise ValueError(f"不支援的LLM服務: {self.llm_service}")
-        
-        # 依照服務設定預設模型名稱
-        if self.llm_service == "ollama" and self.model_name is None:
-            self.model_name = "yi-chat"
-        if self.llm_service == "gemini" and self.model_name is None:
-            self.model_name = "gemini-2.5-flash-lite"
 
 @dataclass
 class MarkdownReconstructorConfig:

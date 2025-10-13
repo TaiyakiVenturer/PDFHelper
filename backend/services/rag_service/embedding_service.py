@@ -4,8 +4,7 @@ Embedding服務 - 基於Ollama的向量化服務
 import time
 from typing import List, Optional, Literal, Union
 
-from ..llm_service import OllamaService
-from ..llm_service import GeminiService
+from ..llm_service import BaseLLMService
 
 from backend.api import ProgressManager
 
@@ -20,9 +19,7 @@ class EmbeddingService:
     
     def __init__(
         self,
-        llm_service: Literal["ollama", "gemini"] = "ollama",
-        model_name: str = "",
-        api_key: Optional[str] = None,
+        llm_service_obj: BaseLLMService,
         max_retries: int = 3,
         retry_delay: int = 1,
         verbose: bool = False
@@ -38,26 +35,7 @@ class EmbeddingService:
             retry_delay: 重試延遲時間（秒）
             verbose: 是否啟用詳細日誌
         """
-        self.llm_service = None
-        if llm_service == "ollama":
-            assert model_name != "", "請提供Ollama的模型名稱"
-            self.llm_service = OllamaService(
-                model_name=model_name,
-                verbose=verbose
-            )
-        elif llm_service == "gemini":
-            assert model_name != "", "請提供Gemini的模型名稱"
-            self.llm_service = GeminiService(
-                model_name=model_name,
-                api_key=api_key,
-                verbose=verbose
-            )
-        else:
-            raise ValueError(f"不支援的llm_service: {llm_service}")
-        self.model_name = self.llm_service.model_name
-        
-        if not self.is_available():
-            raise ConnectionError(f"無法連接到 {llm_service} 服務，請檢查配置")
+        self.llm_service = llm_service_obj
 
         self.max_retries = max_retries
         self.retry_delay = retry_delay

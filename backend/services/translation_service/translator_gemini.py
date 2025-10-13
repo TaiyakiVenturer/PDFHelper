@@ -3,16 +3,17 @@ Gemini翻譯器 - 基於GeminiService進行文本翻譯
 """
 from typing import Optional
 
-from .translator_base import TranslatorBase
-from ..llm_service import GeminiService
+from .translator_base import Translator
+from ..llm_service import BaseLLMService
 
-class GeminiTranslator(TranslatorBase, GeminiService):
+class GeminiTranslator(Translator):
     """
     ### Gemini翻譯器，使用Google Gemini API進行文本翻譯。
     """
 
     def __init__(self, 
             instance_path: str, 
+            llm_services_obj: BaseLLMService = None,
             model_name: str = "gemini-2.5-flash-lite",
             api_key: str = "", 
             verbose: bool = False
@@ -26,12 +27,12 @@ class GeminiTranslator(TranslatorBase, GeminiService):
             api_key: Google Gemini API的API密鑰 (無輸入則使用環境變量中的API_KEY)
             verbose: 是否啟用詳細模式 (預設為False)
         """
-        TranslatorBase.__init__(self, instance_path=instance_path, model_name=model_name, verbose=verbose)
-        GeminiService.__init__(self, model_name=model_name, api_key=api_key, verbose=verbose)
+        Translator.__init__(self, instance_path=instance_path, model_name=model_name, verbose=verbose)
+        self.llm_services_obj = llm_services_obj
 
     def is_available(self) -> bool:
         """檢查Gemini服務是否可用"""
-        return GeminiService.is_available(self)
+        return GoogleService.is_available(self)
 
     def send_translate_request(self, prompt: str, end_chat: bool = False) -> Optional[str]:
         """
@@ -44,7 +45,7 @@ class GeminiTranslator(TranslatorBase, GeminiService):
         Returns:
             str: 翻譯結果
         """
-        return GeminiService.send_multi_request(self, prompt, self._get_system_prompt(), end_chat=end_chat)
+        return GoogleService.send_multi_request(self, prompt, self._get_system_prompt(), end_chat=end_chat)
 
     def _get_system_prompt(self) -> str:
         """獲取系統提示詞"""

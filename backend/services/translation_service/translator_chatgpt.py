@@ -7,12 +7,12 @@ from typing import Optional
 
 import requests
 
-from .translator_base import TranslatorBase
+from .translator_base import Translator
 
 logger = logging.getLogger(__name__)
 
 
-class ChatGPTTranslator(TranslatorBase):
+class ChatGPTTranslator(Translator):
     """使用 OpenAI Chat Completions API 的翻譯器實作。"""
 
     def __init__(

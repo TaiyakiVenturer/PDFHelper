@@ -2633,7 +2633,7 @@ function setProviderBadge(badgeEl, company) {
   badgeEl.classList.add(company);
 }
 
-async function loadModels(elements, company) {
+async function loadModels(elements, company, selectedModel) {
   if (!elements.model) return;
   setProviderBadge(elements.badge, company);
   if (!company) {
@@ -2661,6 +2661,30 @@ async function loadModels(elements, company) {
   }
   const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
   elements.model.innerHTML = `<option value="">請選擇模型</option>${opts}`;
+  if (selectedModel) {
+    if (list.includes(selectedModel)) {
+      elements.model.value = selectedModel;
+    } else {
+      const fallbackOption = document.createElement('option');
+      fallbackOption.value = selectedModel;
+      fallbackOption.textContent = `（未在清單中）${selectedModel}`;
+      fallbackOption.selected = true;
+      elements.model.appendChild(fallbackOption);
+    }
+  }
+}
+
+async function populateService(elements, config) {
+  if (!elements) return;
+  const { company = '', model = '', apiKey = '' } = config || {};
+  if (elements.apiKey) elements.apiKey.value = apiKey;
+  if (elements.apiKey instanceof HTMLInputElement) elements.apiKey.type = 'password';
+  if (elements.toggleBtn) elements.toggleBtn.textContent = '顯示';
+  if (elements.company) elements.company.value = company;
+  updateApiKeyFieldVisibility(elements, company);
+  if (elements.model) elements.model.disabled = true;
+  await loadModels(elements, company, model);
+  if (elements.model) elements.model.disabled = false;
 }
 
 // 綁定每個服務的 company change 事件
@@ -2696,48 +2720,70 @@ bindServiceEvents(translatorElements);
 bindServiceEvents(embeddingElements);
 bindServiceEvents(ragElements);
 
+
 // 開啟設定視窗，載入當前設定
 btnSettings?.addEventListener('click', async () => {
-  let s;
-  try {
-    s = await window.electronAPI?.loadSettings?.();
-  } catch (e) {
-    showToast(`讀取設定失敗`, 'error');
-  }
-  
-  if (s) {
-    // 載入 Translator 設定
-    if (translatorElements.company) translatorElements.company.value = s.translator?.company || '';
-    await loadModels(translatorElements, s.translator?.company || '');
-    if (translatorElements.model) translatorElements.model.value = s.translator?.model || '';
-    if (translatorElements.apiKey) translatorElements.apiKey.value = s.translator?.apiKey || '';
-    updateApiKeyFieldVisibility(translatorElements, s.translator?.company || '');
-
-    // 載入 Embedding 設定
-    if (embeddingElements.company) embeddingElements.company.value = s.embedding?.company || '';
-    await loadModels(embeddingElements, s.embedding?.company || '');
-    if (embeddingElements.model) embeddingElements.model.value = s.embedding?.model || '';
-    if (embeddingElements.apiKey) embeddingElements.apiKey.value = s.embedding?.apiKey || '';
-    updateApiKeyFieldVisibility(embeddingElements, s.embedding?.company || '');
-
-    // 載入 RAG 設定
-    if (ragElements.company) ragElements.company.value = s.rag?.company || '';
-    await loadModels(ragElements, s.rag?.company || '');
-    if (ragElements.model) ragElements.model.value = s.rag?.model || '';
-    if (ragElements.apiKey) ragElements.apiKey.value = s.rag?.apiKey || '';
-    updateApiKeyFieldVisibility(ragElements, s.rag?.company || '');
-  }
-  
-  // 主題 radio
-  const theme = (s && s.theme) ? s.theme : 'dark';
-  document.querySelectorAll('input[name="theme"]').forEach((el) => {
-    if (el instanceof HTMLInputElement) el.checked = (el.value === theme);
-  });
-  
-  // 顯示版本
-  const res = await window.electronAPI?.checkUpdates?.();
-  if (lblVersion && res) lblVersion.textContent = res.currentVersion;
   openModal();
+
+  // 重置 UI
+  document.querySelectorAll('input[name="theme"]').forEach((el) => {
+    if (el instanceof HTMLInputElement) el.checked = false;
+  });
+  updateStatus?.classList.remove('show', 'ok', 'info', 'error');
+  if (updateStatus) updateStatus.textContent = '尚未檢查更新';
+  if (lblVersion) lblVersion.textContent = '-';
+
+  const services = [translatorElements, embeddingElements, ragElements];
+  services.forEach((elements) => {
+    if (!elements) return;
+    if (elements.company) elements.company.value = '';
+    if (elements.apiKey) {
+      elements.apiKey.value = '';
+      if (elements.apiKey instanceof HTMLInputElement) elements.apiKey.type = 'password';
+    }
+    if (elements.toggleBtn) elements.toggleBtn.textContent = '顯示';
+    if (elements.model) {
+      elements.model.disabled = true;
+      elements.model.innerHTML = '<option value="">載入中…</option>';
+    }
+    updateApiKeyFieldVisibility(elements, '');
+  });
+
+  try {
+    const [settings, updateInfo] = await Promise.all([
+      window.electronAPI?.loadSettings?.(),
+      window.electronAPI?.checkUpdates?.().catch((err) => {
+        console.warn('取得版本資訊失敗', err);
+        return null;
+      })
+    ]);
+
+    if (settings) {
+      await Promise.all([
+        populateService(translatorElements, settings.translator),
+        populateService(embeddingElements, settings.embedding),
+        populateService(ragElements, settings.rag)
+      ]);
+
+      const theme = settings.theme || 'dark';
+      document.querySelectorAll('input[name="theme"]').forEach((el) => {
+        if (el instanceof HTMLInputElement) el.checked = (el.value === theme);
+      });
+    }
+
+    if (lblVersion && updateInfo) {
+      lblVersion.textContent = updateInfo.currentVersion;
+    }
+  } catch (error) {
+    console.error('載入設定時發生錯誤', error);
+    services.forEach((elements) => {
+      if (elements?.model) {
+        elements.model.disabled = false;
+        elements.model.innerHTML = '<option value="">請先選公司</option>';
+      }
+    });
+    showToast('讀取設定失敗，請稍後再試', 'error', 2200);
+  }
 });
 
 // 儲存設定按鈕
@@ -2786,28 +2832,29 @@ window.addEventListener('keydown', (e) => {
 btnUpdateInModal?.addEventListener('click', async () => {
   if (!btnUpdateInModal || !updateStatus) return;
   btnUpdateInModal.disabled = true;
-  updateStatus.className = 'update-status show info';
+  updateStatus.classList.remove('ok', 'error', 'info');
+  updateStatus.classList.add('show', 'info');
   updateStatus.innerHTML = `<span class="spinner" aria-hidden="true"></span> 正在檢查更新…`;
   try {
     const res = await window.electronAPI?.checkUpdates?.();
     if (!res) throw new Error('無回應');
     const { currentVersion, hasUpdate, message } = res;
     if (hasUpdate) {
-      updateStatus.className = 'update-status show ok';
+      updateStatus.classList.remove('info', 'error');
+      updateStatus.classList.add('ok');
       updateStatus.textContent = `有新版本可用！目前版本 ${currentVersion}`;
     } else {
-      updateStatus.className = 'update-status show info';
+      updateStatus.classList.remove('ok', 'error');
+      updateStatus.classList.add('info');
       updateStatus.textContent = message || `目前版本 ${currentVersion}，已是最新`;
     }
   } catch (err) {
     console.error('檢查更新失敗', err);
-    updateStatus.className = 'update-status show error';
+    updateStatus.classList.remove('ok', 'info');
+    updateStatus.classList.add('show', 'error');
     updateStatus.textContent = '檢查更新失敗，請稍後再試';
   } finally {
-    setTimeout(() => {
-      updateStatus.classList.remove('show');
-      btnUpdateInModal.disabled = false;
-    }, 2200);
+    btnUpdateInModal.disabled = false;
   }
 });
 

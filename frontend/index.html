@@ -32,6 +32,9 @@
         --drop-border: #475569;
         --drop-hover-bg: rgba(56,189,248,0.08);
         --outline-strong: #1f2937; /* slate-800 */
+        --scrollbar-track: #0b1220;
+        --scrollbar-thumb: rgba(148,163,184,0.6);
+        --scrollbar-thumb-hover: rgba(226,232,240,0.9);
       }
       :root[data-theme="light"] {
         --bg: #f8fafc; /* slate-50 */
@@ -51,6 +54,9 @@
         --drop-border: #94a3b8;
         --drop-hover-bg: rgba(2,136,209,0.08);
         --outline-strong: #94a3b8; /* slate-400 */
+        --scrollbar-track: #e2e8f0;
+        --scrollbar-thumb: rgba(100,116,139,0.65);
+        --scrollbar-thumb-hover: rgba(30,41,59,0.75);
       }
       html, body {
         height: 100%;
@@ -63,6 +69,20 @@
         /* 全域主題切換轉場 */
         transition: background-color 220ms ease, color 220ms ease;
       }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      }
+      *::-webkit-scrollbar { width: 10px; height: 10px; }
+      *::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+      *::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border-radius: 999px;
+        border: 2px solid var(--scrollbar-track);
+        transition: background-color 160ms ease;
+      }
+      *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+      *::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
       /* 自訂標題列（可拖曳區域） */
       .titlebar {
         -webkit-app-region: drag; /* 允許拖曳 */
@@ -123,9 +143,9 @@
   .modal-backdrop { position: fixed; left: 0; right: 0; top: 36px; bottom: 0; background: rgba(2,6,23,0.55); display: none; align-items: center; justify-content: center; z-index: 1000; -webkit-app-region: no-drag; opacity: 0; transition: opacity 200ms ease; }
   .modal-backdrop.show { opacity: 1; }
   .modal { 
-    width: 560px; 
+    width: 720px; 
     max-width: calc(100% - 24px); 
-    max-height: calc(100vh - 72px); /* 留出上下間距 */
+    max-height: calc(100vh - 72px);
     background: var(--surface-1); 
     border: 1px solid var(--outline-strong); 
     border-radius: 16px; 
@@ -143,26 +163,39 @@
   .modal.open { transform: none; opacity: 1; }
   .modal .close { position: absolute; right: 10px; top: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); border-radius: 6px; width: 32px; height: 28px; cursor: pointer; }
   .modal h2 { margin: 4px 0 14px; font-size: 20px; flex-shrink: 0; }
-  .modal-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
-  .section { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
-  .modal h2 { margin: 4px 0 14px; font-size: 20px; flex-shrink: 0; }
-  .modal-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
-  .section { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
-  .section-title { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
-  .field { margin-bottom: 10px; }
-  .field label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 14px; }
+  .modal-body { flex: 1; padding: 0; display: flex; flex-direction: column; }
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding: 4px 4px 8px; overflow: hidden; }
+  .settings-section { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  .section-header { display: flex; flex-direction: column; gap: 6px; }
+  .section-meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; color: var(--accent-bg); background: rgba(14,165,233,0.12); border: 1px solid var(--accent-border); border-radius: 999px; padding: 2px 10px; width: fit-content; }
+  .section-title { margin: 0; font-size: 15px; color: var(--text); }
+  .section-description { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .section-grid { display: flex; flex-direction: column; gap: 10px; }
+  .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 12px; align-items: center; margin: 0; }
+  .field label { margin: 0; color: var(--muted); font-size: 13px; align-self: flex-start; padding-top: 6px; }
+  .field .input, .field .select, .field .input-group, .field .field-text { width: 100%; }
   .input, .select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--text); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease; min-height: 40px; line-height: 1.2; outline: none; }
   .input:focus, .select:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px rgba(2,132,199,0.25); }
-  .input-group { position: relative; }
-  /* 讓輸入框為了 suffix 按鈕預留空間，避免文字被遮或造成視覺溢出 */
-  .input-group input { padding-right: 96px; }
-  .input-group .suffix-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 32px; padding: 0 10px; width: 84px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .input-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+  .input-group input { flex: 1 1 auto; padding-right: 12px; min-width: 0; }
+  .input-group .suffix-btn { flex: 0 0 auto; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease; }
+  .input-group .suffix-btn:hover { background: var(--button-hover-bg); color: var(--text); transform: translateY(-1px); }
+  .field-inline { grid-template-columns: 1fr auto; align-items: center; }
+  .field-inline .field-text { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 4px; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-shrink: 0; }
   .btn-primary { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); font-weight: 700; }
   .btn-primary:hover { background: var(--accent-hover-bg); }
 
   /* Segmented control for theme */
   .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--button-bg); transition: background-color 160ms ease, border-color 160ms ease; }
+  @media (max-width: 720px) {
+    .modal { width: 96vw; }
+    .settings-grid { padding: 0; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .settings-section { padding: 14px; }
+    .field { grid-template-columns: 1fr; gap: 6px; }
+    .field label { padding-top: 0; }
+    .field-inline { grid-template-columns: 1fr; }
+  }
   .segmented input { display: none; }
   /* 修正按鈕可點區域與視覺對齊：統一高度，垂直置中 */
   .segmented label { display: inline-flex; align-items: center; height: 34px; padding: 0 14px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; transition: background-color 160ms ease, color 160ms ease; }
@@ -177,8 +210,8 @@
   .toast .success { border-color: #16a34a; }
   .toast .error { border-color: #ef4444; }
   /* 更新狀態卡片 */
-  .update-status { display: none; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 200ms ease; }
-  .update-status.show { display: flex; opacity: 1; }
+  .update-status { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); color: var(--muted); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 200ms ease; min-height: 44px; opacity: 0.65; }
+  .update-status.show { opacity: 1; border-color: var(--border); }
   .update-status.ok { border-color: #16a34a; color: #16a34a; }
   .update-status.info { border-color: #0284c7; color: #0284c7; }
   .update-status.error { border-color: #ef4444; color: #ef4444; }
@@ -437,20 +470,7 @@
   }
   .selection-popover button:hover { background: var(--button-hover-bg); color: var(--text); }
 
-  .reference-trail {
-    position: fixed;
-    left: 16px;
-    bottom: 60px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    max-width: 320px;
-    box-shadow: 0 14px 24px rgba(0,0,0,0.35);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
+  .reference-trail { display: none !important; pointer-events: none; }
   .trail-item { font-size: 12px; color: var(--muted); cursor: pointer; }
 
   .history-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--surface-2); }
@@ -683,112 +703,134 @@
         <h2>設定</h2>
         
         <div class="modal-body">
-          <!-- 翻譯器設定 -->
-          <div class="section">
-            <div class="section-title">翻譯器設定 (Translator)</div>
-            <div class="field">
-              <label for="selTranslatorCompany">公司 <span id="translatorProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
-              <select id="selTranslatorCompany" class="select">
-                <option value="">請選擇</option>
-                <option value="openai">OpenAI</option>
-                <option value="google">Google</option>
-                <option value="xai">xAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="selTranslatorModel">模型</label>
-              <select id="selTranslatorModel" class="select">
-                <option value="">請先選公司</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="txtTranslatorApiKey">API Key</label>
-              <div class="input-group">
-                <input id="txtTranslatorApiKey" class="input" type="password" placeholder="輸入 Translator API Key" />
-                <button id="btnToggleTranslatorKey" class="suffix-btn" type="button">顯示</button>
+          <div class="settings-grid">
+            <section class="settings-section" id="translatorSettings">
+              <header class="section-header">
+                <span class="section-meta">Translator</span>
+                <h3 class="section-title">翻譯器設定</h3>
+                <p class="section-description">設定翻譯流程所使用的模型提供商、模型與授權金鑰。</p>
+              </header>
+              <div class="section-grid">
+                <div class="field">
+                  <label for="selTranslatorCompany">公司 <span id="translatorProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
+                  <select id="selTranslatorCompany" class="select">
+                    <option value="">請選擇</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="google">Google</option>
+                    <option value="xai">xAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="selTranslatorModel">模型</label>
+                  <select id="selTranslatorModel" class="select">
+                    <option value="">請先選公司</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="txtTranslatorApiKey">API Key</label>
+                  <div class="input-group">
+                    <input id="txtTranslatorApiKey" class="input" type="password" placeholder="輸入 Translator API Key" />
+                    <button id="btnToggleTranslatorKey" class="suffix-btn" type="button">顯示</button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </section>
 
-          <!-- Embedding 設定 -->
-          <div class="section">
-            <div class="section-title">Embedding 設定</div>
-            <div class="field">
-              <label for="selEmbeddingCompany">公司 <span id="embeddingProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
-              <select id="selEmbeddingCompany" class="select">
-                <option value="">請選擇</option>
-                <option value="openai">OpenAI</option>
-                <option value="google">Google</option>
-                <option value="xai">xAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="selEmbeddingModel">模型</label>
-              <select id="selEmbeddingModel" class="select">
-                <option value="">請先選公司</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="txtEmbeddingApiKey">API Key</label>
-              <div class="input-group">
-                <input id="txtEmbeddingApiKey" class="input" type="password" placeholder="輸入 Embedding API Key" />
-                <button id="btnToggleEmbeddingKey" class="suffix-btn" type="button">顯示</button>
+            <section class="settings-section" id="embeddingSettings">
+              <header class="section-header">
+                <span class="section-meta">Embedding</span>
+                <h3 class="section-title">Embedding 設定</h3>
+                <p class="section-description">決定向量化內容時所使用的服務提供商與模型。</p>
+              </header>
+              <div class="section-grid">
+                <div class="field">
+                  <label for="selEmbeddingCompany">公司 <span id="embeddingProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
+                  <select id="selEmbeddingCompany" class="select">
+                    <option value="">請選擇</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="google">Google</option>
+                    <option value="xai">xAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="selEmbeddingModel">模型</label>
+                  <select id="selEmbeddingModel" class="select">
+                    <option value="">請先選公司</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="txtEmbeddingApiKey">API Key</label>
+                  <div class="input-group">
+                    <input id="txtEmbeddingApiKey" class="input" type="password" placeholder="輸入 Embedding API Key" />
+                    <button id="btnToggleEmbeddingKey" class="suffix-btn" type="button">顯示</button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </section>
 
-          <!-- RAG 設定 -->
-          <div class="section">
-            <div class="section-title">RAG 設定</div>
-            <div class="field">
-              <label for="selRagCompany">公司 <span id="ragProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
-              <select id="selRagCompany" class="select">
-                <option value="">請選擇</option>
-                <option value="openai">OpenAI</option>
-                <option value="google">Google</option>
-                <option value="xai">xAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="selRagModel">模型</label>
-              <select id="selRagModel" class="select">
-                <option value="">請先選公司</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="txtRagApiKey">API Key</label>
-              <div class="input-group">
-                <input id="txtRagApiKey" class="input" type="password" placeholder="輸入 RAG API Key" />
-                <button id="btnToggleRagKey" class="suffix-btn" type="button">顯示</button>
+            <section class="settings-section" id="ragSettings">
+              <header class="section-header">
+                <span class="section-meta">RAG</span>
+                <h3 class="section-title">RAG 設定</h3>
+                <p class="section-description">設定檢索式生成流程使用的語言模型與授權資訊。</p>
+              </header>
+              <div class="section-grid">
+                <div class="field">
+                  <label for="selRagCompany">公司 <span id="ragProviderBadge" class="provider-badge" aria-hidden="true"></span></label>
+                  <select id="selRagCompany" class="select">
+                    <option value="">請選擇</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="google">Google</option>
+                    <option value="xai">xAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="selRagModel">模型</label>
+                  <select id="selRagModel" class="select">
+                    <option value="">請先選公司</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="txtRagApiKey">API Key</label>
+                  <div class="input-group">
+                    <input id="txtRagApiKey" class="input" type="password" placeholder="輸入 RAG API Key" />
+                    <button id="btnToggleRagKey" class="suffix-btn" type="button">顯示</button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </section>
 
-          <!-- 外觀與更新 -->
-          <div class="section">
-            <div class="section-title">外觀與更新</div>
-            <div class="field">
-              <label>主題</label>
-              <div class="segmented">
-                <input id="themeDark" type="radio" name="theme" value="dark" />
-                <label for="themeDark">深色</label>
-                <input id="themeLight" type="radio" name="theme" value="light" />
-                <label for="themeLight">淺色</label>
-                <input id="themeSystem" type="radio" name="theme" value="system" />
-                <label for="themeSystem">系統</label>
+            <section class="settings-section" id="appearanceSettings">
+              <header class="section-header">
+                <span class="section-meta">Appearance</span>
+                <h3 class="section-title">外觀與更新</h3>
+                <p class="section-description">選擇偏好的介面主題並查看應用程式版本狀態。</p>
+              </header>
+              <div class="section-grid">
+                <div class="field">
+                  <label>主題</label>
+                  <div class="segmented">
+                    <input id="themeDark" type="radio" name="theme" value="dark" />
+                    <label for="themeDark">深色</label>
+                    <input id="themeLight" type="radio" name="theme" value="light" />
+                    <label for="themeLight">淺色</label>
+                    <input id="themeSystem" type="radio" name="theme" value="system" />
+                    <label for="themeSystem">系統</label>
+                  </div>
+                </div>
+                <div class="field field-inline">
+                  <div class="field-text">目前版本：<span id="lblVersion">-</span></div>
+                  <button id="btnUpdateInModal" class="btn" type="button">檢查更新</button>
+                </div>
+                <div id="updateStatus" class="update-status" aria-live="polite">尚未檢查更新</div>
               </div>
-            </div>
-            <div class="field" style="display:flex; justify-content: space-between; align-items:center;">
-              <div style="color:var(--muted)">目前版本：<span id="lblVersion">-</span></div>
-              <button id="btnUpdateInModal" class="btn" type="button">檢查更新</button>
-            </div>
-            <div id="updateStatus" class="update-status" aria-live="polite"></div>
+            </section>
           </div>
         </div>
 

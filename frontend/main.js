@@ -36,6 +36,27 @@ function createWindow() {
   });
 
   win.loadFile('index.html');
+
+  const toggleDevTools = () => {
+    if (win.webContents.isDevToolsOpened()) {
+      win.webContents.closeDevTools();
+    } else {
+      win.webContents.openDevTools({ mode: 'detach' });
+    }
+  };
+
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const key = (input.key || '').toUpperCase();
+    const isCtrlOrCmd = !!(input.control || input.meta);
+    if (key === 'F12') {
+      event.preventDefault();
+      toggleDevTools();
+    } else if (key === 'I' && isCtrlOrCmd && input.shift) {
+      event.preventDefault();
+      toggleDevTools();
+    }
+  });
   
   // 預設最大化視窗
   win.once('ready-to-show', () => {

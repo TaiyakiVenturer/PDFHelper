@@ -184,6 +184,7 @@ class ServerManager {
             if (debug)
                 console.log("[INFO] 專案根目錄:", projectRoot, ", API 伺服器路徑:", apiScriptPath);
             // 啟動Flask伺服器的子進程
+            // Windows: 使用 windowsHide 隱藏控制台視窗
             this.process = (0, child_process_1.spawn)('uv', ['run', apiScriptPath], {
                 cwd: projectRoot,
                 env: {
@@ -192,7 +193,10 @@ class ServerManager {
                     FLASK_DEBUG: debug.toString(), // Flask 除錯模式
                     PYTHONUNBUFFERED: '1', // 確保即時輸出日誌
                     PYTHONIOENCODING: 'utf-8' // 確保輸出為 UTF-8 編碼
-                }
+                },
+                // Windows 專用選項：隱藏控制台視窗
+                shell: false,
+                windowsHide: true
             });
             this.setupProcessListeners();
             // 等待伺服器開啟
@@ -227,9 +231,44 @@ class ServerManager {
             return false;
         }
         console.log("[INFO] 正在停止後端伺服器...");
-        this.process?.kill('SIGKILL'); // 強制終止子進程
-        this.process = null;
-        this.status = server_js_1.ServerProcessStatus.STOPPED;
+        if (!this.process) {
+            this.status = server_js_1.ServerProcessStatus.STOPPED;
+            return false;
+        }
+        try {
+            // Windows 專用：使用 taskkill 終止整個進程樹
+            if (process.platform === 'win32') {
+                const pid = this.process.pid;
+                if (pid) {
+                    // 使用 taskkill /F /T /PID 來強制終止進程及其所有子進程
+                    // /F = 強制終止, /T = 終止子進程樹, /PID = 指定進程ID
+                    (0, child_process_1.execSync)(`taskkill /F /T /PID ${pid}`, {
+                        windowsHide: true,
+                        stdio: 'ignore' // 忽略輸出
+                    });
+                    console.log(`[INFO] 已使用 taskkill 終止進程樹 (PID: ${pid})`);
+                }
+            }
+            else {
+                // Unix/Linux/Mac: 使用 SIGTERM 優雅終止
+                this.process.kill('SIGTERM');
+                // 如果 2 秒後還沒終止，使用 SIGKILL 強制終止
+                setTimeout(() => {
+                    if (this.process && !this.process.killed) {
+                        this.process.kill('SIGKILL');
+                        console.log('[INFO] 使用 SIGKILL 強制終止進程');
+                    }
+                }, 2000);
+            }
+        }
+        catch (error) {
+            console.error('[ERROR] 終止進程時發生錯誤:', error);
+            // 即使發生錯誤，也嘗試清理狀態
+        }
+        finally {
+            this.process = null;
+            this.status = server_js_1.ServerProcessStatus.STOPPED;
+        }
         return true;
     }
 }

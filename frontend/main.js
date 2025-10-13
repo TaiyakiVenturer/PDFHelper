@@ -91,8 +91,32 @@ app.whenReady().then(async() => {
 
 // 應用程式退出前停止後端伺服器
 app.on('will-quit', (event) => {
-  console.log('[INFO] 正在停止後端伺服器...');
-  serverManager.stopServer();
+  console.log('[INFO] 應用程式即將退出，正在停止後端伺服器...');
+  
+  // 阻止應用立即退出，等待伺服器停止
+  if (serverManager.isRunning()) {
+    event.preventDefault();
+    
+    try {
+      serverManager.stopServer();
+      console.log('[INFO] 後端伺服器已停止');
+    } catch (error) {
+      console.error('[ERROR] 停止後端伺服器時發生錯誤:', error);
+    } finally {
+      // 給予一點時間讓進程完全終止
+      setTimeout(() => {
+        app.exit(0);
+      }, 500);
+    }
+  }
+});
+
+// 確保在應用崩潰時也清理進程
+app.on('before-quit', (event) => {
+  if (serverManager.isRunning()) {
+    console.log('[INFO] 清理後端伺服器進程...');
+    serverManager.stopServer();
+  }
 });
 
 // 所有視窗關閉時退出 (macOS 除外)

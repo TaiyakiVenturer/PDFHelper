@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PDFHelper PyTorch 一鍵安裝腳本
+PDFHelper PyTorch 一鍵安裝腳本（setup_torch.py）
 - 自動偵測 CUDA 是否可用與版本
 - 根據 CUDA 版本自動安裝對應 PyTorch
 - 若無 CUDA 則安裝 CPU 版本
-- 支援 uv/pip
+- 僅支援 uv --reinstall
 """
 import subprocess
 import sys
@@ -20,14 +20,12 @@ CUDA_PYTORCH_INDEX = {
 
 CPU_INDEX = 'https://download.pytorch.org/whl/cpu'
 
-
 def run(cmd):
     print(f"執行: {cmd}")
     result = subprocess.run(cmd, shell=True)
     if result.returncode != 0:
         print(f"\n❌ 指令失敗: {cmd}")
         sys.exit(result.returncode)
-
 
 def detect_cuda_version():
     nvcc = shutil.which('nvcc')
@@ -42,35 +40,28 @@ def detect_cuda_version():
         pass
     return None
 
-
 def choose_index(cuda_version):
     if not cuda_version:
         return 'cpu', CPU_INDEX
-    # 只取主次版本，並嘗試找最接近的較舊版本
     cuda_float = None
     try:
         cuda_float = float('.'.join(cuda_version.split('.')[:2]))
     except Exception:
         pass
     if cuda_float:
-        # 依照支援版本排序（新到舊）
         supported = sorted([float(k) for k in CUDA_PYTORCH_INDEX.keys()], reverse=True)
         for ver in supported:
             if cuda_float >= ver:
                 ver_str = str(ver)
                 return f'cu{ver_str.replace(".", "")}', CUDA_PYTORCH_INDEX[ver_str]
-    # 找不到對應或較舊版本，降級到 CPU
     return 'cpu', CPU_INDEX
 
-
 def get_installer():
-    # 只允許 uv
     if shutil.which('uv'):
         return 'uv pip install --reinstall'
     else:
-        print("❌ 找不到 uv，請先安裝 uv (pip install uv)")
+        print("❌ 找不到 uv，請先安裝 uv (https://github.com/astral-sh/uv)")
         sys.exit(1)
-
 
 def main():
     print("\n==== PDFHelper PyTorch 一鍵安裝工具 ====")

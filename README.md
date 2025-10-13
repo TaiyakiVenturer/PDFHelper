@@ -36,6 +36,7 @@ PDFHelper 是一個基於 AI 的智能 PDF 處理系統，提供 PDF 解析、�
 - Python 3.10 或更高版本
 - uv 包管理器
 - Git
+- Node.js 18+（前端）
 
 ### 安裝步驟
 
@@ -45,37 +46,61 @@ git clone https://github.com/TaiyakiVenturer/PDFHelper.git
 cd PDFHelper
 ```
 
-2. **安裝基礎依賴**
+2. **安裝基礎後端依賴**
 ```bash
 uv sync
 ```
 
-3. **配置 GPU 環境**
-
-**Windows 用戶（推薦）**：
-直接點擊 `setup_torch.bat` 檔案，會出現互動式選單：
-- 預設選擇自動檢測
-- 支援 CPU、CUDA 11.8、CUDA 12.6、CUDA 12.8 版本
-- 包含安裝驗證
-
-**手動配置**：
+3. **安裝前端依賴**
 ```bash
-# CPU 版本
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-
-# CUDA 11.8
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-
-# CUDA 12.6
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-
-# CUDA 12.8
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+cd frontend
+npm install
+cd ..
 ```
 
-4. **驗證安裝**
+4. **安裝 PyTorch（自動偵測 CUDA）**
+
+推薦使用一鍵安裝腳本：
+```bash
+uv run setup_torch.py
+```
+
+**腳本特點：**
+- 自動偵測 CUDA 是否可用及版本
+- 自動選擇最接近的支援 CUDA 版本（如 12.7 會自動安裝 12.6 版）
+- 無 CUDA 則自動安裝 CPU 版本
+- 僅支援 uv --reinstall，安裝全自動
+
+**進階：手動配置**
+```bash
+# CPU 版本
+uv pip install torch torchvision torchaudio --reinstall --index-url https://download.pytorch.org/whl/cpu
+
+# CUDA 11.8
+uv pip install torch torchvision torchaudio --reinstall --index-url https://download.pytorch.org/whl/cu118
+
+# CUDA 12.6
+uv pip install torch torchvision torchaudio --reinstall --index-url https://download.pytorch.org/whl/cu126
+
+# CUDA 12.8
+uv pip install torch torchvision torchaudio --reinstall --index-url https://download.pytorch.org/whl/cu128
+```
+
+---
+
+### 驗證 PyTorch 安裝
+
+安裝完成後，建議先驗證 PyTorch 是否安裝成功：
 ```bash
 python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
+```
+
+### 啟動 App
+
+啟動前端桌面應用：
+```bash
+cd frontend
+npm run start
 ```
 
 ### GPU 支援說明

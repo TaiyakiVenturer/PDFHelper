@@ -110,7 +110,7 @@ class RAGEngine:
                 verbose=self.verbose
             )
             if not self.llm_service.is_available():
-                raise ValueError("⚠️ Gemini服務不可用，請檢查設定")
+                logger.error("⚠️ Gemini服務不可用 (未設定API Key之前可忽略)")
         else:
             raise ValueError(f"不支援的LLM服務: {llm_service}")
 

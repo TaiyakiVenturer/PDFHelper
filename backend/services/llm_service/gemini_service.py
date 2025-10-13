@@ -28,6 +28,7 @@ class GeminiService():
             verbose: 是否啟用詳細模式 (預設為False)
         """
         print("[DEBUG] API Key:", api_key)
+        self.client = None
         self.model_name = model_name
         self.verbose = verbose
 
@@ -45,6 +46,8 @@ class GeminiService():
 
     def is_available(self, model_name: str = None) -> bool:
         """檢查Gemini服務是否可用"""
+        if not self.client:
+            logger.warning(f"服務未初始化, 還不可用")
         try:
             # 使用當前實例的模型名稱進行檢查，而非硬編碼模型名稱
             response = self.client.models.get(model=model_name or self.model_name)

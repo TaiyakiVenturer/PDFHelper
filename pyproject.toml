@@ -12,6 +12,8 @@ dependencies = [
     "chromadb>=1.0.20",
     "python-dotenv>=1.1.1",
     "mineru[core]>=2.5.2",
+    "flask>=3.1.2",
+    "flask-cors>=6.0.1",
 ]
 
 [tool.uv.sources]

@@ -28,9 +28,14 @@ class GeminiService():
             verbose: 是否啟用詳細模式 (預設為False)
         """
         print("[DEBUG] API Key:", api_key)
-        self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
         self.verbose = verbose
+
+        if self.update_config(api_key=api_key, model_name=model_name):
+            if self.verbose:
+                logger.info(f"Gemini服務使用模型: {self.model_name}")
+        else:
+            logger.error("Gemini服務初始化失敗, 請在輸入 API Key 和模型名稱後重試")
 
         self._in_multi_turn = False  # 是否處於多輪對話中
         self._chat_object = None     # 多輪對話物件

@@ -7,8 +7,22 @@ import json
 import sys
 from pathlib import Path
 
+def find_project_root(max_attempts: int = 5) -> Path:
+    current_dir = Path(__file__).resolve().parent
+    attempts = 0
+    while attempts < max_attempts:
+        backend_path = current_dir / 'backend'
+        frontend_path = current_dir / 'frontend'
+        if backend_path.is_dir() and frontend_path.is_dir():
+            return current_dir
+        if current_dir.parent == current_dir:
+            break
+        current_dir = current_dir.parent
+        attempts += 1
+    raise FileNotFoundError("找不到包含 'backend' 和 'frontend' 目錄的專案根目錄")
+
 # 🔧 自動修正 PYTHONPATH - 確保無論如何執行都能找到模組
-project_root = Path(__file__).resolve().parent.parent.parent
+project_root = find_project_root()
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
@@ -19,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # 現在可以安全地使用絕對導入
 from backend.api.pdf_helper import PDFHelper
-from backend.api.config import Config, MinerUConfig, TranslatorConfig, EmbeddingServiceConfig, RAGConfig
+from backend.api import Config, MinerUConfig, TranslatorConfig, EmbeddingServiceConfig, RAGConfig
 
 from backend.api import ProgressManager  # 導入進度管理器
 
@@ -39,6 +53,7 @@ current_progress = {
 # PDFHelper 實例
 pdf_helper = PDFHelper(
     config=Config(
+        instance_path=os.path.join(project_root, 'backend', 'instance'),
         mineru_config=MinerUConfig(verbose=True),
         translator_config=TranslatorConfig(verbose=True),
         embedding_service_config=EmbeddingServiceConfig(verbose=True),

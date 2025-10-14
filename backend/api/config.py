@@ -2,9 +2,25 @@
 PDFHelper Config 模塊 - 統一管理PDFHelper的設定選項。
 """
 import os
-from typing import Literal, List
+from typing import List
 from dataclasses import dataclass
 import json
+
+from pathlib import Path
+
+def find_project_root(max_attempts: int = 5) -> Path:
+    current_dir = Path(__file__).resolve().parent
+    attempts = 0
+    while attempts < max_attempts:
+        backend_path = current_dir / 'backend'
+        frontend_path = current_dir / 'frontend'
+        if backend_path.is_dir() and frontend_path.is_dir():
+            return current_dir
+        if current_dir.parent == current_dir:
+            break
+        current_dir = current_dir.parent
+        attempts += 1
+    raise FileNotFoundError("找不到包含 'backend' 和 'frontend' 目錄的專案根目錄")
 
 @dataclass
 class MinerUConfig:
@@ -121,7 +137,7 @@ class Config:
             rag_config (RAGConfig): RAG引擎設定 (可選)
         """
         # 所有文件統一的儲存路徑
-        self.instance_path: str = instance_path or os.path.abspath(os.path.join(os.path.dirname(__file__), "../instance"))
+        self.instance_path: str = instance_path or os.path.join(str(find_project_root()), "backend", "instance")
 
         self.mineru_config: MinerUConfig = mineru_config or MinerUConfig()
 

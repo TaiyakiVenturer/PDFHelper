@@ -1,4 +1,4 @@
-"""xAI 翻譯器 - 透過 xAI Grok API 進行翻譯"""
+"""ChatGPT 翻譯器 - 透過 OpenAI Chat Completions API 進行翻譯"""
 from __future__ import annotations
 
 import logging
@@ -7,25 +7,25 @@ from typing import Optional
 
 import requests
 
-from .translator_base import Translator
+from .translator import Translator
 
 logger = logging.getLogger(__name__)
 
 
-class XaiTranslator(Translator):
-    """使用 xAI Grok Chat Completions API 的翻譯器實作。"""
+class ChatGPTTranslator(Translator):
+    """使用 OpenAI Chat Completions API 的翻譯器實作。"""
 
     def __init__(
         self,
         instance_path: str,
-        model_name: str = "grok-beta",
+        model_name: str = "gpt-4o-mini",
         api_key: str = "",
         base_url: Optional[str] = None,
         verbose: bool = False,
     ) -> None:
         super().__init__(instance_path=instance_path, model_name=model_name, verbose=verbose)
-        self._api_key = api_key or os.getenv("XAI_API_KEY") or os.getenv("PDFHELPER_TRANSLATOR_KEY", "")
-        self._base_url = (base_url or os.getenv("XAI_BASE_URL") or "https://api.x.ai/v1").rstrip("/")
+        self._api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("PDFHELPER_TRANSLATOR_KEY", "")
+        self._base_url = (base_url or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
 
     def is_available(self) -> bool:
         return bool(self._api_key)
@@ -38,8 +38,8 @@ class XaiTranslator(Translator):
 
     def _system_prompt(self) -> str:
         return (
-            "You are a professional academic translator. Translate English technical content into Traditional Chinese, "
-            "preserving formulas, citations, and terminology consistency."
+            "You are an expert academic translator. Translate English academic content into Traditional Chinese, "
+            "keeping terminology consistent, preserving equations and citations, and responding with translation only."
         )
 
     def send_translate_request(self, prompt: str, end_chat: bool = False) -> Optional[str]:
@@ -69,11 +69,11 @@ class XaiTranslator(Translator):
             data = response.json()
             choices = data.get("choices") or []
             if not choices:
-                logger.error("xAI 回傳內容為空: %s", data)
+                logger.error("OpenAI 回傳內容為空: %s", data)
                 return ""
             content = (choices[0].get("message") or {}).get("content", "").strip()
             return content
         except requests.RequestException as exc:
-            logger.error("xAI 翻譯請求失敗: %s", exc)
+            logger.error("OpenAI 翻譯請求失敗: %s", exc)
             return ""
 

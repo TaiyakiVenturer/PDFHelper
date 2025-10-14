@@ -88,7 +88,10 @@ class ServerManager {
         let attempts = 0;
         while (attempts < maxAttempts) {
             const backendPath = path.join(currentDir, 'backend');
-            if (fs.existsSync(backendPath) && fs.lstatSync(backendPath).isDirectory())
+            const frontendPath = path.join(currentDir, 'frontend');
+            const isDirectory = (p) => fs.existsSync(p) && fs.lstatSync(p).isDirectory();
+            // 檢查 backend 和 frontend 目錄是否存在且為目錄
+            if (isDirectory(backendPath) && isDirectory(frontendPath))
                 return currentDir;
             // 測試是否已到達根目錄
             const parentDir = path.dirname(currentDir);

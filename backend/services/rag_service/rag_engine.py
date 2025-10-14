@@ -97,7 +97,7 @@ class RAGEngine:
         儲存單個文件到向量資料庫
         
         Args:
-            json_file_name: JSON檔案名稱 (必須是翻譯後的JSON文件)
+            json_file_name: Json檔案名稱含副檔名 (例如: `example_translated.json`)
 
         Returns:
             Tuple(success, collection_name): 

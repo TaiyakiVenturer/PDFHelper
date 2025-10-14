@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 class Translator():
     """
-    ### 翻譯器
+    ### 通用翻譯器
 
-    定義了翻譯器的基本接口和通用方法
+    使用指定的LLM服務進行文本翻譯。
     """
     def __init__(self, instance_path: str, llm_service_obj: BaseLLMService, verbose: bool = False):
         """

@@ -14,12 +14,11 @@ from backend.services.translation_service import Translator # 導入翻譯器
 from backend.services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine # 導入RAG引擎
 from backend.services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
 
+from backend.api.config import Config # 導入配置管理
 from backend.api import ProgressManager # 導入進度管理器
 
-from .config import Config # 導入配置管理
-
 import logging
-from .logger import setup_project_logger  # 導入日誌設置函數
+from backend.api.logger import setup_project_logger  # 導入日誌設置函數
 
 setup_project_logger(verbose=True)  # 設置全局日誌記錄器
 logger = logging.getLogger(__name__)
@@ -159,6 +158,63 @@ class PDFHelper:
         else:
             logger.error(f"不支援的LLM服務: {provider}, {model_name}")
 
+    def update_llm_service(self, 
+            service: Literal['translator', 'embedding', 'rag'], 
+            provider: Literal["ollama", "google", "openai"],
+            api_key: str, 
+            model_name: str
+        ) -> HelperResult:
+        """
+        更新API金鑰
+        
+        Args:
+            service: 要更新API金鑰的服務 (translator/embedding/rag)
+            api_key: 新的API金鑰
+            model_name: 模型名稱
+        
+        Returns:
+            HelperResult: 包含是否成功更新API金鑰的統一格式
+        """
+        logger.info(f"[update_llm_service] {service}, {provider}, {model_name}")
+        if service == "translator":
+            self.translator.llm_service = self._create_llm_service(
+                provider=provider, 
+                model_name=model_name, 
+                api_key=api_key,
+                verbose=self.translator.verbose
+            )
+            return HelperResult(
+                success=self.translator.llm_service.is_available(),
+                message="翻譯服務API金鑰更新成功" if self.translator.llm_service.is_available() else "翻譯服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+            )
+        elif service == "embedding":
+            self.rag_engine.embedding_service.llm_service = self._create_llm_service(
+                provider=provider, 
+                model_name=model_name, 
+                api_key=api_key,
+                verbose=self.rag_engine.embedding_service.verbose
+            )
+            return HelperResult(
+                success=self.rag_engine.embedding_service.llm_service.is_available(),
+                message="Embedding服務API金鑰更新成功" if self.rag_engine.embedding_service.llm_service.is_available() else "Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+            )
+        elif service == "rag":
+            self.rag_engine.llm_service = self._create_llm_service(
+                provider=provider, 
+                model_name=model_name, 
+                api_key=api_key,
+                verbose=self.rag_engine.verbose
+            )
+            return HelperResult(
+                success=self.rag_engine.llm_service.is_available(),
+                message="RAG服務API金鑰更新成功" if self.rag_engine.llm_service.is_available() else "RAG服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+            )
+        else:
+            return HelperResult(
+                success=False,
+                message="不支援的服務類型"
+            )
+
     def process_pdf_to_json(self, 
             pdf_name: str, 
             method: Literal["auto", "txt", "ocr"] = "auto", 
@@ -246,7 +302,7 @@ class PDFHelper:
         將JSON內容加入RAG引擎的向量資料庫
         
         Args:
-            json_name: JSON檔案名稱
+            json_name: Json檔案名稱含副檔名 (例如: `example_translated.json`)
         
         Returns:
             HelperResult: 包含是否成功加入向量資料庫的統一格式
@@ -444,60 +500,3 @@ class PDFHelper:
             message="系統健康狀態獲取完成",
             data=health_status
         )
-
-    def update_llm_service(self, 
-            service: Literal['translator', 'embedding', 'rag'], 
-            provider: Literal["ollama", "google", "openai"],
-            api_key: str, 
-            model_name: str
-        ) -> HelperResult:
-        """
-        更新API金鑰
-        
-        Args:
-            service: 要更新API金鑰的服務 (translator/embedding/rag)
-            api_key: 新的API金鑰
-            model_name: 模型名稱
-        
-        Returns:
-            HelperResult: 包含是否成功更新API金鑰的統一格式
-        """
-        logger.info(f"[update_llm_service] {service}, {provider}, {model_name}")
-        if service == "translator":
-            self.translator.llm_service = self._create_llm_service(
-                provider=provider, 
-                model_name=model_name, 
-                api_key=api_key,
-                verbose=self.translator.verbose
-            )
-            return HelperResult(
-                success=self.translator.llm_service.is_available(),
-                message="翻譯服務API金鑰更新成功" if self.translator.llm_service.is_available() else "翻譯服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
-            )
-        elif service == "embedding":
-            self.rag_engine.embedding_service.llm_service = self._create_llm_service(
-                provider=provider, 
-                model_name=model_name, 
-                api_key=api_key,
-                verbose=self.rag_engine.embedding_service.verbose
-            )
-            return HelperResult(
-                success=self.rag_engine.embedding_service.llm_service.is_available(),
-                message="Embedding服務API金鑰更新成功" if self.rag_engine.embedding_service.llm_service.is_available() else "Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
-            )
-        elif service == "rag":
-            self.rag_engine.llm_service = self._create_llm_service(
-                provider=provider, 
-                model_name=model_name, 
-                api_key=api_key,
-                verbose=self.rag_engine.verbose
-            )
-            return HelperResult(
-                success=self.rag_engine.llm_service.is_available(),
-                message="RAG服務API金鑰更新成功" if self.rag_engine.llm_service.is_available() else "RAG服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
-            )
-        else:
-            return HelperResult(
-                success=False,
-                message="不支援的服務類型"
-            )

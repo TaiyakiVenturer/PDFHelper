@@ -7,7 +7,7 @@ from typing import Optional
 
 import requests
 
-from .translator_base import Translator
+from .translator import Translator
 
 logger = logging.getLogger(__name__)
 

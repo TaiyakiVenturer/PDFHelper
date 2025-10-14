@@ -60,7 +60,7 @@ def get_installer():
     if shutil.which('uv'):
         return 'uv pip install --reinstall'
     else:
-        print("❌ 找不到 uv，請先安裝 uv (https://github.com/astral-sh/uv)")
+        print("❌ 找不到 uv，請先安裝 uv (pip install uv) 後再執行此腳本")
         sys.exit(1)
 
 def main():

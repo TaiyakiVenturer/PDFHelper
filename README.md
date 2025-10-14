@@ -134,26 +134,32 @@ npm run start
 
 - **作者**: [TaiyakiVenturer](https://github.com/TaiyakiVenturer)
 
-## � 專案結構
+## 📁 專案結構
 
 ```
 PDFHelper/
-├── backend/                 # Python 後端服務
-│   ├── api/                # Flask API 與核心邏輯
-│   └── services/           # PDF、翻譯、RAG 服務
-├── frontend/               # Electron 前端應用
-│   ├── modules/            # 編譯後的 TypeScript 模組
-│   ├── instance/           # 本地資料（設定、歷史記錄）
-│   └── scripts/            # ⚠️ 已棄用（保留供歷史參考）
-└── docs/                   # 專案文件
+├── backend/                # Python 後端服務
+│   ├── api/               # Flask API 與核心邏輯
+│   ├── services/          # 業務邏輯服務層（LLM、PDF、RAG、翻譯）
+│   ├── instance/          # 執行時資料（DB、PDF、翻譯結果等）
+│   └── tests/             # 單元測試
+├── frontend/              # Electron 桌面應用
+│   ├── modules/           # 前端模組與服務
+│   └── instance/          # 本地資料（設定、歷史記錄）
+├── archive/               # ⚠️ 已棄用的舊版實作
+├── docs/                  # 專案文件與開發筆記
+└── logs/                  # 系統日誌
 ```
 
 ### ⚠️ 重要說明
 
-**`frontend/scripts/` 資料夾已棄用**
-- 此資料夾包含早期的 Python 腳本實作（chat.py, processor.py 等）
-- 自 2025-10-13 起，所有功能已完全遷移至 Flask HTTP API
-- 保留此資料夾僅供歷史參考，請勿使用其中的腳本
+**關於 `archive/` 資料夾**
+- 包含早期開發階段的 Python 腳本和服務實作
+- **自 2025-10-13 起已完全棄用**，所有功能已遷移至：
+  - `backend/api/` - Flask RESTful API
+  - `backend/services/` - 模組化服務層
+- 保留此資料夾僅供歷史參考和學習用途
+- **請勿在生產環境中使用 archive 內的程式碼**
 - 詳見：[API 遷移說明](./docs/TODO.md#階段二統一api介面整合)
 
 ## 📋 TODO

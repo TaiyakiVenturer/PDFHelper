@@ -3,7 +3,7 @@ Gemini翻譯器 - 基於GeminiService進行文本翻譯
 """
 from typing import Optional
 
-from .translator_base import Translator
+from .translator import Translator
 from ..llm_service import BaseLLMService
 
 class GeminiTranslator(Translator):

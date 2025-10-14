@@ -4,7 +4,7 @@ from typing import Dict, Any, Literal
 import time
 
 import logging
-from backend.api import setup_project_logger  # 導入日誌設置函數
+from backend.api.logger import setup_project_logger  # 導入日誌設置函數
 
 setup_project_logger(verbose=True)  # 設置全局日誌記錄器
 logger = logging.getLogger(__name__)
@@ -150,7 +150,7 @@ class MinerUProcessor:
             # 收集所有輸出
             all_output = []
             if self.verbose:
-                logger.info(f"MinerU 輸出:")
+                logger.debug(f"MinerU 輸出:")
             
             while True:
                 output = process.stdout.readline()
@@ -159,7 +159,7 @@ class MinerUProcessor:
                 if output:
                     all_output.append(output.strip())
                     if self.verbose:
-                        logger.info(output.strip())  # 即時顯示
+                        logger.debug(output.strip())  # 即時顯示
             
             # 等待進程完成
             return_code = process.poll()

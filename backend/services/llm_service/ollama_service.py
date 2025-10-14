@@ -189,6 +189,7 @@ class OllamaService(BaseLLMService):
 
     def send_multi_request(self, 
             prompt: str, 
+            system_prompt: Optional[str] = None,
             end_chat: bool = False
         ) -> Optional[str]:
         """
@@ -222,7 +223,7 @@ class OllamaService(BaseLLMService):
                 logger.info("開始多輪對話")
 
         self._chat.append({"role": "user", "content": prompt})
-        response = self.send_single_request(prompt)
+        response = self.send_single_request(prompt, system_prompt=system_prompt, stream=False)
         if response is not None:
             self._chat.append({"role": "assistant", "content": response})
             return response

@@ -279,7 +279,7 @@ class PDFHelper:
             start = time.time()
             translated_file_path = self.translator.translate_content_list(
                 content_list_path=json_path,
-                buffer_time=0.3 if "Ollama" in self.translator.__class__.__name__ else 1.8,
+                buffer_time=1.8 if hasattr(self.translator.llm_service, 'api_key') else 0,
             )
             if self.verbose:
                 logger.info(f"JSON '{json_path}' 翻譯完成，輸出路徑: {translated_file_path}")
@@ -327,8 +327,7 @@ class PDFHelper:
     def from_pdf_to_rag(self, 
             pdf_name: str, 
             method: Literal["auto", "txt", "ocr"] = "auto", 
-            lang: str = "en",
-            device: Literal["cuda", "cpu"] = "cuda"
+            lang: str = "en"
         ) -> HelperResult:
         """
         完整工作流程：從PDF處理到加入RAG引擎
@@ -337,12 +336,14 @@ class PDFHelper:
             pdf_name: PDF檔案名稱
             method: 解析方法 (auto/txt/ocr)
             lang: 語言設定 (預設為英文en)
-            device: 設備模式 (cuda/cpu)
         
         Returns:
             HelperResult: 包含是否成功加入向量資料庫及加入資料庫集合名稱的統一格式
         """
-        logger.info(f"[from_pdf_to_rag 開始] is_processing={ProgressManager.get_state().get('is_processing')}")
+        from torch import cuda
+        device = "cuda" if cuda.is_available() else "cpu"
+
+        logger.info(f"[from_pdf_to_rag] 開始完整處理流程: {pdf_name}, 方法: {method}, 語言: {lang}, 設備: {device}")
         ProgressManager.progress_update(8, "準備處理提取PDF", "processing-pdf")
 
         # 提取PDF成JSON格式
@@ -444,6 +445,7 @@ class PDFHelper:
             if self.verbose:
                 logger.info("問題已提交至RAG引擎")
                 logger.info(f"處理時間: {time.time() - start:.2f} 秒")
+                logger.info(f"回答內容: {ask_results.answer}")
         else:
             logger.error("問題提交失敗，發生錯誤")
         return HelperResult(

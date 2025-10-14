@@ -368,8 +368,7 @@ ipcMain.handle('process:start', async (event, payload) => {
     const asyncResult = await apiClient.startFullProcessAsync(
       fileName,
       method,
-      "en",
-      "cuda"
+      "en"
     );
 
     if (!asyncResult.success)

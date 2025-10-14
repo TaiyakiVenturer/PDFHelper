@@ -87,8 +87,7 @@ def full_process_async_endpoint():
     pdf_name = data.get('pdf_name')
     method = data.get('method')
     lang = data.get('lang')
-    device = data.get('device')
-    logger.info(f"[full_process_async_endpoint] 收到請求: pdf_name={pdf_name}, method={method}, lang={lang}, device={device}")
+    logger.info(f"[full_process_async_endpoint] 收到請求: pdf_name={pdf_name}, method={method}, lang={lang}")
     logger.debug(json.dumps(pdf_helper.get_system_health().data, indent=2, ensure_ascii=False, sort_keys=True))  # 預先檢查系統健康狀態
 
     # 在這裡啟動一個新線程來處理請求
@@ -97,8 +96,7 @@ def full_process_async_endpoint():
         args=(
             pdf_name,
             method,
-            lang,
-            device
+            lang
         ),
         daemon=True
     ).start()

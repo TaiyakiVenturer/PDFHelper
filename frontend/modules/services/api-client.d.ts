@@ -62,7 +62,7 @@ declare class APIClient {
      * @returns Promise<{ success: boolean; message: string; }>
      * @note 此方法會觸發後端的非同步任務, 前端應定期調用 getProcessingProgress 以獲取進度
      */
-    startFullProcessAsync(pdf_name: string, method: "auto" | "txt" | "ocr", lang?: string, device?: "cuda" | "cpu"): Promise<{
+    startFullProcessAsync(pdf_name: string, method: "auto" | "txt" | "ocr", lang?: string): Promise<{
         success: boolean;
         message: string;
     }>;

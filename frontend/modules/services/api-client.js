@@ -163,7 +163,7 @@ class APIClient {
      * @returns Promise<{ success: boolean; message: string; }>
      * @note 此方法會觸發後端的非同步任務, 前端應定期調用 getProcessingProgress 以獲取進度
      */
-    async startFullProcessAsync(pdf_name, method, lang = "en", device = "cpu") {
+    async startFullProcessAsync(pdf_name, method, lang = "en") {
         return this.request(config_1.API_ENDPOINTS.FULL_PROCESS, {
             method: "POST",
             headers: {
@@ -172,8 +172,7 @@ class APIClient {
             body: JSON.stringify({
                 pdf_name: pdf_name,
                 method: method,
-                lang: lang,
-                device: device
+                lang: lang
             })
         });
     }

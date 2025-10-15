@@ -13,7 +13,7 @@ class APIClient {
         this.baseURL = config_1.API_CONFIG.BASE_URL;
         this.requestTimeout = config_1.API_CONFIG.TIMEOUT;
     }
-    async request(endpoint, options = {}) {
+    async request(endpoint, options = {}, showError = true) {
         // 創建超時控制器
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
@@ -40,7 +40,8 @@ class APIClient {
             return data;
         }
         catch (error) {
-            console.error("API request error:", error);
+            if (showError)
+                console.error("API request error:", error);
             // 確認error是Error類型 再檢查哪一種Error類型
             if (!(error instanceof Error))
                 throw new Error("Unknown error occurred");
@@ -149,10 +150,11 @@ class APIClient {
     }
     /**
      * 獲取系統健康狀態
+     * @param showError - 是否顯示錯誤訊息
      * @returns Promise<GetSystemHealthResult>
      */
-    async checkSystemHealth() {
-        return this.request(config_1.API_ENDPOINTS.SYSTEM_HEALTH, { method: "GET" });
+    async checkSystemHealth(showError = true) {
+        return this.request(config_1.API_ENDPOINTS.SYSTEM_HEALTH, { method: "GET" }, showError);
     }
     /**
      * 非同步完整處理流程 (上傳 PDF -> 處理 PDF -> 翻譯 JSON -> 加入 RAG)

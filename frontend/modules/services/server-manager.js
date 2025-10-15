@@ -156,7 +156,7 @@ class ServerManager {
             if (debug)
                 console.log(`[DEBUG] 等待伺服器就緒... (嘗試第 ${attempts} 次)`);
             try {
-                const respond = await api_client_js_1.apiClient.checkSystemHealth();
+                const respond = await api_client_js_1.apiClient.checkSystemHealth(false);
                 if (respond.success)
                     return true;
             }

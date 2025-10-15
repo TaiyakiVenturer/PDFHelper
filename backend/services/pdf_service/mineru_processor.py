@@ -1,6 +1,6 @@
 import os
 import subprocess
-from typing import Dict, Any, Literal
+from typing import Dict, Any, Literal, Tuple
 import time
 
 import logging
@@ -74,35 +74,16 @@ class MinerUProcessor:
         original_filename = os.path.splitext(pdf_name)[0]
         
         # 檢查完整路徑長度
-        test_path = os.path.join(output_path, original_filename, method, f"{original_filename}_layout.pdf")
+        test_path = os.path.join(output_path, original_filename, method, f"{original_filename}_content_list.json")
         
+        import re
         if len(test_path) > 250:  # 留一些緩衝空間
-            # 創建短檔名版本
-            import hashlib
-            hash_part = hashlib.md5(original_filename.encode()).hexdigest()[:8]
-            short_filename = f"doc_{hash_part}"
-            short_pdf_name = f"{short_filename}.pdf"
-            
-            logger.warning(f"路徑過長，創建短檔名副本:")
-            logger.warning(f"原檔名: {original_filename}")
-            logger.warning(f"短檔名: {short_filename}")
-
-            # 創建短檔名的 PDF 副本
-            import shutil
-            short_pdf_path = os.path.join(self.default_path, short_pdf_name)
-            shutil.copy2(original_pdf_path, short_pdf_path)
-            
-            # 使用短檔名處理
-            pdf_path = short_pdf_path
-            processing_filename = short_filename
-            
-            # 記錄映射關係，以便後續處理
-            self._filename_mapping = {
-                'original': original_filename,
-                'short': short_filename,
-                'short_pdf_path': short_pdf_path
-            }
-        else:
+            logger.warning(f"路徑過長，創建雜湊名稱副本:")
+            pdf_path, processing_filename = self._get_hashed_filename(original_filename, original_pdf_path)
+        elif not re.match(r"^[a-zA-Z0-9.-]+$", original_filename):  # original_filename != [a-zA-Z0-9.-]
+            logger.warning(f"檔案名稱出現非法字元，創建雜湊名稱副本:")
+            pdf_path, processing_filename = self._get_hashed_filename(original_filename, original_pdf_path)
+        else:   
             pdf_path = original_pdf_path
             processing_filename = original_filename
             self._filename_mapping = None
@@ -235,6 +216,34 @@ class MinerUProcessor:
                 "success": False,
                 "error": str(e)
             }
+
+    def _get_hashed_filename(self, original_filename: str, original_pdf_path: str) -> Tuple[str, str]:
+        """生成短檔名以避免路徑過長問題"""
+        # 創建短檔名版本
+        import hashlib
+        hash_part = hashlib.md5(original_filename.encode()).hexdigest()[:8]
+        short_filename = f"doc_{hash_part}"
+        short_pdf_name = f"{short_filename}.pdf"
+        
+        logger.warning(f"原檔名: {original_filename}")
+        logger.warning(f"短檔名: {short_filename}")
+
+        # 創建短檔名的 PDF 副本
+        import shutil
+        short_pdf_path = os.path.join(self.default_path, short_pdf_name)
+        shutil.copy2(original_pdf_path, short_pdf_path)
+        
+        # 使用短檔名處理
+        pdf_path = short_pdf_path
+        processing_filename = short_filename
+        
+        # 記錄映射關係，以便後續處理
+        self._filename_mapping = {
+            'original': original_filename,
+            'short': short_filename,
+            'short_pdf_path': short_pdf_path
+        }
+        return pdf_path, processing_filename
 
     def _find_generated_files(self, output_path: str, file_name: str, method: str) -> Dict[str, Any]:
         """在輸出目錄中尋找MinerU生成的檔案"""

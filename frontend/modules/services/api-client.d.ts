@@ -50,9 +50,10 @@ declare class APIClient {
     reconstructMarkdown(json_name: string, method: "auto" | "txt" | "ocr", lang: "zh" | "en"): Promise<ReconstructMarkdownResult>;
     /**
      * 獲取系統健康狀態
+     * @param showError - 是否顯示錯誤訊息
      * @returns Promise<GetSystemHealthResult>
      */
-    checkSystemHealth(): Promise<GetSystemHealthResult>;
+    checkSystemHealth(showError?: boolean): Promise<GetSystemHealthResult>;
     /**
      * 非同步完整處理流程 (上傳 PDF -> 處理 PDF -> 翻譯 JSON -> 加入 RAG)
      * @param pdf_name - PDF 檔案名稱

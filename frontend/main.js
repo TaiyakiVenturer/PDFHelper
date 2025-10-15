@@ -83,7 +83,7 @@ app.whenReady().then(async() => {
   console.log("[INFO] 正在啟動後端伺服器...");
 
   const started = await serverManager.startServer({
-    timeout: 40000,
+    timeout: 60000,
     debug: true
   });
   // 檢查是否啟動成功
@@ -657,7 +657,42 @@ ipcMain.handle('app:check-updates', () => {
   };
 });
 
-// IPC: 模型清單（真實 API 查詢）
+/**
+ * 統一的模型過濾函式
+ * @param {string[]} modelList - 原始模型列表
+ * @param {boolean} isEmbedding - 是否為 embedding 模型
+ * @param {RegExp} [includePattern] - 語言模型的包含條件 (可選)
+ * @param {RegExp} [excludePattern] - 額外的排除條件 (可選)
+ * @returns {string[]} 過濾後的模型列表
+ */
+function filter_models(modelList, isEmbedding, includePattern = null, excludePattern = null) {
+  return modelList.filter(model => {
+    const s = String(model).toLowerCase();
+    
+    if (isEmbedding) {
+      // Embedding 模型: 必須包含 embed/embedding,排除 whisper/tts/audio/image/vision/dall
+      const hasEmbed = /(embed|embedding)/.test(s);
+      const isExcluded = /(whisper|tts|audio|image|vision|dall)/.test(s);
+      return hasEmbed && !isExcluded;
+    } else {
+      // 語言模型: 檢查 include & exclude
+      const shouldInclude = includePattern ? includePattern.test(s) : true;
+      const baseExclude = /(embed|embedding|whisper|tts|audio|image|vision|dall|realtime|search)/.test(s);
+      const extraExclude = excludePattern ? excludePattern.test(s) : false;
+      return shouldInclude && !baseExclude && !extraExclude;
+    }
+  });
+}
+
+const companyNameMap = {
+  'ollama': 'Ollama',
+  'openai': 'OpenAI',
+  'google': 'Google',
+  'anthropic': 'Anthropic',
+  'xai': 'xAI'
+}
+
+// IPC: 模型清單 (真實 API 查詢)
 // 接受 company、可選的 apiKey 和 modelType 參數
 // modelType: 'language' (預設) 或 'embedding'
 ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType = 'language') => {
@@ -670,12 +705,27 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
     // 嘗試從 translator 讀取（預設情況）
     apiKey = settings.translator?.apiKey || settings.apiKey || '';
   }
-  
+  if (!apiKey && company != 'ollama') 
+    return { models: [], error: `缺少 API Key (${companyNameMap[company]})` };  // company = ollama -> Ollama
+
   const isEmbedding = modelType === 'embedding';
-  
   try {
-    if (company === 'openai') {
-      if (!apiKey) return { models: [], error: '缺少 API Key（OpenAI）' };
+    if (company === 'ollama') {
+      // Ollama 預設本機埠 http://localhost:11434/api/tags
+      try {
+        const res = await fetch('http://localhost:11434/api/tags');
+        if (!res.ok) return { models: [], error: '無法連線到 Ollama，請確認已安裝並啟動（11434）' };
+        const json = await res.json();
+        const rawModels = Array.isArray(json?.models) ? json.models.map(m => m.name).filter(Boolean) : [];
+        
+        // 使用統一過濾函式 (Ollama 不需要額外的 includePattern)
+        const models = filter_models(rawModels, isEmbedding);
+        return { models };
+      } catch (e) {
+        return { models: [], error: 'Ollama 未啟動或無法連線' };
+      }
+    }
+    else if (company === 'openai') {
       const res = await fetch('https://api.openai.com/v1/models', {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
@@ -688,59 +738,12 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
       const json = await res.json();
       const ids = Array.isArray(json?.data) ? json.data.map(m => m.id) : [];
       
-      let filtered;
-      if (isEmbedding) {
-        // Embedding 模型：只要包含 embedding 或 embed
-        filtered = ids.filter(id => {
-          const s = String(id).toLowerCase();
-          return /(embedding|embed)/.test(s) && !/whisper|tts|audio|image|vision|dall/.test(s);
-        });
-        const priority = ['text-embedding-3-large', 'text-embedding-3-small', 'text-embedding-ada-002'];
-        filtered.sort((a,b)=>{
-          const ia = priority.findIndex(p=>a.includes(p));
-          const ib = priority.findIndex(p=>b.includes(p));
-          return (ia===-1?999:ia)-(ib===-1?999:ib) || a.localeCompare(b);
-        });
-      } else {
-        // 語言模型：排除 embedding、image、audio 等
-        filtered = ids.filter(id => {
-          const s = String(id).toLowerCase();
-          const include = /(gpt|^o[34]|chatgpt|davinci)/.test(s);
-          const exclude = /(embedding|embed|whisper|tts|audio|image|vision|dall|instruct)/.test(s);
-          return include && !exclude;
-        });
-        const priority = ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'o4', 'o3'];
-        filtered.sort((a,b)=>{
-          const ia = priority.findIndex(p=>a.includes(p));
-          const ib = priority.findIndex(p=>b.includes(p));
-          return (ia===-1?999:ia)-(ib===-1?999:ib) || a.localeCompare(b);
-        });
-      }
-      return { models: filtered };
+      // 使用統一過濾函式
+      const includePattern = /(gpt|^o[34]|chatgpt|davinci)/;
+      const models = filter_models(ids, isEmbedding, includePattern);
+      return { models };
     }
-    if (company === 'ollama') {
-      // Ollama 預設本機埠 http://localhost:11434/api/tags
-      try {
-        const res = await fetch('http://localhost:11434/api/tags');
-        if (!res.ok) return { models: [], error: '無法連線到 Ollama，請確認已安裝並啟動（11434）' };
-        const json = await res.json();
-        const models = Array.isArray(json?.models) ? json.models.map(m => m.name).filter(Boolean) : [];
-        
-        let filtered;
-        if (isEmbedding) {
-          // Embedding 模型
-          filtered = models.filter(n => /embed/i.test(n));
-        } else {
-          // 語言模型
-          filtered = models.filter(n => !/embed|vision|image|audio/i.test(n));
-        }
-        return { models: filtered };
-      } catch (e) {
-        return { models: [], error: 'Ollama 未啟動或無法連線' };
-      }
-    }
-    if (company === 'google') {
-      if (!apiKey) return { models: [], error: '缺少 API Key（Google）' };
+    else if (company === 'google') {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
       if (!res.ok) {
         let msg = `Google 錯誤 ${res.status}`;
@@ -748,84 +751,22 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
         return { models: [], error: msg };
       }
       const json = await res.json();
-      const models = Array.isArray(json?.models) ? json.models : [];
+      const allModels = Array.isArray(json?.models) ? json.models : [];
       
-      let list;
-      if (isEmbedding) {
-        // Embedding 模型：支援 embedContent 方法
-        list = models
-          .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.some(x => /embed/i.test(x)))
-          .map(m => String(m.name || m.displayName || ''))
-          .filter(Boolean)
-          .map(name => name.replace(/^models\//, ''))
-          .filter(n => /embed/i.test(n));
-        const priority = ['text-embedding-004', 'embedding-001'];
-        list.sort((a,b)=>{
-          const ia = priority.findIndex(p=>a.includes(p));
-          const ib = priority.findIndex(p=>b.includes(p));
-          return (ia===-1?999:ia)-(ib===-1?999:ib) || a.localeCompare(b);
-        });
-      } else {
-        // 語言模型：支援 generateContent 方法，排除 embedding、vision、audio、image 等
-        list = models
-          .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.some(x => /generate/i.test(x)))
-          .map(m => String(m.name || m.displayName || ''))
-          .filter(Boolean)
-          .map(name => name.replace(/^models\//, ''))
-          .filter(n => {
-            const s = n.toLowerCase();
-            const include = /gemini/.test(s);
-            const exclude = /(embed|embedding|vision|audio|image|instruct)/.test(s);
-            return include && !exclude;
-          });
-        const priority = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
-        list.sort((a,b)=>{
-          const ia = priority.findIndex(p=>a.includes(p));
-          const ib = priority.findIndex(p=>b.includes(p));
-          return (ia===-1?999:ia)-(ib===-1?999:ib) || a.localeCompare(b);
-        });
-      }
-      return { models: list };
-    }
-    if (company === 'xai') {
-      if (!apiKey) return { models: [], error: '缺少 API Key（xAI）' };
-      const res = await fetch('https://api.x.ai/v1/models', {
-        headers: { Authorization: `Bearer ${apiKey}` }
-      });
-      if (!res.ok) {
-        let msg = `xAI 錯誤 ${res.status}`;
-        if (res.status === 401) msg = 'xAI：API Key 無效或未授權 (401)';
-        return { models: [], error: msg };
-      }
-      const json = await res.json();
-      const ids = Array.isArray(json?.data) ? json.data.map(m => m.id) : [];
+      // Google 特殊處理: 先根據 supportedGenerationMethods 篩選
+      const methodFilter = isEmbedding ? /embed/i : /generate/i;
+      const rawModels = allModels
+        .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.some(x => methodFilter.test(x)))
+        .map(m => String(m.name || m.displayName || ''))
+        .filter(Boolean)
+        .map(name => name.replace(/^models\//, ''));
       
-      let filtered;
-      if (isEmbedding) {
-        // xAI 的 embedding 模型（如果有的話）
-        filtered = ids.filter(id => {
-          const s = String(id).toLowerCase();
-          return /(embed|embedding)/.test(s);
-        });
-      } else {
-        // 語言模型
-        filtered = ids.filter(id => {
-          const s = String(id).toLowerCase();
-          const include = /(grok|xai)/.test(s);
-          const exclude = /(embed|embedding|audio|image|vision)/.test(s);
-          return include && !exclude;
-        });
-      }
-      const priority = isEmbedding ? [] : ['grok-2', 'grok-2-mini'];
-      filtered.sort((a,b)=>{
-        const ia = priority.findIndex(p=>a.includes(p));
-        const ib = priority.findIndex(p=>b.includes(p));
-        return (ia===-1?999:ia)-(ib===-1?999:ib) || a.localeCompare(b);
-      });
-      return { models: filtered };
+      // 使用統一過濾函式
+      const includePattern = /gemini/;
+      const models = filter_models(rawModels, isEmbedding, includePattern);
+      return { models };
     }
-    if (company === 'anthropic') {
-      if (!apiKey) return { models: [], error: '缺少 API Key（Anthropic）' };
+    else if (company === 'anthropic') {
       const res = await fetch('https://api.anthropic.com/v1/models', {
         headers: {
           'x-api-key': apiKey,
@@ -840,29 +781,27 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
       const json = await res.json();
       const ids = Array.isArray(json?.data) ? json.data.map(m => m.id) : [];
       
-      let filtered;
-      if (isEmbedding) {
-        // Anthropic 的 embedding 模型（如果有的話）
-        filtered = ids.filter(id => {
-          const s = String(id).toLowerCase();
-          return /(embed|embedding)/.test(s);
-        });
-      } else {
-        // 語言模型
-        filtered = ids.filter(id => {
-          const s = String(id).toLowerCase();
-          const include = /claude/.test(s);
-          const exclude = /(embed|embedding|audio|image|vision)/.test(s);
-          return include && !exclude;
-        });
-      }
-      const priority = isEmbedding ? [] : ['claude-3-5-sonnet', 'claude-3-5-haiku', 'claude-3-opus'];
-      filtered.sort((a,b)=>{
-        const ia = priority.findIndex(p=>a.includes(p));
-        const ib = priority.findIndex(p=>b.includes(p));
-        return (ia===-1?999:ia)-(ib===-1?999:ib) || a.localeCompare(b);
+      // 使用統一過濾函式
+      const includePattern = /claude/;
+      const models = filter_models(ids, isEmbedding, includePattern);
+      return { models };
+    }
+    else if (company === 'xai') {
+      const res = await fetch('https://api.x.ai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` }
       });
-      return { models: filtered };
+      if (!res.ok) {
+        let msg = `xAI 錯誤 ${res.status}`;
+        if (res.status === 401) msg = 'xAI：API Key 無效或未授權 (401)';
+        return { models: [], error: msg };
+      }
+      const json = await res.json();
+      const ids = Array.isArray(json?.data) ? json.data.map(m => m.id) : [];
+      
+      // 使用統一過濾函式
+      const includePattern = /(grok|xai)/;
+      const models = filter_models(ids, isEmbedding, includePattern);
+      return { models };
     }
   } catch (err) {
     console.error('取得模型清單失敗:', err);

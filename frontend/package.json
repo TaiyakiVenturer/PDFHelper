@@ -4,12 +4,58 @@
   "description": "顯示文字的簡易 Electron App",
   "main": "main.js",
   "scripts": {
-    "start": "chcp 65001 >NUL && electron ."
+    "start": "chcp 65001 >NUL && electron .",
+    "pack": "chcp 65001 >NUL && electron-packager . PDFHelper --platform=win32 --arch=x64 --out=dist --overwrite",
+    "prepare-python": "chcp 65001 >NUL && scripts\\build-python-env.cmd",
+  "dist": "chcp 65001 >NUL && electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^38.1.2"
+    "electron": "^38.1.2",
+    "electron-packager": "^17.1.2",
+    "electron-builder": "^24.13.3"
   },
   "dependencies": {
     "marked": "^12.0.2"
+  },
+  "build": {
+    "appId": "com.pdfhelper.desktop",
+    "productName": "PDFHelper",
+    "compression": "maximum",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "!dist/**/*",
+      "!**/*.map",
+      "!python-env/**/*",
+      "!logs/**/*",
+      "!backend/instance/chroma_db/**/*",
+      "!backend/instance/mineru_outputs/**/*",
+      "!backend/instance/pdfs/**/*",
+      "!backend/instance/reconstructed_files/**/*",
+      "!backend/instance/translated_files/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend"
+      },
+      {
+        "from": "../requirements.txt",
+        "to": "requirements.txt"
+      },
+      {
+        "from": "scripts/setup-python.cmd",
+        "to": "scripts/setup-python.cmd"
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
+      "artifactName": "PDFHelper-Setup-${version}.${ext}"
+    }
   }
 }

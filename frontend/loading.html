@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDFHelper 啟動中</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(120% 100% at 50% 0%, #1d273b 0%, #0b1120 65%, #05070f 100%);
+        color: #e2e8f0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          'Microsoft JhengHei', 'Noto Sans TC', arial, sans-serif;
+        position: relative;
+        overflow: hidden;
+      }
+      body::before {
+        content: '';
+        position: absolute;
+        inset: -40% -20% auto -20%;
+        height: 60%;
+        background: radial-gradient(circle, rgba(14,165,233,0.18) 0%, rgba(14,165,233,0) 65%);
+        filter: blur(0px);
+        opacity: 0.8;
+        animation: floatGlow 6s ease-in-out infinite alternate;
+      }
+      @keyframes floatGlow {
+        from { transform: translateY(-8px); opacity: 0.72; }
+        to { transform: translateY(14px); opacity: 0.88; }
+      }
+      .splash {
+        position: relative;
+        width: clamp(340px, 50vw, 440px);
+        min-height: 280px;
+        padding: 36px 32px 34px;
+        border-radius: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+        background: rgba(7, 14, 24, 0.92);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        box-shadow: 0 34px 70px rgba(2, 132, 199, 0.28);
+        backdrop-filter: blur(14px);
+        transition: border-color 180ms ease, color 180ms ease;
+      }
+      .splash::before {
+        content: '';
+        position: absolute;
+        inset: 4px;
+        border-radius: 20px;
+        background: linear-gradient(145deg, rgba(14,165,233,0.16), rgba(2,132,199,0.02));
+        opacity: 0.85;
+        pointer-events: none;
+      }
+      .splash[data-state="error"] { color: #fca5a5; border-color: rgba(248,113,113,0.55); }
+      .splash[data-state="error"]::before { background: linear-gradient(145deg, rgba(248,113,113,0.22), rgba(252,165,165,0)); }
+      .splash[data-state="success"] { color: #6ee7b7; border-color: rgba(45,212,191,0.6); }
+      .splash[data-state="success"]::before { background: linear-gradient(145deg, rgba(16,185,129,0.22), rgba(134,239,172,0)); }
+      .splash[data-state="info"] { color: #e2e8f0; }
+      .splash h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: inherit;
+        z-index: 1;
+      }
+      .splash p {
+        margin: 0;
+        text-align: center;
+        font-size: 16px;
+        line-height: 1.5;
+        color: inherit;
+        z-index: 1;
+        max-width: 320px;
+      }
+      .brand-mark {
+        position: relative;
+        width: 80px;
+        height: 80px;
+        display: grid;
+        place-items: center;
+        z-index: 1;
+      }
+      .orbit {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        animation: orbit 12s linear infinite;
+      }
+      .orbit::after {
+        content: '';
+        position: absolute;
+        top: -4px;
+        left: 50%;
+        width: 8px;
+        height: 8px;
+        margin-left: -4px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #38bdf8, #22d3ee);
+        box-shadow: 0 0 12px rgba(34, 211, 238, 0.6);
+      }
+      .glyph {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        border-radius: 18px;
+        background: linear-gradient(160deg, rgba(2,132,199,0.18), rgba(14,165,233,0.08));
+        display: grid;
+        place-items: center;
+        box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.18);
+      }
+      .glyph span {
+        display: inline-block;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #38bdf8;
+        text-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+      }
+      @keyframes orbit {
+        to { transform: rotate(360deg); }
+      }
+      .footnote {
+        font-size: 12px;
+        letter-spacing: 0.05em;
+        color: rgba(148, 163, 184, 0.7);
+        z-index: 1;
+      }
+      .pulse-bar {
+        position: absolute;
+        inset: auto 36px 24px 36px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.22);
+        overflow: hidden;
+        z-index: 1;
+      }
+      .pulse-bar::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(34,197,94,0), rgba(34,197,94,0.8), rgba(34,197,94,0));
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0% { transform: translateX(-100%); opacity: 0.2; }
+        50% { opacity: 1; }
+        100% { transform: translateX(100%); opacity: 0.2; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash" data-state="info">
+      <div class="brand-mark" aria-hidden="true">
+        <div class="orbit"></div>
+        <div class="glyph"><span>PH</span></div>
+      </div>
+      <h1>PDFHelper</h1>
+      <p id="statusText">正在啟動後端服務...</p>
+      <span class="footnote">首次啟動可能需要一點時間</span>
+      <div class="pulse-bar" aria-hidden="true"></div>
+    </div>
+    <script>
+      (function () {
+        const statusEl = document.getElementById('statusText');
+        const splash = document.querySelector('.splash');
+        if (!window.electronAPI || typeof window.electronAPI.onStartupStatus !== 'function') return;
+        window.electronAPI.onStartupStatus((payload) => {
+          if (!payload) return;
+          if (payload.message) statusEl.textContent = payload.message;
+          if (payload.state) splash.dataset.state = payload.state;
+        });
+      })();
+    </script>
+  </body>
+</html>

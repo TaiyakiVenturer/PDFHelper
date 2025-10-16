@@ -135,6 +135,8 @@ const noteComposerContext = document.getElementById('noteComposerContext');
 const btnNoteSave = document.getElementById('btnNoteSave');
 const btnNoteCancel = document.getElementById('btnNoteCancel');
 const suggestedQuestionsEl = document.getElementById('suggestedQuestions');
+const suggestionContainerEl = document.getElementById('suggestionContainer');
+const btnToggleSuggestions = document.getElementById('btnToggleSuggestions');
 const btnChatNew = document.getElementById('btnChatNew');
 const btnChatHistory = document.getElementById('btnChatHistory');
 const btnChatHistoryClose = document.getElementById('btnChatHistoryClose');
@@ -278,6 +280,7 @@ const STORAGE_KEYS = {
   notes: 'pdfhelper.reader.notes',
   annotations: 'pdfhelper.reader.annotations',
   readerPrefs: 'pdfhelper.reader.preferences',
+  chatPrefs: 'pdfhelper.chat.preferences',
   chatHistory: 'pdfhelper.chat.history'
 };
 const tocState = { items: [], activeId: null };
@@ -291,6 +294,8 @@ if (typeof readerPrefs.tocVisible !== 'boolean') {
   readerPrefs.tocVisible = false;
   persistToStorage(STORAGE_KEYS.readerPrefs, readerPrefs);
 }
+const chatPrefs = loadFromStorage(STORAGE_KEYS.chatPrefs, { suggestionsCollapsed: false });
+const processedDocsState = { items: [], loading: false };
 const referenceTrail = [];
 const selectionState = { range: null, text: '', headingId: null, fromSecondary: false, highlightId: null };
 const noteComposerState = { editingId: null, headingId: null, snippet: '' };
@@ -1705,6 +1710,7 @@ window.electronAPI?.onProcessEvent?.((evt) => {
     if (resultView) resultView.style.display = 'block';
     activeSessionId = null;
     processingStartTime = null;
+    refreshProcessedDocs();
     
   } else if (evt.type === 'log') {
     // 處理來自後端的實時日誌
@@ -1760,6 +1766,38 @@ const voiceState = {
   listening: false,
   utterance: null
 };
+
+function persistChatPrefs() {
+  persistToStorage(STORAGE_KEYS.chatPrefs, chatPrefs);
+}
+
+function applySuggestionsVisibility() {
+  const collapsed = Boolean(chatPrefs.suggestionsCollapsed);
+  suggestionContainerEl?.classList.toggle('collapsed', collapsed);
+  if (suggestedQuestionsEl) {
+    if (collapsed) {
+      suggestedQuestionsEl.setAttribute('aria-hidden', 'true');
+    } else {
+      suggestedQuestionsEl.removeAttribute('aria-hidden');
+    }
+  }
+  if (btnToggleSuggestions) {
+    btnToggleSuggestions.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    btnToggleSuggestions.textContent = collapsed ? '▸' : '▾';
+    btnToggleSuggestions.title = collapsed ? '顯示推薦問題' : '隱藏推薦問題';
+  }
+}
+
+function setSuggestionsCollapsed(collapsed) {
+  chatPrefs.suggestionsCollapsed = Boolean(collapsed);
+  persistChatPrefs();
+  applySuggestionsVisibility();
+}
+
+function autoCollapseSuggestions() {
+  if (chatPrefs.suggestionsCollapsed) return;
+  setSuggestionsCollapsed(true);
+}
 
 function renderChat() {
   if (!chatListEl) return;
@@ -2038,12 +2076,17 @@ function refreshSuggestedQuestions() {
 }
 
 function renderSuggestedQuestions() {
-  if (!suggestedQuestionsEl) return;
+  if (!suggestedQuestionsEl) {
+    applySuggestionsVisibility();
+    return;
+  }
   if (!chatState.suggestions.length) {
     suggestedQuestionsEl.innerHTML = '<div class="muted" style="font-size:12px;">尚無建議問題</div>';
+    applySuggestionsVisibility();
     return;
   }
   suggestedQuestionsEl.innerHTML = chatState.suggestions.map(text => `<button class="suggestion-item" type="button" data-suggestion="${escapeHtml(text)}">${escapeHtml(text)}</button>`).join('');
+  applySuggestionsVisibility();
 }
 
 function enqueueChatQuestion(text, autoSend = false) {
@@ -2135,8 +2178,12 @@ async function sendChat() {
   const text = chatInputEl.value.trim();
   if (!text) return;
   const conv = ensureActiveConversation();
+  const hadUserMessage = conv?.messages?.some(m => m.role === 'user');
   const userMessage = { role: 'user', content: text };
   conv.messages.push(userMessage);
+  if (!hadUserMessage && !chatPrefs.suggestionsCollapsed) {
+    autoCollapseSuggestions();
+  }
   updateConversationMetadata();
   renderChat();
   chatInputEl.value = '';
@@ -2368,6 +2415,10 @@ noteListEl?.addEventListener('click', (event) => {
 
 btnChatNew?.addEventListener('click', () => startNewConversation());
 
+btnToggleSuggestions?.addEventListener('click', () => {
+  setSuggestionsCollapsed(!chatPrefs.suggestionsCollapsed);
+});
+
 suggestedQuestionsEl?.addEventListener('click', (event) => {
   const btn = event.target.closest('button[data-suggestion]');
   if (!btn) return;
@@ -2416,6 +2467,7 @@ btnVoiceOutput?.addEventListener('click', speakLastAssistantMessage);
 
 ensureActiveConversation();
 renderChat();
+applySuggestionsVisibility();
 refreshSuggestedQuestions();
 renderChatHistoryList();
 ensureReaderContainers();
@@ -2458,53 +2510,206 @@ btnAskSelection?.addEventListener('click', queueQuestionFromSelection);
 renderBookmarks();
 renderNotes();
 
-// 歷史按鈕（打開簡易歷史視窗）
+// 歷史按鈕（已處理文件檢視）
 const btnHistory = document.getElementById('btnHistory');
 const historyBackdrop = document.getElementById('historyBackdrop');
 const btnHistoryClose = document.getElementById('btnHistoryClose');
 const btnHistoryClose2 = document.getElementById('btnHistoryClose2');
 const btnHistoryClear = document.getElementById('btnHistoryClear');
-const historyList = document.getElementById('historyList');
+const historyListEl = document.getElementById('historyList');
 
-async function renderHistory() {
-  const list = await window.electronAPI?.historyList?.();
-  if (!historyList) return;
-  const items = (Array.isArray(list) ? list : []).map(r => {
-    const dt = new Date(r.updatedAt || r.createdAt || Date.now());
-    const status = r.done ? '完成' : (r.error ? '錯誤' : (r.lastStatus || '進行中'));
-    return `<div style="padding:8px 10px; border-bottom:1px solid var(--border);">
-      <div style="display:flex; justify-content:space-between; gap:8px;">
-        <div style="font-weight:600;">${r.filePath || '(無檔名)'} <span class="muted" style="font-weight:400;">${r.company || ''}/${r.model || ''}</span></div>
-        <div class="muted">${dt.toLocaleString()}</div>
-      </div>
-      <div class="muted" style="margin-top:4px;">${status}</div>
+function normalizeProcessedDoc(item, index) {
+  const id = item?.id || item?.documentId || item?.sessionId || item?.collectionName || `doc-${index}`;
+  const filePath = item?.filePath || item?.path || '';
+  const title = item?.title || item?.displayName || (filePath ? pathBasename(filePath) : '') || item?.name || `文件 ${index + 1}`;
+  const updatedAt = item?.updatedAt || item?.finishedAt || item?.completedAt || item?.createdAt || item?.timestamp || null;
+  const translator = item?.translator || item?.company || '';
+  const model = item?.model || item?.translatorModel || '';
+  const status = item?.status || (item?.error ? '錯誤' : (item?.done ? '完成' : ''));
+  const language = item?.lang || item?.language || '';
+  const collection = item?.collection || item?.collectionName || '';
+  return { id, title, filePath, updatedAt, translator, model, status, language, collection, raw: item };
+}
+
+function formatDocTime(value) {
+  if (!value) return '';
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString();
+  } catch {
+    return '';
+  }
+}
+
+function renderProcessedDocs() {
+  if (!historyListEl) return;
+  if (processedDocsState.loading) {
+    historyListEl.innerHTML = '<div class="doc-history-empty">正在載入…</div>';
+    return;
+  }
+  if (!processedDocsState.items.length) {
+    historyListEl.innerHTML = '<div class="doc-history-empty">尚無已處理文件</div>';
+    return;
+  }
+  const html = processedDocsState.items.map(doc => {
+    const metaParts = [];
+    const time = formatDocTime(doc.updatedAt);
+    if (time) metaParts.push(`<span>🕒 ${escapeHtml(time)}</span>`);
+    if (doc.status) metaParts.push(`<span>狀態：${escapeHtml(doc.status)}</span>`);
+    const modelLabel = [doc.translator, doc.model].filter(Boolean).join(' / ');
+    if (modelLabel) metaParts.push(`<span>模型：${escapeHtml(modelLabel)}</span>`);
+    if (doc.language) metaParts.push(`<span>語言：${escapeHtml(doc.language)}</span>`);
+    if (doc.collection) metaParts.push(`<span>集合：${escapeHtml(doc.collection)}</span>`);
+    const metaHtml = metaParts.length ? `<div class="doc-history-meta">${metaParts.join('<span>•</span>')}</div>` : '';
+    return `<div class="doc-history-item" role="button" tabindex="0" data-id="${escapeHtml(doc.id)}">
+      <div class="doc-history-title">${escapeHtml(doc.title)}</div>
+      ${metaHtml}
+      <button class="doc-history-remove" type="button" data-action="remove" title="移除此文件">×</button>
     </div>`;
   }).join('');
-  historyList.innerHTML = items || '<div class="muted">尚無歷程</div>';
+  historyListEl.innerHTML = html;
+}
+
+async function refreshProcessedDocs() {
+  processedDocsState.loading = true;
+  renderProcessedDocs();
+  try {
+    const res = await window.electronAPI?.processedList?.();
+    if (res?.ok === false) {
+      processedDocsState.items = [];
+      if (res?.error) showToast(res.error, 'warning', 2600);
+    } else {
+      const source = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+      processedDocsState.items = source.map((item, index) => normalizeProcessedDoc(item, index));
+    }
+  } catch (err) {
+    console.error('載入已處理文件列表失敗:', err);
+    processedDocsState.items = [];
+    showToast('無法載入已處理文件清單', 'error', 2200);
+  } finally {
+    processedDocsState.loading = false;
+    renderProcessedDocs();
+  }
+}
+
+function applyHistoricalDocument(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  const mdPrimary = typeof payload.markdown === 'string' ? payload.markdown : '';
+  const mdZh = typeof payload.zh === 'string' ? payload.zh : (typeof payload.contentZh === 'string' ? payload.contentZh : '');
+  const mdEn = typeof payload.en === 'string' ? payload.en : (typeof payload.contentEn === 'string' ? payload.contentEn : '');
+  if (!mdPrimary && !mdZh && !mdEn) return false;
+  if (mdZh) resultState.zh = mdZh;
+  if (mdEn) resultState.en = mdEn;
+  if (mdPrimary || mdZh || mdEn) resultState.markdown = mdPrimary || mdEn || mdZh || resultState.markdown;
+  resultState.meta = payload.meta || payload.metadata || payload.info || resultState.meta;
+  if (payload.lang) resultState.lang = payload.lang;
+  clearSelection();
+  renderMarkdown();
+  if (wrapUpload) wrapUpload.style.display = 'none';
+  if (processingView) processingView.style.display = 'none';
+  if (resultView) resultView.style.display = 'block';
+  return true;
+}
+
+async function openProcessedDocumentById(id) {
+  if (!id) return;
+  const fallbackEntry = processedDocsState.items.find(doc => doc.id === id);
+  try {
+    const res = await window.electronAPI?.loadProcessedDoc?.(id);
+    let doc = null;
+    if (res?.ok === false) {
+      if (res?.error) showToast(res.error, 'warning', 2400);
+    } else if (res) {
+      doc = res.document || res.data || res.payload || res;
+    }
+    if (!doc && fallbackEntry?.raw) {
+      doc = fallbackEntry.raw;
+    }
+    if (doc && applyHistoricalDocument(doc)) {
+      closeHistory();
+      showToast('已載入歷程文件', 'success', 1400);
+    } else {
+      showToast('尚未取得已處理文件內容', 'warning', 2000);
+    }
+  } catch (err) {
+    console.error('載入歷程文件失敗:', err);
+    showToast('載入歷程文件時發生錯誤', 'error', 2200);
+  }
+}
+
+async function removeProcessedDocumentById(id) {
+  if (!id) return;
+  if (!window.confirm('確定要移除此文件記錄嗎？')) return;
+  try {
+    const res = await window.electronAPI?.removeProcessedDoc?.(id);
+    if (!res) {
+      showToast('尚未設定刪除接口', 'warning', 2200);
+      return;
+    }
+    if (res.ok === false) {
+      showToast(res.error || '無法移除文件', 'error', 2200);
+      return;
+    }
+    showToast('已移除文件記錄', 'success', 1400);
+    await refreshProcessedDocs();
+  } catch (err) {
+    console.error('移除歷程文件失敗:', err);
+    showToast('移除歷程文件時發生錯誤', 'error', 2200);
+  }
 }
 
 function openHistory() {
   if (!historyBackdrop) return;
-  renderHistory();
+  processedDocsState.loading = true;
+  renderProcessedDocs();
   historyBackdrop.style.display = 'flex';
-  requestAnimationFrame(()=>historyBackdrop.classList.add('show'));
-  const modal = historyBackdrop.querySelector('.modal');
-  modal?.classList.add('open');
+  requestAnimationFrame(() => {
+    historyBackdrop.classList.add('show');
+    historyBackdrop.querySelector('.modal')?.classList.add('open');
+  });
+  refreshProcessedDocs();
 }
+
 function closeHistory() {
   if (!historyBackdrop) return;
   historyBackdrop.classList.remove('show');
-  const modal = historyBackdrop.querySelector('.modal');
-  modal?.classList.remove('open');
-  setTimeout(()=>{ historyBackdrop.style.display = 'none'; }, 180);
+  historyBackdrop.querySelector('.modal')?.classList.remove('open');
+  setTimeout(() => { historyBackdrop.style.display = 'none'; }, 180);
 }
 
 btnHistory?.addEventListener('click', openHistory);
 btnHistoryClose?.addEventListener('click', closeHistory);
 btnHistoryClose2?.addEventListener('click', closeHistory);
 btnHistoryClear?.addEventListener('click', async () => {
-  await window.electronAPI?.historyClear?.();
-  renderHistory();
+  const cleared = await window.electronAPI?.historyClear?.();
+  if (cleared) {
+    showToast('已清除歷程記錄', 'info', 1600);
+  }
+  await refreshProcessedDocs();
+});
+
+historyListEl?.addEventListener('click', (event) => {
+  const removeBtn = event.target.closest('.doc-history-remove');
+  if (removeBtn) {
+    event.stopPropagation();
+    const id = removeBtn.closest('.doc-history-item')?.getAttribute('data-id');
+    removeProcessedDocumentById(id);
+    return;
+  }
+  const item = event.target.closest('.doc-history-item');
+  if (!item) return;
+  const id = item.getAttribute('data-id');
+  openProcessedDocumentById(id);
+});
+
+historyListEl?.addEventListener('keydown', (event) => {
+  if (!['Enter', ' '].includes(event.key)) return;
+  const item = event.target.closest('.doc-history-item');
+  if (!item) return;
+  event.preventDefault();
+  const id = item.getAttribute('data-id');
+  openProcessedDocumentById(id);
 });
 
 
@@ -2596,6 +2801,28 @@ const ragElements = {
   modelType: 'language' // RAG 使用語言模型
 };
 
+// 模型列表快取，避免每次開啟設定都重新向後端取資料
+const MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 分鐘
+const modelCache = new Map(); // key => { timestamp, items, error }
+
+async function getCachedModels(company, apiKey, modelType) {
+  const cacheKey = `${modelType}:${company || ''}:${apiKey || ''}`;
+  const now = Date.now();
+  const cached = modelCache.get(cacheKey);
+  if (cached && (now - cached.timestamp) < MODEL_CACHE_TTL) {
+    return cached;
+  }
+
+  const res = await window.electronAPI?.listModels?.(company, apiKey, modelType);
+  const payload = {
+    timestamp: now,
+    items: res?.models || [],
+    error: res?.error || null
+  };
+  modelCache.set(cacheKey, payload);
+  return payload;
+}
+
 function updateApiKeyFieldVisibility(elements, company) {
   // Ollama 不需要 API Key，隱藏並停用欄位
   const isOllama = company === 'ollama';
@@ -2640,29 +2867,45 @@ async function loadModels(elements, company, selectedModel) {
     elements.model.innerHTML = '<option value="">請先選公司</option>';
     return;
   }
-  elements.model.innerHTML = '<option value="">載入中…</option>';
+  // 若沒有 API Key（如未填寫或為 Ollama），只顯示原值即可
+  const needsKey = company && company !== 'ollama';
+  const placeholderText = needsKey ? '載入中…' : '不需設定模型';
+  elements.model.innerHTML = `<option value="">${placeholderText}</option>`;
   
   // 讀取當前輸入的 API Key（如果有的話）
   const currentApiKey = elements.apiKey?.value || '';
   // 傳遞 modelType 以區分語言模型和 embedding 模型
   const modelType = elements.modelType || 'language';
-  const res = await window.electronAPI?.listModels?.(company, currentApiKey, modelType);
-  
-  const list = res?.models || [];
-  const error = res?.error;
+  const requestToken = Symbol('loadModels');
+  elements._activeRequest = requestToken;
+
+  // 無需 API Key 的服務（如 Ollama）直接顯示固定選項
+  if (!needsKey) {
+    const ollamaOptions = '<option value="default">Default</option>';
+    elements.model.innerHTML = `<option value="">請選擇模型</option>${ollamaOptions}`;
+    if (selectedModel) elements.model.value = selectedModel;
+    return;
+  }
+
+  const { items, error } = await getCachedModels(company, currentApiKey, modelType).catch((err) => ({ items: [], error: err?.message || '載入失敗' }));
+  if (elements._activeRequest !== requestToken) return; // 有較新的請求，忽略本次結果
+
   if (error) {
     elements.model.innerHTML = `<option value="">${error}</option>`;
     return;
   }
-  if (!list.length) {
+
+  if (!items.length) {
     const typeStr = modelType === 'embedding' ? 'Embedding 模型' : '語言模型';
     elements.model.innerHTML = `<option value="">未取得任何${typeStr}，請確認 API Key 或權限</option>`;
     return;
   }
-  const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
-  elements.model.innerHTML = `<option value="">請選擇模型</option>${opts}`;
+
+  const optionsHtml = items.map((m) => `<option value="${m}">${m}</option>`).join('');
+  elements.model.innerHTML = `<option value="">請選擇模型</option>${optionsHtml}`;
+
   if (selectedModel) {
-    if (list.includes(selectedModel)) {
+    if (items.includes(selectedModel)) {
       elements.model.value = selectedModel;
     } else {
       const fallbackOption = document.createElement('option');
@@ -2749,14 +2992,13 @@ btnSettings?.addEventListener('click', async () => {
     updateApiKeyFieldVisibility(elements, '');
   });
 
+  const updatePromise = window.electronAPI?.checkUpdates?.().catch((err) => {
+    console.warn('取得版本資訊失敗', err);
+    return null;
+  });
+
   try {
-    const [settings, updateInfo] = await Promise.all([
-      window.electronAPI?.loadSettings?.(),
-      window.electronAPI?.checkUpdates?.().catch((err) => {
-        console.warn('取得版本資訊失敗', err);
-        return null;
-      })
-    ]);
+    const settings = await window.electronAPI?.loadSettings?.();
 
     if (settings) {
       await Promise.all([
@@ -2770,10 +3012,6 @@ btnSettings?.addEventListener('click', async () => {
         if (el instanceof HTMLInputElement) el.checked = (el.value === theme);
       });
     }
-
-    if (lblVersion && updateInfo) {
-      lblVersion.textContent = updateInfo.currentVersion;
-    }
   } catch (error) {
     console.error('載入設定時發生錯誤', error);
     services.forEach((elements) => {
@@ -2784,6 +3022,15 @@ btnSettings?.addEventListener('click', async () => {
     });
     showToast('讀取設定失敗，請稍後再試', 'error', 2200);
   }
+
+  updatePromise?.then((info) => {
+    if (!lblVersion) return;
+    if (info?.currentVersion) {
+      lblVersion.textContent = info.currentVersion;
+    } else {
+      lblVersion.textContent = '-';
+    }
+  });
 });
 
 // 儲存設定按鈕

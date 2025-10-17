@@ -2,7 +2,7 @@
 Embedding服務 - 基於Ollama的向量化服務
 """
 import time
-from typing import List, Optional, Literal, Union
+from typing import List, Optional, Union
 
 from ..llm_service import BaseLLMService
 
@@ -100,8 +100,8 @@ class EmbeddingService:
         """
         buffer_time = 1 if hasattr(self.llm_service, 'api_key') else 0
 
-        last_progress = 75
-        per_progress = 20 / len(texts)
+        last_progress = 73
+        per_progress = 23 / len(texts)
 
         embeddings = []
         error_counter = 0

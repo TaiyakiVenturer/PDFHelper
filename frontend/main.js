@@ -427,7 +427,7 @@ ipcMain.handle('process:start', async (event, payload) => {
     win?.webContents.send('process:evt', {
       type: 'progress',
       sessionId,
-      percent: 5,
+      percent: 0,
       status: '已上傳 PDF',
       timestamp: Date.now()
     });
@@ -780,11 +780,6 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
   
   // 如果沒有提供 API Key，從 settings 讀取（注意新版結構）
   let apiKey = providedApiKey;
-  if (!apiKey) {
-    const settings = readSettings();
-    // 嘗試從 translator 讀取（預設情況）
-    apiKey = settings.translator?.apiKey || settings.apiKey || '';
-  }
   if (!apiKey && company != 'ollama') 
     return { models: [], error: `缺少 API Key (${companyNameMap[company]})` };  // company = ollama -> Ollama
 

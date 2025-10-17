@@ -3,6 +3,8 @@ import subprocess
 from typing import Dict, Any, Literal, Tuple
 import time
 
+from backend.api import ProgressManager # 導入進度管理器
+
 import logging
 from backend.api.logger import setup_project_logger  # 導入日誌設置函數
 
@@ -104,6 +106,7 @@ class MinerUProcessor:
             "-d", device
         ]
         
+        ProgressManager.progress_update(3, "初始化 MinerU", "processing-pdf")  # 更新進度
         if self.verbose:
             logger.info(f"執行命令: {' '.join(cmd)}")
             logger.info(f"輸出目錄: {output_path}")
@@ -116,12 +119,17 @@ class MinerUProcessor:
                 logger.info("-" * 60)
 
             # 使用 Popen 來即時顯示輸出
+            # 編碼處理策略：統一使用 UTF-8 以保證跨平台一致性
+            # - 與 Electron (PYTHONIOENCODING='utf-8') 行為一致
+            # - 配合 errors='replace' 處理無法解碼的字節（如某些舊版程式的 Big5 輸出）
+            # - 確保在 Windows/Linux/Mac 上都能正常運行
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,  # 將 stderr 重定向到 stdout
                 text=True,
-                encoding='utf-8',  # 明確指定 UTF-8 編碼
+                encoding='utf-8',  # 明確指定 UTF-8，與 Electron 環境一致
+                errors='replace',  # 遇到無法解碼的字節時用替代字符代替（容錯處理）
                 cwd=os.path.dirname(__file__),
                 universal_newlines=True,
                 bufsize=1,
@@ -138,6 +146,7 @@ class MinerUProcessor:
                 if output == '' and process.poll() is not None:
                     break
                 if output:
+                    self._update_progress(output)  # 更新進度
                     all_output.append(output.strip())
                     if self.verbose:
                         logger.debug(output.strip())  # 即時顯示
@@ -244,6 +253,32 @@ class MinerUProcessor:
             'short_pdf_path': short_pdf_path
         }
         return pdf_path, processing_filename
+
+    def _update_progress(self, message: str):
+        """更新處理進度"""
+        if not message:
+            return
+
+        progress: Tuple[float, str] = (-1.0, "錯誤狀態")
+        if "processing pages" in message.lower():
+            progress = (27.0, "最後處理頁面")
+        elif "ocr-det" in message.lower():
+            progress = (24.0, "OCR 文字辨識")
+        elif "table-wireless" in message.lower():
+            progress = (21.0, "表格預測")
+        elif "table-ocr" in message.lower():
+            progress = (18.0, "表格 OCR 辨識")
+        elif "mfr predict" in message.lower():
+            progress = (15.0, "版面分析")
+        elif "mfd predict" in message.lower():
+            progress = (12.0, "表格分析")
+        elif "layout predict" in message.lower():
+            progress = (9.0, "版面預測")
+        elif "fetching" in message.lower():
+            progress = (6.0, "獲取頁面")
+        else:
+            return  # 無需更新
+        ProgressManager.progress_update(*progress, "processing-pdf")
 
     def _find_generated_files(self, output_path: str, file_name: str, method: str) -> Dict[str, Any]:
         """在輸出目錄中尋找MinerU生成的檔案"""

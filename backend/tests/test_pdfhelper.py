@@ -2,6 +2,9 @@ import os
 import sys
 from pathlib import Path
 
+# 確保測試環境使用 UTF-8 編碼（與 Electron 環境一致）
+os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+
 def find_project_root(max_attempts: int = 5) -> Path:
     current_dir = Path(__file__).resolve().parent
     attempts = 0

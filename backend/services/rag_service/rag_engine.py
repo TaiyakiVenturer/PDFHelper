@@ -113,7 +113,7 @@ class RAGEngine:
             if not chunks:
                 logger.error("未讀取到翻譯JSON文件或文件內容為空")
                 return False
-            ProgressManager.progress_update(75, "文件片段生成完成，開始向量化並儲存到資料庫", "adding-to-rag")
+            ProgressManager.progress_update(73, "文件片段生成完成，開始向量化並儲存到資料庫", "adding-to-rag")
 
             # 檢查embedding服務可用性
             if not self.embedding_service.is_available():

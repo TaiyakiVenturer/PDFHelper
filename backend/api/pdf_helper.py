@@ -233,7 +233,6 @@ class PDFHelper:
         Returns:
             HelperResult: 包含處理結果的統一格式
         """
-        ProgressManager.progress_update(13, f"正在處理 PDF (可能需要幾分鐘，請耐心等候)", "processing-pdf")
         if self.verbose:
             logger.info(f"開始處理 PDF: {pdf_name}，方法: {method}, 語言: {lang}, 設備: {device}")
 
@@ -244,7 +243,6 @@ class PDFHelper:
             device=device
         )
         if mineru_results["success"]:
-            ProgressManager.progress_update(28, "PDF處理完成", "processing-pdf")
             if self.verbose:
                 logger.info(f"PDF '{pdf_name}' 處理完成，輸出路徑: {mineru_results['output_path']}")
                 logger.info(f"生成的檔案: {json.dumps(mineru_results['output_file_paths'], indent=2, ensure_ascii=False, sort_keys=True)}")
@@ -344,7 +342,6 @@ class PDFHelper:
         device = "cuda" if cuda.is_available() else "cpu"
 
         logger.info(f"[from_pdf_to_rag] 開始完整處理流程: {pdf_name}, 方法: {method}, 語言: {lang}, 設備: {device}")
-        ProgressManager.progress_update(8, "準備處理提取PDF", "processing-pdf")
 
         # 提取PDF成JSON格式
         mineru_results = self.process_pdf_to_json(
@@ -357,7 +354,6 @@ class PDFHelper:
             ProgressManager.progress_fail("PDF處理失敗")
             return mineru_results
 
-        ProgressManager.progress_update(30, "PDF處理完成，開始翻譯JSON內容", "translating-json")
         # 獲取生成的JSON檔案路徑
         json_path = mineru_results.data.get("output_file_paths").get("json")
         if not json_path:
@@ -367,7 +363,6 @@ class PDFHelper:
                 success=False,
                 message="未找到生成的JSON檔案"
             )
-        ProgressManager.progress_update(33, "已獲取生成的JSON檔案", "translating-json")
         
         if not os.path.exists(json_path):
             logger.error(f"生成的JSON檔案不存在: {json_path}，無法進行後續操作")
@@ -376,7 +371,7 @@ class PDFHelper:
                 success=False,
                 message="生成的JSON檔案不存在"
             )
-        ProgressManager.progress_update(36, "開始翻譯JSON內容", "translating-json")
+        ProgressManager.progress_update(30, "開始翻譯JSON內容", "translating-json")
         
         # 翻譯JSON內容
         translated_path = self.translate_json_content(json_path)

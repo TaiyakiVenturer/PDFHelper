@@ -94,12 +94,20 @@ class ProgressManager:
             stage: 當前階段 ("idle", "processing-pdf", "translating-json", "adding-to-rag")
         """
         if cls._instance is None:
-            logger.warning("[進度更新] ProgressManager 未初始化，忽略更新")
-            return
-        
+            return  # 未初始化不更新
         if cls._instance._state["is_processing"] is False:
             logger.warning(f"[進度更新被拒絕] 當前沒有任務在處理中，無法更新進度")
             return
+        if not (0 <= progress <= 100):
+            logger.error(f"[進度更新被拒絕] 無效的進度值: {progress}，必須在 0-100 範圍內")
+            return
+        if stage not in ["idle", "processing-pdf", "translating-json", "adding-to-rag"]:
+            logger.error(f"[進度更新被拒絕] 無效的階段值: {stage}")
+            return
+        if progress < cls._instance._state["progress"]:
+            return  # 不允許進度回退
+        if progress == cls._instance._state["progress"] and message == cls._instance._state["message"] and stage == cls._instance._state["stage"]:
+            return  # 無變化不更新
 
         progress = round(progress, 2)
         with cls._instance._lock:

@@ -163,8 +163,8 @@
   .modal.open { transform: none; opacity: 1; }
   .modal .close { position: absolute; right: 10px; top: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); border-radius: 6px; width: 32px; height: 28px; cursor: pointer; }
   .modal h2 { margin: 4px 0 14px; font-size: 20px; flex-shrink: 0; }
-  .modal-body { flex: 1; padding: 0; display: flex; flex-direction: column; }
-  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding: 4px 4px 8px; overflow: hidden; }
+  .modal-body { flex: 1; padding: 0; display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding: 4px 4px 8px; min-height: 0; }
   .settings-section { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
   .section-header { display: flex; flex-direction: column; gap: 6px; }
   .section-meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; color: var(--accent-bg); background: rgba(14,165,233,0.12); border: 1px solid var(--accent-border); border-radius: 999px; padding: 2px 10px; width: fit-content; }
@@ -442,6 +442,11 @@
   .composer-actions { display: flex; justify-content: flex-end; gap: 6px; }
 
   .chat-section { flex: 1; min-height: 0; }
+  .suggestion-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .suggestion-container.collapsed { margin-bottom: 0; }
+  .suggestion-container.collapsed .suggestion-list { display: none; }
+  .suggestion-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+  .toggle-suggestions { padding: 4px 8px; font-size: 12px; }
   .suggestion-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .suggestion-item { padding: 6px 10px; border-radius: 999px; background: rgba(14,165,233,0.15); color: var(--accent-bg); cursor: pointer; font-size: 12px; border: 1px solid transparent; }
   .suggestion-item:hover { border-color: var(--accent-border); }
@@ -476,6 +481,16 @@
   .history-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--surface-2); }
   .history-item { border: 1px solid transparent; border-radius: 8px; padding: 8px; margin-bottom: 6px; cursor: pointer; }
   .history-item.active { border-color: var(--accent-border); background: rgba(14,165,233,0.12); }
+  .doc-history-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; }
+  .doc-history-item { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-1); cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease; }
+  .doc-history-item:hover { border-color: var(--accent-border); background: rgba(14,165,233,0.08); transform: translateY(-1px); }
+  .doc-history-title { font-size: 14px; font-weight: 600; color: var(--text); margin: 0; }
+  .doc-history-meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+  .doc-history-meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .doc-history-remove { position: absolute; top: 8px; right: 8px; padding: 4px 6px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease; }
+  .doc-history-item:hover .doc-history-remove { opacity: 1; }
+  .doc-history-remove:hover { background: rgba(239,68,68,0.12); color: #ef4444; border-color: rgba(239,68,68,0.35); }
+  .doc-history-empty { font-size: 13px; color: var(--muted); padding: 12px; text-align: center; border: 1px dashed var(--border); border-radius: 10px; }
 
   .search-hit { background: rgba(14,165,233,0.35); color: inherit; border-radius: 4px; padding: 0 2px; }
   .search-hit.active-hit { outline: 2px solid var(--accent-border); }
@@ -675,7 +690,13 @@
                 <button id="btnVoiceOutput" class="btn-icon" type="button" title="語音播放">🔊</button>
               </div>
             </div>
-            <div id="suggestedQuestions" class="suggestion-list" aria-live="polite"></div>
+            <div id="suggestionContainer" class="suggestion-container">
+              <div class="suggestion-header">
+                <span>推薦問題</span>
+                <button id="btnToggleSuggestions" class="btn-icon toggle-suggestions" type="button" aria-expanded="true" title="隱藏推薦問題">▾</button>
+              </div>
+              <div id="suggestedQuestions" class="suggestion-list" aria-live="polite"></div>
+            </div>
             <div id="chatList" class="chat-list" aria-live="polite"></div>
             <div class="chat-input">
               <textarea id="chatInput" placeholder="輸入訊息（Shift+Enter 換行）" aria-label="輸入問題"></textarea>
@@ -844,9 +865,9 @@
     <div id="historyBackdrop" class="modal-backdrop">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
         <button id="btnHistoryClose" class="close" aria-label="關閉">✕</button>
-        <h2 id="historyTitle">處理歷程</h2>
-        <div id="historyList" style="max-height: 50vh; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:8px; background: var(--surface-2);">
-          <div class="muted">尚無歷程</div>
+  <h2 id="historyTitle">已處理文件</h2>
+        <div id="historyList" class="doc-history-list" role="list">
+          <div class="doc-history-empty">尚無已處理文件</div>
         </div>
         <div class="modal-actions">
           <button id="btnHistoryClear" class="btn" title="清除紀錄">清除</button>

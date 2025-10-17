@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ,listModels: (company, apiKey, modelType) => ipcRenderer.invoke('models:list', company, apiKey, modelType)
   ,historyList: () => ipcRenderer.invoke('history:list')
   ,historyClear: () => ipcRenderer.invoke('history:clear')
+  ,processedList: () => ipcRenderer.invoke('processed-docs:list')
+  ,loadProcessedDoc: (id) => ipcRenderer.invoke('processed-docs:load', id)
+  ,removeProcessedDoc: (id) => ipcRenderer.invoke('processed-docs:remove', id)
   ,getNativeTheme: () => ({
     shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
     themeSource: nativeTheme.themeSource
@@ -60,6 +63,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_e, theme) => callback(theme);
     ipcRenderer.on('app:applyTheme', listener);
     return () => ipcRenderer.removeListener('app:applyTheme', listener);
+  },
+  onStartupStatus: (callback) => {
+    const listener = (_e, payload) => callback(payload);
+    ipcRenderer.on('app:startup-status', listener);
+    return () => ipcRenderer.removeListener('app:startup-status', listener);
   },
   // 拖放除錯日誌
   logDropDebug: (data) => ipcRenderer.send('debug:drop-log', data)

@@ -262,8 +262,8 @@ class Translator():
         # 翻譯處理
         translated_count = 0
 
-        last_progress = 36  # 初始進度
-        per_progress = 30 / len(content_list)  # 30%分配給翻譯
+        last_progress = 30  # 初始進度
+        per_progress = 37 / len(content_list)  # 37%分配給翻譯
         for index, item in enumerate(content_list):
             ProgressManager.progress_update(last_progress + per_progress * index, f"正在翻譯第 {index+1}/{len(content_list)} 個段落", "translating-json")
             if item.get('translation_metadata', {}) != {}:
@@ -274,6 +274,7 @@ class Translator():
             if translated_count != 0 and translated_count % 10 == 0:
                 start_time = time.time()
                 logger.info(f"第 {index//10} 個檢查點，正在保存翻譯進度...")
+                ProgressManager.progress_update(last_progress + per_progress * index, f"正在保存翻譯進度...", "translating-json")
                 self._save_translated_progress(content_list, file_name)
                 end_time = time.time()
 

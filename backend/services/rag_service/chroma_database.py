@@ -232,32 +232,6 @@ class ChromaVectorStore:
             logger.error(f"查詢時出錯: {e}")
             return None
 
-    def search_by_text(self, document_name: str, searching_text: str, n_results: int = 10, 
-        filter_dict: Optional[Dict[str, Any]] = None, include_distances: bool = True
-    ) -> Optional[Dict[str, Any]]:
-        """
-        內容輸入後經過Embedding服務轉換為向量，然後查詢相似內容
-        
-        Args:
-            document_name: 集合名稱 (通常為內容名稱)
-            searching_text: 查詢內容
-            n_results: 返回結果數量
-            filter_dict: 過濾條件
-            include_distances: 是否包含距離分數
-            
-        Returns:
-            查詢結果
-        """
-        # 初始化Embedding服務並獲取查詢文本的embedding
-        embedding_service = EmbeddingService()
-        searching_embedding = embedding_service.get_embedding(searching_text)
-        
-        if searching_embedding is None:
-            logger.error("輸入文本無法生成有效的embedding，操作終止")
-            return None
-
-        return self.search(document_name, searching_embedding, n_results, filter_dict, include_distances)
-
     def get_collection_info(self, document_name: str) -> Optional[Dict[str, Any]]:
         """
         獲取集合資訊

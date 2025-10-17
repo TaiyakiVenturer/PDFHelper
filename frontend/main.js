@@ -14,11 +14,87 @@ let currentDocumentState = {
   sessionId: null
 };
 
+// 啟動畫面狀態
+let splashWindow = null;
+let splashReady = false;
+const splashQueue = [];
+
+function createSplashWindow() {
+  if (splashWindow && !splashWindow.isDestroyed()) return splashWindow;
+
+  splashReady = false;
+  const win = new BrowserWindow({
+    width: 480,
+    height: 320,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    frame: false,
+    show: false,
+    skipTaskbar: true,
+    alwaysOnTop: false,
+    backgroundColor: '#0f172a',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  win.loadFile('loading.html');
+
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed()) win.show();
+  });
+
+  win.webContents.once('did-finish-load', () => {
+    splashReady = true;
+    while (splashQueue.length && !win.isDestroyed()) {
+      const payload = splashQueue.shift();
+      win.webContents.send('app:startup-status', payload);
+    }
+  });
+
+  win.on('closed', () => {
+    splashWindow = null;
+    splashReady = false;
+    splashQueue.length = 0;
+  });
+
+  splashWindow = win;
+  return win;
+}
+
+function sendStartupStatus(message, state = 'info') {
+  if (!splashWindow || splashWindow.isDestroyed()) return;
+  const payload = { message, state, timestamp: Date.now() };
+  if (splashReady) {
+    splashWindow.webContents.send('app:startup-status', payload);
+  } else {
+    splashQueue.push(payload);
+  }
+}
+
+function closeSplashWindow(delay = 0) {
+  if (!splashWindow || splashWindow.isDestroyed()) return;
+  if (delay > 0) {
+    setTimeout(() => {
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.close();
+      }
+    }, delay);
+  } else {
+    splashWindow.close();
+  }
+}
+
 // 降低 Windows 磁碟快取錯誤訊息 (僅影響快取，不影響功能)
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
 function createWindow() {
+  sendStartupStatus('載入介面...', 'info');
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -80,6 +156,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async() => {
+  createSplashWindow();
+  sendStartupStatus('正在啟動後端伺服器...', 'info');
   console.log("[INFO] 正在啟動後端伺服器...");
 
   const started = await serverManager.startServer({
@@ -90,6 +168,7 @@ app.whenReady().then(async() => {
   if (!started)
   {
     console.error("[ERROR] 後端伺服器啟動失敗，請確認 Python 環境與相依套件是否正確安裝。");
+    sendStartupStatus('後端伺服器啟動失敗，請確認環境設定。', 'error');
     dialog.showErrorBox(
       '啟動失敗', 
       '後端伺服器啟動失敗，請確認 Python 環境與相依套件是否正確安裝。\n\n' + 
@@ -102,6 +181,7 @@ app.whenReady().then(async() => {
     return;
   }
   console.log("[INFO] 後端伺服器啟動成功。");
+  sendStartupStatus('後端伺服器啟動成功，準備開啟介面。', 'success');
 
   createWindow();
   app.on('activate', () => {
@@ -347,7 +427,7 @@ ipcMain.handle('process:start', async (event, payload) => {
     win?.webContents.send('process:evt', {
       type: 'progress',
       sessionId,
-      percent: 5,
+      percent: 0,
       status: '已上傳 PDF',
       timestamp: Date.now()
     });
@@ -700,11 +780,6 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
   
   // 如果沒有提供 API Key，從 settings 讀取（注意新版結構）
   let apiKey = providedApiKey;
-  if (!apiKey) {
-    const settings = readSettings();
-    // 嘗試從 translator 讀取（預設情況）
-    apiKey = settings.translator?.apiKey || settings.apiKey || '';
-  }
   if (!apiKey && company != 'ollama') 
     return { models: [], error: `缺少 API Key (${companyNameMap[company]})` };  // company = ollama -> Ollama
 
@@ -876,6 +951,18 @@ ipcMain.handle('chat:ask', async (_event, payload) => {
 // IPC: 歷史紀錄操作
 ipcMain.handle('history:list', () => readHistory());
 ipcMain.handle('history:clear', () => { writeHistory([]); return true; });
+ipcMain.handle('processed-docs:list', async () => {
+  // TODO: 由使用者實作實際資料來源
+  return { ok: true, items: [] };
+});
+ipcMain.handle('processed-docs:load', async (_event, docId) => {
+  // TODO: 回傳已處理文件內容，例如 { ok: true, document: { markdown, zh, en, meta } }
+  return { ok: false, error: 'processed-docs:load 尚未實作，請在 main.js 補上對應邏輯。', id: docId };
+});
+ipcMain.handle('processed-docs:remove', async (_event, docId) => {
+  // TODO: 移除指定的已處理文件
+  return { ok: false, error: 'processed-docs:remove 尚未實作，請在 main.js 補上對應邏輯。', id: docId };
+});
 
 // 保留外部內容注入接口：external:content
 ipcMain.on('external:content', (event, payload) => {

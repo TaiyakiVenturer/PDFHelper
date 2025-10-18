@@ -86,6 +86,12 @@ declare class APIClient {
      * @returns Promise<HelperResult<null>>
      */
     updateAPIKey(service: "translator" | "embedding" | "rag", provider: "ollama" | "google" | "openai", api_key: string, model_name: string): Promise<HelperResult<null>>;
+    /**
+     * 移除 PDFHelper 儲存的檔案及資料
+     * @param target - 要移除的檔案名稱 (不含路徑)
+     * @returns Promise<HelperResult<null>>
+     */
+    removeFile(target: string): Promise<HelperResult<null>>;
 }
 export declare const apiClient: APIClient;
 export {};

@@ -9,10 +9,9 @@ from dataclasses import dataclass
 import json
 
 import backend.services.llm_service as llm_services  # 導入所有LLM服務
-from backend.services.pdf_service import MinerUProcessor # 導入MinerU文件處理器
-from backend.services.translation_service import Translator # 導入翻譯器
-from backend.services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine # 導入RAG引擎
-from backend.services.pdf_service.md_reconstructor import MarkdownReconstructor # 導入Markdown重建器
+from backend.services.pdf_service import MinerUProcessor, MarkdownReconstructor  # 導入PDF處理器和Markdown重建器
+from backend.services.translation_service import Translator  # 導入翻譯器
+from backend.services.rag_service import DocumentProcessor, EmbeddingService, ChromaVectorStore, RAGEngine  # 導入RAG引擎相關模塊
 
 from backend.api.config import Config # 導入配置管理
 from backend.api import ProgressManager # 導入進度管理器
@@ -477,6 +476,63 @@ class PDFHelper:
             success=finished_path is not None,
             message="Markdown重組完成" if finished_path else "Markdown重組失敗",
             data={"markdown_path": finished_path} if finished_path else None
+        )
+
+    def remove_file_from_system(self, file_name: str) -> HelperResult:
+        """
+        從系統中移除指定的檔案
+        
+        Args:
+            file_name: 要移除的檔案名稱 (`filename.XXX`，支援有無副檔名)
+        
+        Returns:
+            HelperResult: 包含是否成功移除檔案的統一格式
+        """
+        # 確保只保留檔案名稱，不包含副檔名
+        if file_name.find(".") != -1:
+            file_name = file_name[:file_name.rfind(".")]
+
+        # 依照檔案結構組合完整路徑
+        pdf_name = file_name + ".pdf"
+        translated_path = file_name + "_translated.json"
+
+        pdf_path = os.path.join(self.config.instance_path, "pdfs", pdf_name)
+        mineru_path = os.path.join(self.config.instance_path, "mineru_outputs", file_name)
+        translated_path = os.path.join(self.config.instance_path, "translated_files", translated_path)
+        reconstruct_path = os.path.join(self.config.instance_path, "reconstructed_files", file_name)
+
+        try:
+            import shutil
+
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                logger.info(f"已移除檔案: {pdf_path}")
+            
+            if os.path.exists(mineru_path):
+                shutil.rmtree(mineru_path)
+                logger.info(f"已移除資料夾: {mineru_path}")
+            
+            if os.path.exists(translated_path):
+                os.remove(translated_path)
+                logger.info(f"已移除檔案: {translated_path}")
+            
+            if os.path.exists(reconstruct_path):
+                shutil.rmtree(reconstruct_path)
+                logger.info(f"已移除資料夾: {reconstruct_path}")
+            
+            self.rag_engine.vector_store.delete_collection(file_name)
+        except Exception as e:
+            logger.error(f"檔案移除失敗: {e}")
+            return HelperResult(
+                success=False,
+                message=f"檔案移除失敗: {e}",
+                data=None
+            )
+
+        return HelperResult(
+            success=True,
+            message="檔案移除完成",
+            data=None
         )
 
     def get_system_health(self) -> HelperResult:

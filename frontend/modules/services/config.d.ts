@@ -25,6 +25,7 @@ export declare const API_ENDPOINTS: {
     readonly UPDATE_API_KEY: "api/update-api-key";
     readonly FULL_PROCESS: "api/full-process-async";
     readonly GET_PROGRESS: "api/get-progress";
+    readonly REMOVE_FILE: "api/remove-file";
 };
 import { type ProgressStageNames } from "../types/progress.js";
 /**

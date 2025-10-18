@@ -29,7 +29,8 @@ exports.API_ENDPOINTS = {
     RESET_PROCESS: "api/reset-process",
     UPDATE_API_KEY: "api/update-api-key",
     FULL_PROCESS: "api/full-process-async",
-    GET_PROGRESS: "api/get-progress"
+    GET_PROGRESS: "api/get-progress",
+    REMOVE_FILE: "api/remove-file"
 };
 const progress_js_1 = require("../types/progress.js");
 /**

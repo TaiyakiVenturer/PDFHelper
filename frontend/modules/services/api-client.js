@@ -214,5 +214,19 @@ class APIClient {
             })
         });
     }
+    /**
+     * 移除 PDFHelper 儲存的檔案及資料
+     * @param target - 要移除的檔案名稱 (不含路徑)
+     * @returns Promise<HelperResult<null>>
+     */
+    async removeFile(target) {
+        return this.request(config_1.API_ENDPOINTS.REMOVE_FILE, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ target })
+        });
+    }
 }
 exports.apiClient = new APIClient();

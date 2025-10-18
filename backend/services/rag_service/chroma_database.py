@@ -9,7 +9,6 @@ import chromadb
 from chromadb.config import Settings
 
 from .document_processor import DocumentChunk
-from .embedding_service import EmbeddingService
 
 import logging
 from backend.api import setup_project_logger  # 導入日誌設置函數
@@ -283,7 +282,7 @@ class ChromaVectorStore:
 
             # 檢查集合是否真的被刪除
             try:
-                collection = self.client.get_collection(name="SiLU_translated.json")
+                collection = self.client.get_collection(name=document_name)
                 raise ValueError(f"集合 {collection.name} 仍然存在")  # 這不應該出現
             except:
                 logger.info(f"集合 {document_name} 已成功刪除")  # 這是正常的

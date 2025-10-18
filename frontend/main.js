@@ -889,9 +889,6 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
 // IPC: RAG 問答功能（使用 HTTP API）
 ipcMain.handle('chat:ask', async (_event, payload) => {
   try {
-    // 從 settings.json 讀取 RAG 配置
-    const settings = readSettings();
-    
     // 準備參數
     const question = String(payload?.question || '');
     
@@ -959,9 +956,21 @@ ipcMain.handle('processed-docs:load', async (_event, docId) => {
   // TODO: 回傳已處理文件內容，例如 { ok: true, document: { markdown, zh, en, meta } }
   return { ok: false, error: 'processed-docs:load 尚未實作，請在 main.js 補上對應邏輯。', id: docId };
 });
+
+// IPC: 刪除已處理文件
 ipcMain.handle('processed-docs:remove', async (_event, docId) => {
-  // TODO: 移除指定的已處理文件
-  return { ok: false, error: 'processed-docs:remove 尚未實作，請在 main.js 補上對應邏輯。', id: docId };
+  const history = readHistory();
+  const docData = history.find(h => h.sessionId === docId);
+  if (docData && docData.filePath) {
+    documentName = docData.filePath.replace(/^.*[\\/]/, ''); // instance/docname.pdf -> docname.pdf
+    console.log('[chat:ask] 從歷史記錄取得 documentName:', documentName);
+  }
+
+  const result = await apiClient.removeFile(documentName);
+  if (!result.success) {
+    return { ok: false, error: result.message || '刪除失敗' };
+  }
+  return { ok: true };
 });
 
 // 保留外部內容注入接口：external:content

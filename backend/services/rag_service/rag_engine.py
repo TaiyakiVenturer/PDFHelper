@@ -1,7 +1,7 @@
 """
 RAG引擎 - 整合文件處理、向量查詢和答案生成的主引擎
 """
-from typing import List, Dict, Any, Optional, Literal, Iterable, Generator, Tuple
+from typing import List, Dict, Any, Optional, Iterable, Generator, Tuple
 import time
 from dataclasses import dataclass
 
@@ -9,7 +9,7 @@ from .document_processor import DocumentProcessor
 from .embedding_service import EmbeddingService
 from .chroma_database import ChromaVectorStore
 
-from ..llm_service import BaseLLMService
+from backend.services.llm_service import BaseLLMService
 
 from backend.api import ProgressManager  # 導入進度管理器
 

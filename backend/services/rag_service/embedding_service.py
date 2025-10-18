@@ -4,7 +4,7 @@ Embedding服務 - 基於Ollama的向量化服務
 import time
 from typing import List, Optional, Union
 
-from ..llm_service import BaseLLMService
+from backend.services.llm_service import BaseLLMService
 
 from backend.api import ProgressManager
 

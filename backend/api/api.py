@@ -290,6 +290,25 @@ def update_api_key_endpoint():
     except Exception as e:
         return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
 
+@app.route('/api/remove-file', methods=['POST'])
+def remove_file_endpoint():
+    """從系統中移除檔案及其相關資料"""
+    try:
+        data = request.json
+        file_name = data.get('file_name')
+        
+        if not file_name:
+            return jsonify({"success": False, "message": "缺少 file_name 參數"}), 400
+
+        result = pdf_helper.remove_file_from_system(file_name)
+        
+        return jsonify({
+            'success': result.success,
+            'message': result.message,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"錯誤: {str(e)}"}), 500
+
 if __name__ == '__main__':
     host = "localhost"
     port = os.getenv("FLASK_PORT", 13635)

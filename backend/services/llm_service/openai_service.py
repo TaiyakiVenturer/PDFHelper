@@ -233,7 +233,7 @@ class OpenAIService(BaseLLMService):
         else:
             return None
 
-    def send_embedding_request(self, text: str, store: bool) -> Optional[List[float]]:
+    def send_embedding_request(self, text: Union[str, List[str]], store: bool) -> Optional[List[List[float]]]:
         """
         發送embedding請求到OpenAI服務
 
@@ -242,7 +242,7 @@ class OpenAIService(BaseLLMService):
             store: 是否為存儲用途 True: 存儲, False: 搜索 (僅Gemini適用，OpenAI忽略)
 
         Returns:
-            List[float]: 向量化結果 (出現錯誤則返回 None)
+            Union (List[float] | List[List[float]]): 單個或多個向量化結果 (出現錯誤則返回 None)
         """
         try:
             if not self.is_available():
@@ -258,7 +258,7 @@ class OpenAIService(BaseLLMService):
             )
 
             if hasattr(response, 'data') and response.data:
-                embedding = response.data[0].embedding
+                embedding = [embed.embedding for embed in response.data]
                 if embedding:
                     if self.verbose:
                         logger.info("OpenAI獲取embedding成功")

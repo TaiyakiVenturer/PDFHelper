@@ -116,7 +116,7 @@ class GoogleService(BaseLLMService):
             stream: bool = False
         ) -> Union[Optional[str], Generator[str, None, None]]:
         """
-        發送請求到Gemini服務
+        發送請求到Google服務
 
         Args:
             prompt: 要發送的文本
@@ -179,7 +179,7 @@ class GoogleService(BaseLLMService):
             end_chat: bool = False
             ) -> Optional[str]:
         """
-        發送多輪請求到Gemini服務
+        發送多輪請求到Google服務
 
         Args:
             prompt: 要發送的文本
@@ -226,16 +226,16 @@ class GoogleService(BaseLLMService):
             logger.error("多輪請求失敗")
             return None
 
-    def send_embedding_request(self, text: str, store: bool) -> Optional[List[float]]:
+    def send_embedding_request(self, text: Union[str, List[str]], store: bool) -> Optional[List[List[float]]]:
         """
-        發送embedding請求到Gemini服務
+        發送embedding請求到Google服務
 
         Args:
             text: 需要向量化的字串
             store: 是否為存儲用途 True: 存儲, False: 搜索
 
         Returns:
-            list: 向量化結果 (若失敗則返回None)
+            Union (List[float] | List[List[float]]): 單個或多個向量化結果 (出現錯誤則返回 None)
         """
         if not self.is_available():
             logger.warning("Gemini服務不可用，無法發送embedding請求")
@@ -252,7 +252,7 @@ class GoogleService(BaseLLMService):
             if response and len(response.embeddings) > 0:
                 if self.verbose:
                     logger.info("Gemini獲取embedding成功")
-                return response.embeddings[0].values
+                return [embedding.values for embedding in response.embeddings]
             else:
                 logger.error(f"Gemini未獲取到embedding，響應數據: {response}")
                 return None

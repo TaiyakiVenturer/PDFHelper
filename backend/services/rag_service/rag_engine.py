@@ -131,7 +131,8 @@ class RAGEngine:
                 self.vector_store.delete_collection(collection_name)
 
             # 新增到向量資料庫
-            success = self.vector_store.add_chunks(chunks, embeddings, collection_name=collection_name)
+            logger.debug(f"片段數量: {len(chunks)}, 向量數量: {len(embeddings[0])}")
+            success = self.vector_store.add_chunks(chunks, embeddings[0], collection_name=collection_name)
             ProgressManager.progress_update(99, "文件成功儲存到向量資料庫", "idle")
 
             if success:

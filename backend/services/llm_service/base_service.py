@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 from dataclasses import dataclass
 
 @dataclass
@@ -44,7 +44,7 @@ class BaseLLMService:
         """
         raise NotImplementedError("子類別必須實現此方法。")
 
-    def send_embedding_request(self, text: str, store: bool) -> Optional[List[float]]:
+    def send_embedding_request(self, text: Union[str, List[str]], store: bool) -> Optional[List[List[float]]]:
         """
         將文本轉換為嵌入向量。
         這是一個抽象方法，具體實現應由子類完成。

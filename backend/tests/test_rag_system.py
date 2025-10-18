@@ -56,6 +56,10 @@ def main():
         )
         # llm_service = llm_services.OllamaService(
         #     model_name=args.model,  # 可依實際 API Key 與模型調整
+        #     verbose=True
+        # )
+        # llm_service = llm_services.OpenAIService(
+        #     model_name=args.model,  # 可依實際 API Key 與模型調整
         #     api_key=args.apikey,
         #     verbose=True
         # )
@@ -89,8 +93,8 @@ def main():
 
     print("2. 測試 Embedding 產生")
     try:
-        test_text = "這是一個測試字串，用於驗證embedding功能。"
-        embedding = rag.embedding_service.get_embedding(test_text)
+        test_text = ["這是一個測試字串，用於驗證embedding功能。", "RAG系統應該能夠正確處理這些文字並產生向量。"]
+        embedding = rag.embedding_service.get_embeddings(test_text)
         if embedding:
             print(f"✅ Embedding 產生成功，維度: {len(embedding)}")
             print(f"   前5個值: {embedding[:5]}")
@@ -99,12 +103,13 @@ def main():
     except Exception as e:
         print(f"❌ 測試 Embedding 時出錯: {e}")
 
+    collection_name = '_'.join(Path(args.json).stem.split("_")[:-1])
     print("3. 測試向量資料庫索引與搜尋")
     try:
         success = rag.store_document_into_vectordb(args.json)
         if success:
             print("✅ 文件索引成功")
-            search_results = rag.search(args.question, args.json, top_k=3)
+            search_results = rag.search(args.question, collection_name=collection_name, top_k=3)
             print(f"搜尋結果數量: {len(search_results)}")
             for i, result in enumerate(search_results[:2]):
                 print(f"結果 {i+1}: {getattr(result, 'content', str(result))[:100]}...")
@@ -115,8 +120,8 @@ def main():
 
     print("4. 測試 LLM 問答功能 (可選)")
     try:
-        collection_names = Path(args.json).stem
-        response = rag.ask(args.question, collection_name=collection_names, top_k=3, include_sources=True)
+        # 嵌入語言模型無法實際生成答案，此測試僅為了確認ask的正常運作
+        response = rag.ask(args.question, collection_name=collection_name, top_k=3, include_sources=True)
         print(f"✅ 問答測試完成")
         print(f"狀態: {getattr(response, 'status', None)}")
         print(f"查詢: {getattr(response, 'query', None)}")
@@ -130,7 +135,7 @@ def main():
 
     print("5. 系統信息總結")
     try:
-        system_info = rag.get_system_info(args.json)
+        system_info = rag.get_system_info()
         print("✅ 系統信息:")
         for key, value in system_info.items():
             print(f"   {key}: {value}")

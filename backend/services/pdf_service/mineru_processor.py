@@ -260,22 +260,22 @@ class MinerUProcessor:
             return
 
         progress: Tuple[float, str] = (-1.0, "錯誤狀態")
-        if "processing pages" in message.lower():
-            progress = (27.0, "最後處理頁面")
-        elif "ocr-det" in message.lower():
-            progress = (24.0, "OCR 文字辨識")
-        elif "table-wireless" in message.lower():
-            progress = (21.0, "表格預測")
-        elif "table-ocr" in message.lower():
-            progress = (18.0, "表格 OCR 辨識")
-        elif "mfr predict" in message.lower():
-            progress = (15.0, "版面分析")
-        elif "mfd predict" in message.lower():
-            progress = (12.0, "表格分析")
+        if "fetching" in message.lower():
+            progress = (6.0, "處理中: 獲取頁面")
         elif "layout predict" in message.lower():
-            progress = (9.0, "版面預測")
-        elif "fetching" in message.lower():
-            progress = (6.0, "獲取頁面")
+            progress = (9.0, "處理中: 版面預測")
+        elif "mfd predict" in message.lower():
+            progress = (12.0, "處理中: 表格分析")
+        elif "mfr predict" in message.lower():
+            progress = (15.0, "處理中: 版面分析")
+        elif "table-ocr" in message.lower():
+            progress = (18.0, "處理中: 表格 OCR 辨識")
+        elif "table-wireless" in message.lower():
+            progress = (21.0, "處理中: 表格預測")
+        elif "ocr-det" in message.lower():
+            progress = (24.0, "處理中: OCR 文字辨識")
+        elif "processing pages" in message.lower():
+            progress = (27.0, "處理中: 最後處理頁面")
         else:
             return  # 無需更新
         ProgressManager.progress_update(*progress, "processing-pdf")

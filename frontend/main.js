@@ -162,7 +162,7 @@ app.whenReady().then(async() => {
 
   const started = await serverManager.startServer({
     timeout: 60000,
-    debug: true
+    debug: false
   });
   // 檢查是否啟動成功
   if (!started)
@@ -183,6 +183,7 @@ app.whenReady().then(async() => {
   console.log("[INFO] 後端伺服器啟動成功。");
   sendStartupStatus('後端伺服器啟動成功，準備開啟介面。', 'success');
 
+  closeSplashWindow();
   createWindow();
   app.on('activate', () => {
     // 在 macOS 上, 當 dock 圖示被點擊且沒有其它視窗開啟時, 重新建立視窗
@@ -792,7 +793,7 @@ ipcMain.handle('models:list', async (_event, company, providedApiKey, modelType 
         if (!res.ok) return { models: [], error: '無法連線到 Ollama，請確認已安裝並啟動（11434）' };
         const json = await res.json();
         const rawModels = Array.isArray(json?.models) ? json.models.map(m => m.name).filter(Boolean) : [];
-        
+
         // 使用統一過濾函式 (Ollama 不需要額外的 includePattern)
         const models = filter_models(rawModels, isEmbedding);
         return { models };
@@ -890,7 +891,6 @@ ipcMain.handle('chat:ask', async (_event, payload) => {
   try {
     // 從 settings.json 讀取 RAG 配置
     const settings = readSettings();
-    const ragConfig = settings.rag || {};
     
     // 準備參數
     const question = String(payload?.question || '');

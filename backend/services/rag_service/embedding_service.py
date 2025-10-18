@@ -45,12 +45,12 @@ class EmbeddingService:
         """檢查Embedding服務是否可用"""
         return self.llm_service.is_available(model_name=model_name)
 
-    def _get_single_embedding_with_retry(self, text: Union[str, List[str]], store: bool) -> Optional[Union[List[float], List[List[float]]]]:
+    def _get_embedding_with_retry(self, text: Union[str, List[str]], store: bool) -> Optional[List[List[float]]]:
         """
-        附帶重試機制的單個embedding處理
+        附帶重試機制的embedding處理
         
         Args:
-            text: 需要向量化的字串 or 字串列表 (Ollama僅支援單字串，Gemini支援列表)
+            text: 需要向量化的字串 or 字串列表
             store: 是否為存儲用途 True: 存儲, False: 搜索 (僅Gemini適用)
 
         Returns:
@@ -81,33 +81,45 @@ class EmbeddingService:
         Returns:
             List[float]: 向量化結果 (出現錯誤則返回 None)
         """
-        embedding = self._get_single_embedding_with_retry(text, store=store)
+        embedding = self._get_embedding_with_retry(text, store=store)[0]
         if embedding is None:
             logger.error(f"無法為文本獲取embedding: {text[:30]}...")
         if self.verbose and embedding is not None:
             logger.info("獲取單個embedding完成")
         return embedding
 
-    def get_embeddings(self, texts: List[str], store: bool) -> List[List[float]]:
+    def get_embeddings(self, texts: List[str], store: bool = False, batch_size: int = 100) -> List[List[float]]:
         """
         批量處理字串的embeddings
 
         Args:
             texts: 字串列表
+            store: 是否為存儲用途 True: 存儲, False: 搜索 (僅Gemini適用)
+            batch_size: 每批次處理的字串數量
 
         Returns:
             List[Optional[List[float]]]: 向量化結果列表
         """
         buffer_time = 1 if hasattr(self.llm_service, 'api_key') else 0
 
+        new_texts: List[List[str]] = []
+        counter = 0
+        while True:
+            text = texts[counter:counter + batch_size]
+            if not text:
+                break
+            new_texts.append(text)
+            counter += batch_size
+        print(f"總共有 {len(new_texts)} 批次需要處理")
+
         last_progress = 73
-        per_progress = 23 / len(texts)
+        per_progress = 23 / len(new_texts)
 
         embeddings = []
         error_counter = 0
-        for index, text in enumerate(texts):
-            ProgressManager.progress_update(last_progress + per_progress * index , f"正在處理第 {index + 1} 條，共 {len(texts)} 條", "adding-to-rag")
-            embedding = self._get_single_embedding_with_retry(text, store=store)
+        for index, text in enumerate(new_texts):
+            ProgressManager.progress_update(last_progress + per_progress * index , f"處理中: 正在處理第 {index + 1} 條，共 {len(new_texts)} 條", "adding-to-rag")
+            embedding = self._get_embedding_with_retry(text, store=store)
 
             # 紀錄embedding獲取失敗的字串，並過濾掉失敗的結果
             if embedding is None:
@@ -118,7 +130,7 @@ class EmbeddingService:
             time.sleep(buffer_time)
         
         if error_counter > 0:
-            logger.warning(f"總共有 {error_counter} 條字串未能成功處理embedding")
+            logger.warning(f"總共有 {error_counter} 批次的字串未能成功處理")
         if self.verbose:
-            logger.info(f"批量處理embedding完成，共處理 {len(texts)} 條字串")
+            logger.info(f"批量處理embedding完成，共處理 {len(embeddings)} 批次的字串")
         return embeddings

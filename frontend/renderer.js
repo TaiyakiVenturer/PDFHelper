@@ -2879,14 +2879,6 @@ async function loadModels(elements, company, selectedModel) {
   const requestToken = Symbol('loadModels');
   elements._activeRequest = requestToken;
 
-  // 無需 API Key 的服務（如 Ollama）直接顯示固定選項
-  if (!needsKey) {
-    const ollamaOptions = '<option value="default">Default</option>';
-    elements.model.innerHTML = `<option value="">請選擇模型</option>${ollamaOptions}`;
-    if (selectedModel) elements.model.value = selectedModel;
-    return;
-  }
-
   const { items, error } = await getCachedModels(company, currentApiKey, modelType).catch((err) => ({ items: [], error: err?.message || '載入失敗' }));
   if (elements._activeRequest !== requestToken) return; // 有較新的請求，忽略本次結果
 

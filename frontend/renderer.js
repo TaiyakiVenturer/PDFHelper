@@ -147,6 +147,11 @@ const chatHistoryBackdrop = document.getElementById('chatHistoryBackdrop');
 const chatHistoryListEl = document.getElementById('chatHistoryList');
 const btnVoiceInput = document.getElementById('btnVoiceInput');
 const btnVoiceOutput = document.getElementById('btnVoiceOutput');
+const workspaceTabButtons = document.querySelectorAll('.workspace-tab');
+const workspacePanels = document.querySelectorAll('.tab-panel');
+const workspaceActionGroups = document.querySelectorAll('.tab-actions');
+const highlightListEl = document.getElementById('highlightList');
+const btnClearHighlights = document.getElementById('btnClearHighlights');
 
 function ensureReaderContainers() {
   if (!mdContainer || !mdContainer.isConnected) {
@@ -168,6 +173,38 @@ function ensureReaderContainers() {
 
 document.addEventListener('DOMContentLoaded', ensureReaderContainers);
 ensureReaderContainers();
+
+const WORKSPACE_TABS = new Set(['chat', 'notes', 'saved']);
+
+function setWorkspaceTab(tab) {
+  const next = (tab && WORKSPACE_TABS.has(tab)) ? tab : 'chat';
+  activeWorkspaceTab = next;
+  workspaceTabButtons.forEach(btn => {
+    const isActive = btn.dataset.tab === next;
+    btn.classList.toggle('active', isActive);
+    if (isActive) {
+      btn.setAttribute('aria-selected', 'true');
+    } else {
+      btn.setAttribute('aria-selected', 'false');
+    }
+  });
+  workspacePanels.forEach(panel => {
+    const isActive = panel.dataset.tab === next;
+    if (isActive) {
+      panel.removeAttribute('hidden');
+    } else {
+      panel.setAttribute('hidden', '');
+    }
+  });
+  workspaceActionGroups.forEach(group => {
+    const isActive = group.dataset.tab === next;
+    if (isActive) {
+      group.removeAttribute('hidden');
+    } else {
+      group.setAttribute('hidden', '');
+    }
+  });
+}
 
 // 日誌功能元素
 const toggleLogsBtn = document.getElementById('toggleLogs');
@@ -382,6 +419,7 @@ function renderMarkdown() {
     }
     enableSplitView(Boolean(readerPrefs.split), false);
     applyAnnotations();
+    renderHighlights();
     if (searchState.query) {
       highlightSearchQuery(searchState.query);
     }
@@ -1040,6 +1078,7 @@ function openNoteComposer(options = {}) {
   noteComposerContext.textContent = noteComposerState.snippet ? `引用：${noteComposerState.snippet.slice(0, 80)}` : '一般筆記';
   noteComposerEl.hidden = false;
   noteComposerInput.focus();
+  setWorkspaceTab('notes');
 }
 
 function closeNoteComposer() {
@@ -1121,6 +1160,63 @@ function removeNote(id) {
   renderNotes();
   showToast('筆記已刪除', 'info', 1400);
   refreshSuggestedQuestions();
+}
+
+function renderHighlights() {
+  if (!highlightListEl) return;
+  if (!annotationState.highlights.length) {
+    highlightListEl.innerHTML = '<div class="muted">尚無標註</div>';
+    return;
+  }
+  const items = [...annotationState.highlights].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const html = items.map(ann => {
+    const heading = ann.headingText || resultState.headings.find(h => h.id === ann.headingId)?.text || '';
+    const timestamp = ann.createdAt ? new Date(ann.createdAt).toLocaleTimeString() : '';
+    return `
+      <div class="highlight-card" data-id="${escapeHtml(ann.id)}">
+        <div class="highlight-snippet">${escapeHtml((ann.snippet || '').slice(0, 240))}</div>
+        <div class="highlight-meta">
+          <span>${escapeHtml(heading || '標註')}</span>
+          <span>${escapeHtml(timestamp)}</span>
+        </div>
+        <div class="highlight-actions">
+          <button class="btn-icon" type="button" data-action="jump">定位</button>
+          <button class="btn-icon" type="button" data-action="delete">刪除</button>
+        </div>
+      </div>`;
+  }).join('');
+  highlightListEl.innerHTML = html;
+}
+
+function focusHighlight(id) {
+  ensureReaderContainers();
+  if (!id) return;
+  const selector = `mark.annotation-highlight[data-annotation-id="${escapeCssId(id)}"]`;
+  let container = mdContainer;
+  let target = container?.querySelector(selector);
+  if (!target && mdContainerSecondary) {
+    container = mdContainerSecondary;
+    target = mdContainerSecondary.querySelector(selector);
+  }
+  if (!container || !target) return;
+  smoothScrollIntoView(container, target);
+  target.classList.add('pulse-highlight');
+  setTimeout(() => target.classList.remove('pulse-highlight'), 900);
+}
+
+function clearAllHighlights() {
+  if (!annotationState.highlights.length) {
+    showToast('沒有標註可清除', 'info', 1400);
+    return;
+  }
+  annotationState.highlights = [];
+  persistToStorage(STORAGE_KEYS.annotations, annotationState);
+  [mdContainer, mdContainerSecondary].forEach(container => {
+    container?.querySelectorAll('mark.annotation-highlight').forEach(unwrapHighlightElement);
+  });
+  renderHighlights();
+  renderContextChips();
+  showToast('已清除所有標註', 'info', 1400);
 }
 
 function locateNote(id) {
@@ -1294,10 +1390,12 @@ function createHighlightFromSelection() {
   }
   const snippet = selectionState.text.slice(0, 200);
   const id = `ann-${Date.now()}`;
+  const heading = resultState.headings.find(h => h.id === selectionState.headingId) || getCurrentHeading();
   const highlight = {
     id,
     snippet,
-    headingId: selectionState.headingId || '',
+    headingId: selectionState.headingId || heading?.id || '',
+    headingText: heading?.text || '',
     createdAt: Date.now()
   };
   annotationState.highlights.push(highlight);
@@ -1309,6 +1407,8 @@ function createHighlightFromSelection() {
     reapplyHighlight(mdContainer, highlight, false);
   }
   renderContextChips();
+  renderHighlights();
+  setWorkspaceTab('saved');
   showToast('標註完成', 'success', 1400);
   window.getSelection()?.removeAllRanges();
   clearSelection();
@@ -1325,6 +1425,7 @@ function removeHighlightById(id) {
     const selector = `mark.annotation-highlight[data-annotation-id="${escapeCssId(id)}"]`;
     container.querySelectorAll(selector).forEach(unwrapHighlightElement);
   });
+  renderHighlights();
   return true;
 }
 
@@ -1766,6 +1867,7 @@ const voiceState = {
   listening: false,
   utterance: null
 };
+let activeWorkspaceTab = 'chat';
 
 function persistChatPrefs() {
   persistToStorage(STORAGE_KEYS.chatPrefs, chatPrefs);
@@ -1804,8 +1906,11 @@ function renderChat() {
   const html = chatState.messages.map(msg => {
     const roleClass = msg.role === 'assistant' ? 'assistant' : (msg.role === 'user' ? 'user' : 'system');
     const body = `<div class="msg-content">${formatChatHtml(msg.content || '')}</div>`;
-    const references = (msg.references && msg.references.length)
-      ? `<div class="msg-references">${msg.references.map(ref => `<button class="reference-chip" type="button" data-heading="${escapeHtml(ref.headingId || '')}">${escapeHtml(ref.label || ref.headingText || '引用')}</button>`).join('')}</div>`
+    const referenceList = Array.isArray(msg.references)
+      ? msg.references.filter(ref => ref && ref.headingId)
+      : [];
+    const references = referenceList.length
+      ? `<div class="msg-references">${referenceList.map(ref => `<button class="reference-chip" type="button" data-heading="${escapeHtml(ref.headingId || '')}">${escapeHtml(ref.label || ref.headingText || '引用')}</button>`).join('')}</div>`
       : '';
     const followups = (msg.followups && msg.followups.length)
       ? `<div class="followup-list">${msg.followups.map(text => `<button class="followup-btn" type="button" data-followup="${escapeHtml(text)}">${escapeHtml(text)}</button>`).join('')}</div>`
@@ -2031,6 +2136,7 @@ function normalizeReferences(list) {
   for (const item of list) {
     if (!item) continue;
     const headingId = item.headingId || item.id || item.anchor || '';
+    if (!headingId) continue;
     const label = item.label || item.headingText || item.title || item.text || headingId;
     if (headingId && seen.has(headingId)) continue;
     if (headingId) seen.add(headingId);
@@ -2413,6 +2519,34 @@ noteListEl?.addEventListener('click', (event) => {
   }
 });
 
+workspaceTabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    if (tab) setWorkspaceTab(tab);
+  });
+});
+
+highlightListEl?.addEventListener('click', (event) => {
+  const actionBtn = event.target.closest('button[data-action]');
+  if (!actionBtn) return;
+  const card = event.target.closest('.highlight-card');
+  if (!card) return;
+  const id = card.getAttribute('data-id');
+  if (!id) return;
+  const action = actionBtn.getAttribute('data-action');
+  if (action === 'delete') {
+    const removed = removeHighlightById(id);
+    if (removed) {
+      renderContextChips();
+      showToast('標註已移除', 'info', 1400);
+    }
+  } else if (action === 'jump') {
+    focusHighlight(id);
+  }
+});
+
+btnClearHighlights?.addEventListener('click', clearAllHighlights);
+
 btnChatNew?.addEventListener('click', () => startNewConversation());
 
 btnToggleSuggestions?.addEventListener('click', () => {
@@ -2473,6 +2607,7 @@ renderChatHistoryList();
 ensureReaderContainers();
 hideSelectionPopover();
 updateSelectionPopoverActions('selection');
+setWorkspaceTab(activeWorkspaceTab);
 const tocInitiallyVisible = Boolean(readerPrefs.tocVisible);
 if (tocSidebar) tocSidebar.classList.toggle('hidden', !tocInitiallyVisible);
 if (readerContentEl) readerContentEl.classList.toggle('toc-hidden', !tocInitiallyVisible);
@@ -2509,6 +2644,7 @@ btnAskSelection?.addEventListener('click', queueQuestionFromSelection);
 
 renderBookmarks();
 renderNotes();
+renderHighlights();
 
 // 歷史按鈕（已處理文件檢視）
 const btnHistory = document.getElementById('btnHistory');
@@ -2517,6 +2653,12 @@ const btnHistoryClose = document.getElementById('btnHistoryClose');
 const btnHistoryClose2 = document.getElementById('btnHistoryClose2');
 const btnHistoryClear = document.getElementById('btnHistoryClear');
 const historyListEl = document.getElementById('historyList');
+const historyConfirmEl = document.getElementById('historyConfirm');
+const historyConfirmTitleEl = document.getElementById('historyConfirmTitle');
+const btnHistoryConfirmCancel = document.getElementById('btnHistoryConfirmCancel');
+const btnHistoryConfirmDelete = document.getElementById('btnHistoryConfirmDelete');
+const historyConfirmDeleteLabel = btnHistoryConfirmDelete?.textContent || '移除';
+let pendingHistoryRemovalId = null;
 
 function normalizeProcessedDoc(item, index) {
   const id = item?.id || item?.documentId || item?.sessionId || item?.collectionName || `doc-${index}`;
@@ -2571,6 +2713,37 @@ function renderProcessedDocs() {
   historyListEl.innerHTML = html;
 }
 
+function showHistoryRemovalConfirm(id, title) {
+  if (!historyConfirmEl) return;
+  pendingHistoryRemovalId = id || null;
+  const label = (title || '').trim() || '這筆記錄';
+  if (historyConfirmTitleEl) historyConfirmTitleEl.textContent = label;
+  historyConfirmEl.removeAttribute('hidden');
+  historyConfirmEl.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => historyConfirmEl.classList.add('show'));
+  if (btnHistoryConfirmCancel) {
+    try {
+      btnHistoryConfirmCancel.focus({ preventScroll: true });
+    } catch {
+      btnHistoryConfirmCancel.focus();
+    }
+  }
+}
+
+function hideHistoryRemovalConfirm() {
+  if (!historyConfirmEl) return;
+  historyConfirmEl.classList.remove('show');
+  historyConfirmEl.setAttribute('aria-hidden', 'true');
+  pendingHistoryRemovalId = null;
+  if (btnHistoryConfirmDelete) {
+    btnHistoryConfirmDelete.disabled = false;
+    btnHistoryConfirmDelete.textContent = historyConfirmDeleteLabel;
+  }
+  setTimeout(() => {
+    if (historyConfirmEl) historyConfirmEl.setAttribute('hidden', '');
+  }, 180);
+}
+
 async function refreshProcessedDocs() {
   processedDocsState.loading = true;
   renderProcessedDocs();
@@ -2614,6 +2787,7 @@ function applyHistoricalDocument(payload) {
 
 async function openProcessedDocumentById(id) {
   if (!id) return;
+  hideHistoryRemovalConfirm();
   const fallbackEntry = processedDocsState.items.find(doc => doc.id === id);
   try {
     const res = await window.electronAPI?.loadProcessedDoc?.(id);
@@ -2640,7 +2814,12 @@ async function openProcessedDocumentById(id) {
 
 async function removeProcessedDocumentById(id) {
   if (!id) return;
-  if (!window.confirm('確定要移除此文件記錄嗎？')) return;
+  const deleteBtn = btnHistoryConfirmDelete;
+  const originalLabel = deleteBtn?.textContent || historyConfirmDeleteLabel;
+  if (deleteBtn) {
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = '移除中…';
+  }
   try {
     const res = await window.electronAPI?.removeProcessedDoc?.(id);
     if (!res) {
@@ -2652,15 +2831,22 @@ async function removeProcessedDocumentById(id) {
       return;
     }
     showToast('已移除文件記錄', 'success', 1400);
+    hideHistoryRemovalConfirm();
     await refreshProcessedDocs();
   } catch (err) {
     console.error('移除歷程文件失敗:', err);
     showToast('移除歷程文件時發生錯誤', 'error', 2200);
+  } finally {
+    if (deleteBtn) {
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = originalLabel;
+    }
   }
 }
 
 function openHistory() {
   if (!historyBackdrop) return;
+  hideHistoryRemovalConfirm();
   processedDocsState.loading = true;
   renderProcessedDocs();
   historyBackdrop.style.display = 'flex';
@@ -2673,6 +2859,7 @@ function openHistory() {
 
 function closeHistory() {
   if (!historyBackdrop) return;
+  hideHistoryRemovalConfirm();
   historyBackdrop.classList.remove('show');
   historyBackdrop.querySelector('.modal')?.classList.remove('open');
   setTimeout(() => { historyBackdrop.style.display = 'none'; }, 180);
@@ -2682,6 +2869,7 @@ btnHistory?.addEventListener('click', openHistory);
 btnHistoryClose?.addEventListener('click', closeHistory);
 btnHistoryClose2?.addEventListener('click', closeHistory);
 btnHistoryClear?.addEventListener('click', async () => {
+  hideHistoryRemovalConfirm();
   const cleared = await window.electronAPI?.historyClear?.();
   if (cleared) {
     showToast('已清除歷程記錄', 'info', 1600);
@@ -2693,12 +2881,16 @@ historyListEl?.addEventListener('click', (event) => {
   const removeBtn = event.target.closest('.doc-history-remove');
   if (removeBtn) {
     event.stopPropagation();
-    const id = removeBtn.closest('.doc-history-item')?.getAttribute('data-id');
-    removeProcessedDocumentById(id);
+    const item = removeBtn.closest('.doc-history-item');
+    const id = item?.getAttribute('data-id');
+    if (!id) return;
+    const title = item?.querySelector('.doc-history-title')?.textContent || '';
+    showHistoryRemovalConfirm(id, title);
     return;
   }
   const item = event.target.closest('.doc-history-item');
   if (!item) return;
+  if (pendingHistoryRemovalId) hideHistoryRemovalConfirm();
   const id = item.getAttribute('data-id');
   openProcessedDocumentById(id);
 });
@@ -2710,6 +2902,18 @@ historyListEl?.addEventListener('keydown', (event) => {
   event.preventDefault();
   const id = item.getAttribute('data-id');
   openProcessedDocumentById(id);
+});
+
+btnHistoryConfirmCancel?.addEventListener('click', () => {
+  hideHistoryRemovalConfirm();
+});
+
+btnHistoryConfirmDelete?.addEventListener('click', () => {
+  if (!pendingHistoryRemovalId) {
+    hideHistoryRemovalConfirm();
+    return;
+  }
+  removeProcessedDocumentById(pendingHistoryRemovalId);
 });
 
 

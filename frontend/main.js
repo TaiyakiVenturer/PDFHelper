@@ -273,6 +273,7 @@ const projectRoot = path.join(__dirname, '..'); // 從 frontend 回到根目錄
 const uploadDir = path.join(projectRoot, 'backend', 'instance', 'pdfs');
 const historyPath = path.join(__dirname, 'instance', 'history.json');
 const dropDebugPath = path.join(__dirname, 'instance', 'drop_debug.txt');
+const sessionTracker = new Map();
 
 console.log("[DEBUG] 設定檔路徑", settingsPath);
 console.log("[DEBUG] 歷史紀錄檔案", historyPath);
@@ -433,6 +434,17 @@ ipcMain.handle('process:start', async (event, payload) => {
       timestamp: Date.now()
     });
 
+    const startAt = Date.now();
+    sessionTracker.set(sessionId, {
+      filePath,
+      storedFileName: fileName,
+      translator: `${translatorConfig.company}/${translatorConfig.model}`,
+      embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
+      createdAt: startAt,
+      updatedAt: startAt,
+      lastStatus: '已上傳 PDF'
+    });
+
     // 更新後端的 API Key 和模型（分開更新）
     await apiClient.updateAPIKey("translator", translatorConfig.company, translatorConfig.apiKey, translatorConfig.model);
     await apiClient.updateAPIKey("embedding", embeddingConfig.company, embeddingConfig.apiKey, embeddingConfig.model);
@@ -461,6 +473,7 @@ ipcMain.handle('process:start', async (event, payload) => {
         error: asyncResult.error || 'API 調用失敗',
         timestamp: Date.now() 
       });
+      sessionTracker.delete(sessionId);
       return { ok: false, error: asyncResult.error || 'API 調用失敗' };
     }
     console.log('[process:start] API 調用成功，開始輪詢進度...');
@@ -496,37 +509,48 @@ ipcMain.handle('process:start', async (event, payload) => {
         win?.webContents.send('process:evt', evtObj);
         
         // 更新歷史記錄
-        if (evtObj.type === 'progress' || evtObj.type === 'done' || evtObj.type === 'error') {
-          // 讀取 history.json 裡並依照 sessionId 獲取紀錄
-          const list = readHistory();
-          let rec = list.find(r => r.sessionId === sessionId);
-          
-          // 如果 sessionId 對應資料不存在, 創立新紀錄資料
-          if (!rec) {
-            rec = { 
-              sessionId, 
-              filePath, 
-              translator: `${translatorConfig.company}/${translatorConfig.model}`,
-              embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
-              createdAt: Date.now(), 
-              updates: [] 
-            };
+        if (evtObj.type === 'progress') {
+          const info = sessionTracker.get(sessionId) || {
+            filePath,
+            storedFileName: fileName,
+            translator: `${translatorConfig.company}/${translatorConfig.model}`,
+            embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
+            createdAt: Date.now()
+          };
+          sessionTracker.set(sessionId, {
+            ...info,
+            updatedAt: Date.now(),
+            lastStatus: evtObj.status || '',
+            lastPercent: evtObj.percent ?? null
+          });
+        } else if (evtObj.type === 'done' || evtObj.type === 'error') {
+          const info = sessionTracker.get(sessionId) || {};
+          const finalRecord = {
+            sessionId,
+            filePath: info.filePath || filePath,
+            storedFileName: info.storedFileName || fileName,
+            translator: info.translator || `${translatorConfig.company}/${translatorConfig.model}`,
+            embedding: info.embedding || `${embeddingConfig.company}/${embeddingConfig.model}`,
+            createdAt: info.createdAt || Date.now(),
+            updatedAt: Date.now(),
+            status: evtObj.type,
+            lastStatus: evtObj.status || evtObj.error || '',
+            done: evtObj.type === 'done',
+            error: evtObj.type === 'error' ? String(evtObj.error || '') : null
+          };
 
-            // 將新紀錄移動到最前面
-            list.unshift(rec);
-            if (list.length > 200) list.length = 200;
-          }
-          rec.updatedAt = Date.now();
-          rec.lastType = evtObj.type;
-          rec.lastStatus = evtObj.status || evtObj.error || '';
-          
-          // 如果完成，加入結果資料
           if (evtObj.type === 'done') {
-            rec.done = true;
+            finalRecord.status = 'done';
             if (evtObj.metadata) {
-              rec.metadata = evtObj.metadata;
-              
-              // 調用 reconstructMarkdown 並讀取內容
+              finalRecord.metadata = evtObj.metadata;
+              finalRecord.language = evtObj.metadata.language || evtObj.metadata.lang || info.language || null;
+              finalRecord.collectionName = evtObj.metadata.collection_name || info.collectionName || null;
+              if (evtObj.metadata.translated_json_name) {
+                finalRecord.translatedJsonName = evtObj.metadata.translated_json_name;
+              }
+              if (evtObj.metadata.translated_json_path) {
+                finalRecord.translatedJsonPath = evtObj.metadata.translated_json_path;
+              }
               if (evtObj.metadata.translated_json_name) {
                 try {
                   console.log('[process:start] 開始重組 Markdown:', evtObj.metadata.translated_json_name);
@@ -535,26 +559,21 @@ ipcMain.handle('process:start', async (event, payload) => {
                     "auto",
                     "zh"
                   );
-                  
+
                   if (reconstructResult.success && reconstructResult.data?.markdown_path) {
                     const markdownPath = reconstructResult.data.markdown_path;
                     console.log('[process:start] Markdown 重組成功:', markdownPath);
-                    
-                    // 檢查檔案是否存在
+
                     if (fs.existsSync(markdownPath)) {
-                      // 讀取 Markdown 內容
                       const markdownContent = fs.readFileSync(markdownPath, 'utf-8');
                       console.log('[process:start] Markdown 內容已讀取，長度:', markdownContent.length);
-                      
-                      // 將內容加入 evtObj, 前端才能渲染
+
                       evtObj.content = markdownContent;
                       evtObj.metadata.markdownPath = markdownPath;
-                      
-                      // 保存到記錄和全局狀態
-                      rec.markdownPath = markdownPath;
+                      finalRecord.markdownPath = markdownPath;
+                      finalRecord.metadata = { ...evtObj.metadata };
                       currentDocumentState.markdownPath = markdownPath;
-                      
-                      // 重新發送 done 事件（包含 Markdown 內容）
+
                       win?.webContents.send('process:evt', evtObj);
                     } else {
                       console.warn('[process:start] Markdown 檔案不存在:', markdownPath);
@@ -566,28 +585,26 @@ ipcMain.handle('process:start', async (event, payload) => {
                   console.error('[process:start] 重組 Markdown 時發生錯誤:', reconstructError);
                 }
               }
-              
-              // 保存 collection_name
-              if (evtObj.metadata.collection_name) {
-                rec.collectionName = evtObj.metadata.collection_name;
-                currentDocumentState.collectionName = evtObj.metadata.collection_name;
+
+              if (!finalRecord.markdownPath && evtObj.metadata.markdownPath && fs.existsSync(evtObj.metadata.markdownPath)) {
+                finalRecord.markdownPath = evtObj.metadata.markdownPath;
+                currentDocumentState.markdownPath = evtObj.metadata.markdownPath;
+              }
+
+              if (finalRecord.collectionName) {
+                currentDocumentState.collectionName = finalRecord.collectionName;
                 console.log('[process:start] 更新當前文件狀態:', currentDocumentState);
               }
             }
+          } else {
+            finalRecord.status = 'error';
           }
-          else if (evtObj.type === 'error')
-            rec.error = String(evtObj.error || '');
-          
-          // 紀錄更新歷程
-          rec.updates.push({ 
-            t: Date.now(), 
-            type: evtObj.type, 
-            status: evtObj.status || '', 
-            percent: evtObj.percent ?? null 
-          });
-          
-          // 保存回 history.json
+
+          const list = readHistory().filter(r => r.sessionId !== sessionId);
+          list.unshift(finalRecord);
+          if (list.length > 200) list.length = 200;
           writeHistory(list);
+          sessionTracker.delete(sessionId);
         }
         
         // 如果處理完成或發生錯誤，停止輪詢
@@ -604,6 +621,7 @@ ipcMain.handle('process:start', async (event, payload) => {
     return { ok: true };
   } catch (err) {
     console.error('[process:start] 處理失敗', err);
+    if (sessionId) sessionTracker.delete(sessionId);
     const win = BrowserWindow.fromWebContents(event.sender);
     win?.webContents.send('process:evt', { 
       type: 'error', 
@@ -648,10 +666,15 @@ ipcMain.handle('file:import-temp', async (_event, payload) => {
 
     // 檔名淨化與唯一化
     const base = String(name || 'upload.pdf').replace(/[\\/:*?"<>|]+/g, '_');
-    const ts = new Date();
-    const stamp = `${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}-${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}${String(ts.getSeconds()).padStart(2,'0')}-${String(ts.getMilliseconds()).padStart(3,'0')}`;
-    const filePath = path.join(uploadDir, `${stamp}-${base}`);
+    const parsed = path.parse(base);
+    let candidate = base || 'upload.pdf';
+    let attempt = 1;
     fs.mkdirSync(uploadDir, { recursive: true });
+    while (fs.existsSync(path.join(uploadDir, candidate))) {
+      const suffix = `-${attempt++}`;
+      candidate = `${parsed.name || 'upload'}${suffix}${parsed.ext || '.pdf'}`;
+    }
+    const filePath = path.join(uploadDir, candidate);
     fs.writeFileSync(filePath, buf);
     return { ok: true, filePath };
   } catch (e) {
@@ -947,29 +970,101 @@ ipcMain.handle('chat:ask', async (_event, payload) => {
 
 // IPC: 歷史紀錄操作
 ipcMain.handle('history:list', () => readHistory());
-ipcMain.handle('history:clear', () => { writeHistory([]); return true; });
-ipcMain.handle('processed-docs:list', async () => {
-  // TODO: 由使用者實作實際資料來源
-  return { ok: true, items: [] };
+ipcMain.handle('history:clear', () => {
+  sessionTracker.clear();
+  writeHistory([]);
+  return true;
 });
+ipcMain.handle('processed-docs:list', async () => {
+  const history = readHistory();
+  const items = history
+    .filter(rec => rec && (rec.done || rec.status === 'done'))
+    .map(rec => {
+      const titleSource = rec.metadata?.title
+        || rec.metadata?.document_name
+        || rec.metadata?.display_name
+        || rec.filePath
+        || rec.storedFileName
+        || rec.markdownPath
+        || rec.sessionId;
+      return {
+        id: rec.sessionId,
+        sessionId: rec.sessionId,
+        title: titleSource ? path.basename(titleSource) : rec.sessionId,
+        filePath: rec.filePath || '',
+        updatedAt: rec.updatedAt || rec.createdAt || null,
+        translator: rec.translator || '',
+        model: rec.metadata?.translator_model || rec.metadata?.model || '',
+        status: rec.status === 'error' ? '錯誤' : '完成',
+        language: rec.language || rec.metadata?.language || rec.metadata?.lang || '',
+        collection: rec.collectionName || rec.metadata?.collection_name || '',
+        markdownPath: rec.markdownPath || rec.metadata?.markdownPath || '',
+        raw: rec
+      };
+    });
+  return { ok: true, items };
+});
+
 ipcMain.handle('processed-docs:load', async (_event, docId) => {
-  // TODO: 回傳已處理文件內容，例如 { ok: true, document: { markdown, zh, en, meta } }
-  return { ok: false, error: 'processed-docs:load 尚未實作，請在 main.js 補上對應邏輯。', id: docId };
+  if (!docId) return { ok: false, error: '缺少識別碼' };
+  const history = readHistory();
+  const record = history.find(rec => rec.sessionId === docId || rec.collectionName === docId);
+  if (!record) return { ok: false, error: '找不到紀錄' };
+
+  let markdownPath = record.markdownPath || record.metadata?.markdownPath || '';
+  if (!markdownPath || !fs.existsSync(markdownPath)) {
+    const jsonName = record.translatedJsonName || record.metadata?.translated_json_name;
+    if (jsonName) {
+      try {
+        const reconstructResult = await apiClient.reconstructMarkdown(jsonName, 'auto', 'zh');
+        if (reconstructResult.success && reconstructResult.data?.markdown_path) {
+          const candidate = reconstructResult.data.markdown_path;
+          if (fs.existsSync(candidate)) {
+            markdownPath = candidate;
+            record.markdownPath = candidate;
+            record.metadata = { ...(record.metadata || {}), markdownPath: candidate };
+            const updatedHistory = history.filter(item => item.sessionId !== record.sessionId);
+            updatedHistory.unshift(record);
+            if (updatedHistory.length > 200) updatedHistory.length = 200;
+            writeHistory(updatedHistory);
+          }
+        }
+      } catch (err) {
+        console.warn('[processed-docs:load] 重新重組 Markdown 失敗:', err);
+      }
+    }
+  }
+
+  if (!markdownPath || !fs.existsSync(markdownPath)) {
+    return { ok: false, error: '找不到對應的內容檔案' };
+  }
+
+  const markdown = fs.readFileSync(markdownPath, 'utf-8');
+  const meta = { ...(record.metadata || {}) };
+  if (record.collectionName && !meta.collection_name) meta.collection_name = record.collectionName;
+  const payload = {
+    markdown,
+    meta,
+    metadata: meta,
+    lang: record.language || meta.language || meta.lang || 'zh',
+    sessionId: record.sessionId,
+    filePath: record.filePath || '',
+    translator: record.translator || '',
+    embedding: record.embedding || '',
+    createdAt: record.createdAt || null,
+    updatedAt: record.updatedAt || null
+  };
+  return { ok: true, document: payload };
 });
 
 // IPC: 刪除已處理文件
 ipcMain.handle('processed-docs:remove', async (_event, docId) => {
+  if (!docId) return { ok: false, error: '缺少識別碼' };
   const history = readHistory();
-  const docData = history.find(h => h.sessionId === docId);
-  if (docData && docData.filePath) {
-    documentName = docData.filePath.replace(/^.*[\\/]/, ''); // instance/docname.pdf -> docname.pdf
-    console.log('[chat:ask] 從歷史記錄取得 documentName:', documentName);
-  }
-
-  const result = await apiClient.removeFile(documentName);
-  if (!result.success) {
-    return { ok: false, error: result.message || '刪除失敗' };
-  }
+  const index = history.findIndex(rec => rec.sessionId === docId || rec.collectionName === docId);
+  if (index === -1) return { ok: false, error: '找不到紀錄' };
+  history.splice(index, 1);
+  writeHistory(history);
   return { ok: true };
 });
 

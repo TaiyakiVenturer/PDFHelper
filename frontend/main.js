@@ -978,7 +978,7 @@ ipcMain.handle('history:clear', () => {
 ipcMain.handle('processed-docs:list', async () => {
   const history = readHistory();
   const items = history
-    .filter(rec => rec && (rec.done || rec.status === 'done'))
+    .filter(rec => rec && (rec.done || rec.status === 'done' || rec.status === 'error'))
     .map(rec => {
       const titleSource = rec.metadata?.title
         || rec.metadata?.document_name
@@ -987,6 +987,8 @@ ipcMain.handle('processed-docs:list', async () => {
         || rec.storedFileName
         || rec.markdownPath
         || rec.sessionId;
+      const statusCode = rec.status || (rec.done ? 'done' : '');
+      const isError = statusCode === 'error';
       return {
         id: rec.sessionId,
         sessionId: rec.sessionId,
@@ -995,7 +997,10 @@ ipcMain.handle('processed-docs:list', async () => {
         updatedAt: rec.updatedAt || rec.createdAt || null,
         translator: rec.translator || '',
         model: rec.metadata?.translator_model || rec.metadata?.model || '',
-        status: rec.status === 'error' ? '錯誤' : '完成',
+        status: isError ? '錯誤' : '完成',
+        state: statusCode,
+        errorMessage: rec.error || rec.errorMessage || rec.metadata?.error || rec.metadata?.errorMessage || '',
+        lastStatus: rec.lastStatus || rec.metadata?.lastStatus || '',
         language: rec.language || rec.metadata?.language || rec.metadata?.lang || '',
         collection: rec.collectionName || rec.metadata?.collection_name || '',
         markdownPath: rec.markdownPath || rec.metadata?.markdownPath || '',

@@ -2667,10 +2667,14 @@ function normalizeProcessedDoc(item, index) {
   const updatedAt = item?.updatedAt || item?.finishedAt || item?.completedAt || item?.createdAt || item?.timestamp || null;
   const translator = item?.translator || item?.company || '';
   const model = item?.model || item?.translatorModel || '';
-  const status = item?.status || (item?.error ? '錯誤' : (item?.done ? '完成' : ''));
+  const state = item?.state || item?.rawStatus || '';
+  const status = item?.status || (state === 'error' ? '錯誤' : (state === 'done' ? '完成' : (item?.error ? '錯誤' : (item?.done ? '完成' : ''))));
   const language = item?.lang || item?.language || '';
   const collection = item?.collection || item?.collectionName || '';
-  return { id, title, filePath, updatedAt, translator, model, status, language, collection, raw: item };
+  const errorMessage = item?.errorMessage || item?.error || '';
+  const lastStatus = item?.lastStatus || '';
+  const isError = state === 'error' || /錯誤/.test(status);
+  return { id, title, filePath, updatedAt, translator, model, status, language, collection, state, isError, errorMessage, lastStatus, raw: item };
 }
 
 function formatDocTime(value) {
@@ -2703,8 +2707,14 @@ function renderProcessedDocs() {
     if (modelLabel) metaParts.push(`<span>模型：${escapeHtml(modelLabel)}</span>`);
     if (doc.language) metaParts.push(`<span>語言：${escapeHtml(doc.language)}</span>`);
     if (doc.collection) metaParts.push(`<span>集合：${escapeHtml(doc.collection)}</span>`);
+    if (doc.isError) {
+      if (doc.lastStatus) metaParts.push(`<span class="doc-history-error">⚠ ${escapeHtml(doc.lastStatus)}</span>`);
+      if (doc.errorMessage) metaParts.push(`<span class="doc-history-error">⚠ ${escapeHtml(doc.errorMessage)}</span>`);
+    }
     const metaHtml = metaParts.length ? `<div class="doc-history-meta">${metaParts.join('<span>•</span>')}</div>` : '';
-    return `<div class="doc-history-item" role="button" tabindex="0" data-id="${escapeHtml(doc.id)}">
+    const classes = ['doc-history-item'];
+    if (doc.isError) classes.push('error');
+  return `<div class="${classes.join(' ')}" role="button" tabindex="0" data-id="${escapeHtml(doc.id)}" data-status="${escapeHtml(doc.state || '')}" data-error="${doc.isError ? 'true' : 'false'}" data-error-message="${doc.errorMessage ? escapeHtml(doc.errorMessage) : ''}" data-last-status="${doc.lastStatus ? escapeHtml(doc.lastStatus) : ''}" aria-disabled="${doc.isError ? 'true' : 'false'}">
       <div class="doc-history-title">${escapeHtml(doc.title)}</div>
       ${metaHtml}
       <button class="doc-history-remove" type="button" data-action="remove" title="移除此文件">×</button>
@@ -2891,6 +2901,14 @@ historyListEl?.addEventListener('click', (event) => {
   const item = event.target.closest('.doc-history-item');
   if (!item) return;
   if (pendingHistoryRemovalId) hideHistoryRemovalConfirm();
+  const isError = item.getAttribute('data-error') === 'true';
+  if (isError) {
+    const lastStatus = item.getAttribute('data-last-status') || '';
+    const errMsg = item.getAttribute('data-error-message') || '';
+    const message = [lastStatus, errMsg].filter(Boolean).join('｜') || '此紀錄因處理失敗無法開啟';
+    showToast(message, 'warning', 2400);
+    return;
+  }
   const id = item.getAttribute('data-id');
   openProcessedDocumentById(id);
 });
@@ -2900,6 +2918,13 @@ historyListEl?.addEventListener('keydown', (event) => {
   const item = event.target.closest('.doc-history-item');
   if (!item) return;
   event.preventDefault();
+  if (item.getAttribute('data-error') === 'true') {
+    const lastStatus = item.getAttribute('data-last-status') || '';
+    const errMsg = item.getAttribute('data-error-message') || '';
+    const message = [lastStatus, errMsg].filter(Boolean).join('｜') || '此紀錄因處理失敗無法開啟';
+    showToast(message, 'warning', 2400);
+    return;
+  }
   const id = item.getAttribute('data-id');
   openProcessedDocumentById(id);
 });

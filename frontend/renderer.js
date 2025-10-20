@@ -2658,7 +2658,9 @@ const historyConfirmTitleEl = document.getElementById('historyConfirmTitle');
 const btnHistoryConfirmCancel = document.getElementById('btnHistoryConfirmCancel');
 const btnHistoryConfirmDelete = document.getElementById('btnHistoryConfirmDelete');
 const historyConfirmDeleteLabel = btnHistoryConfirmDelete?.textContent || '移除';
+const historyConfirmClearLabel = '清除';
 let pendingHistoryRemovalId = null;
+let pendingHistoryRemovalAll = false;
 
 function normalizeProcessedDoc(item, index) {
   const id = item?.id || item?.documentId || item?.sessionId || item?.collectionName || `doc-${index}`;
@@ -2723,13 +2725,19 @@ function renderProcessedDocs() {
   historyListEl.innerHTML = html;
 }
 
-function showHistoryRemovalConfirm(id, title) {
+function showHistoryRemovalConfirm(id, title, options = {}) {
   if (!historyConfirmEl) return;
-  pendingHistoryRemovalId = id || null;
-  const label = (title || '').trim() || '這筆記錄';
+  const isClearAll = Boolean(options.clearAll);
+  pendingHistoryRemovalAll = isClearAll;
+  pendingHistoryRemovalId = isClearAll ? null : (id || null);
+  const label = isClearAll ? '全部歷程紀錄' : ((title || '').trim() || '這筆記錄');
   if (historyConfirmTitleEl) historyConfirmTitleEl.textContent = label;
   historyConfirmEl.removeAttribute('hidden');
   historyConfirmEl.setAttribute('aria-hidden', 'false');
+  historyConfirmEl.setAttribute('data-mode', isClearAll ? 'clear-all' : 'single');
+  if (btnHistoryConfirmDelete) {
+    btnHistoryConfirmDelete.textContent = isClearAll ? historyConfirmClearLabel : historyConfirmDeleteLabel;
+  }
   requestAnimationFrame(() => historyConfirmEl.classList.add('show'));
   if (btnHistoryConfirmCancel) {
     try {
@@ -2744,7 +2752,9 @@ function hideHistoryRemovalConfirm() {
   if (!historyConfirmEl) return;
   historyConfirmEl.classList.remove('show');
   historyConfirmEl.setAttribute('aria-hidden', 'true');
+  historyConfirmEl.removeAttribute('data-mode');
   pendingHistoryRemovalId = null;
+  pendingHistoryRemovalAll = false;
   if (btnHistoryConfirmDelete) {
     btnHistoryConfirmDelete.disabled = false;
     btnHistoryConfirmDelete.textContent = historyConfirmDeleteLabel;
@@ -2849,6 +2859,34 @@ async function removeProcessedDocumentById(id) {
   } finally {
     if (deleteBtn) {
       deleteBtn.disabled = false;
+      const mode = historyConfirmEl?.getAttribute('data-mode');
+      deleteBtn.textContent = mode === 'clear-all' ? historyConfirmClearLabel : historyConfirmDeleteLabel;
+    }
+  }
+}
+
+async function clearAllProcessedDocuments() {
+  const deleteBtn = btnHistoryConfirmDelete;
+  const originalLabel = deleteBtn?.textContent || historyConfirmClearLabel;
+  if (deleteBtn) {
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = '清除中…';
+  }
+  try {
+    const cleared = await window.electronAPI?.historyClear?.();
+    if (cleared) {
+      showToast('已清除所有歷程記錄', 'info', 1600);
+    } else {
+      showToast('沒有變更或歷程已為空', 'info', 1600);
+    }
+    hideHistoryRemovalConfirm();
+    await refreshProcessedDocs();
+  } catch (err) {
+    console.error('清除歷程記錄失敗:', err);
+    showToast('清除歷程記錄時發生錯誤', 'error', 2200);
+  } finally {
+    if (deleteBtn) {
+      deleteBtn.disabled = false;
       deleteBtn.textContent = originalLabel;
     }
   }
@@ -2878,13 +2916,8 @@ function closeHistory() {
 btnHistory?.addEventListener('click', openHistory);
 btnHistoryClose?.addEventListener('click', closeHistory);
 btnHistoryClose2?.addEventListener('click', closeHistory);
-btnHistoryClear?.addEventListener('click', async () => {
-  hideHistoryRemovalConfirm();
-  const cleared = await window.electronAPI?.historyClear?.();
-  if (cleared) {
-    showToast('已清除歷程記錄', 'info', 1600);
-  }
-  await refreshProcessedDocs();
+btnHistoryClear?.addEventListener('click', () => {
+  showHistoryRemovalConfirm(null, '全部歷程紀錄', { clearAll: true });
 });
 
 historyListEl?.addEventListener('click', (event) => {
@@ -2934,6 +2967,10 @@ btnHistoryConfirmCancel?.addEventListener('click', () => {
 });
 
 btnHistoryConfirmDelete?.addEventListener('click', () => {
+  if (pendingHistoryRemovalAll) {
+    clearAllProcessedDocuments();
+    return;
+  }
   if (!pendingHistoryRemovalId) {
     hideHistoryRemovalConfirm();
     return;

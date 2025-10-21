@@ -494,11 +494,13 @@ class PDFHelper:
 
         # 依照檔案結構組合完整路徑
         pdf_name = file_name + ".pdf"
-        translated_path = file_name + "_translated.json"
+        progress_name = file_name + "_progress.json"
+        translated_name = file_name + "_translated.json"
 
         pdf_path = os.path.join(self.config.instance_path, "pdfs", pdf_name)
         mineru_path = os.path.join(self.config.instance_path, "mineru_outputs", file_name)
-        translated_path = os.path.join(self.config.instance_path, "translated_files", translated_path)
+        translate_progress_path = os.path.join(self.config.instance_path, "translated_files", "unfinished_file", progress_name)
+        translated_name = os.path.join(self.config.instance_path, "translated_files", translated_name)
         reconstruct_path = os.path.join(self.config.instance_path, "reconstructed_files", file_name)
 
         try:
@@ -507,18 +509,32 @@ class PDFHelper:
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
                 logger.info(f"已移除檔案: {pdf_path}")
+            else:
+                logger.warning(f"檔案不存在，無法移除: {pdf_path}")
             
             if os.path.exists(mineru_path):
                 shutil.rmtree(mineru_path)
                 logger.info(f"已移除資料夾: {mineru_path}")
+            else:
+                logger.warning(f"資料夾還未生成，無法移除: {mineru_path}")
             
-            if os.path.exists(translated_path):
-                os.remove(translated_path)
-                logger.info(f"已移除檔案: {translated_path}")
+            if os.path.exists(translate_progress_path):
+                os.remove(translate_progress_path)
+                logger.info(f"已移除檔案: {translate_progress_path}")
+            else:
+                logger.warning(f"檔案不存在，無法移除: {translate_progress_path}")
+
+            if os.path.exists(translated_name):
+                os.remove(translated_name)
+                logger.info(f"已移除檔案: {translated_name}")
+            else:
+                logger.warning(f"檔案還未生成，無法移除: {translated_name}")
             
             if os.path.exists(reconstruct_path):
                 shutil.rmtree(reconstruct_path)
                 logger.info(f"已移除資料夾: {reconstruct_path}")
+            else:
+                logger.warning(f"資料夾還未生成，無法移除: {reconstruct_path}")
             
             self.rag_engine.vector_store.delete_collection(file_name)
         except Exception as e:

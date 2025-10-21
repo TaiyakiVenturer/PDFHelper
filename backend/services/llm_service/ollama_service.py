@@ -118,7 +118,7 @@ class OllamaService(BaseLLMService):
 
         Args:
             prompt: 要發送的文本
-            system_prompt: 系統提示文本 (Ollama目前不支持此參數)
+            system_prompt: 系統提示文本
             stream: 是否使用流式回應
 
         Returns:
@@ -134,11 +134,15 @@ class OllamaService(BaseLLMService):
         # 發送請求
         try:
             if not self._in_multi_turn:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
                 response = self.session.post(
                     f"{self.base_url}/api/generate",
                     json={
                         "model": self.model_name,
-                        "prompt": prompt,
+                        "messages": messages,
                         "stream": stream
                     },
                     stream=stream,
@@ -217,13 +221,12 @@ class OllamaService(BaseLLMService):
             return None
 
         if not self._in_multi_turn:
-            self._chat = []
+            self._chat = [system_prompt] if system_prompt else []
             self._in_multi_turn = True
             if self.verbose:
                 logger.info("開始多輪對話")
 
-        self._chat.append({"role": "user", "content": prompt})
-        response = self.send_single_request(prompt, system_prompt=system_prompt, stream=False)
+        response = self.send_single_request(prompt, stream=False)
         if response is not None:
             self._chat.append({"role": "assistant", "content": response})
             return response

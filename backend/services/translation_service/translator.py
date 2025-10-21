@@ -35,7 +35,6 @@ class Translator():
         self.llm_service = llm_service_obj
 
         self.verbose = verbose
-        self.term_dictionary = {}
 
         self.instance_path = instance_path
         self.progress_path = os.path.join(instance_path, "translated_files", "unfinished_file")
@@ -72,8 +71,6 @@ class Translator():
 ### 處理格式：
 上下文：{context}
 內容類型：{content_type}
-翻譯內容：{text}  
-翻譯輸出：{respond}
 
 **重要：僅輸出翻譯結果，無需額外說明；上下文僅供參考，請勿將上下文內容複製到回答中**
 """
@@ -85,37 +82,6 @@ class Translator():
             self._get_system_prompt(), 
             end_chat=end_chat
         )
-    
-    def _get_term_dictionary(self) -> dict:
-        """
-        獲取術語對照表
-        """
-        return self.term_dictionary
-
-    def _set_term_dictionary(self, term_dictionary: dict):
-        """
-        設置術語對照表
-        """
-        self.term_dictionary = term_dictionary
-
-    def _get_relevant_terms(self, text: str) -> str:
-        """獲取相關的已翻譯術語"""
-        if not self.term_dictionary:
-            return ""
-            
-        relevant = []
-        for en_term, zh_term in self.term_dictionary.items():
-            if en_term.lower() in text.lower():
-                relevant.append(f"{en_term}→{zh_term}")
-
-        return "; ".join(relevant[:5])  # 限制最多5個術語
-    
-    def _update_term_dictionary(self, original: str, translated: str):
-        """更新術語對照表"""
-        # 簡單的術語提取邏輯（可以後續改進）
-        if len(original.split()) <= 3 and len(translated) <= 20:
-            # 短語可能是術語
-            self.term_dictionary[original.strip()] = translated.strip()
 
     def _clean_translation(self, text: str) -> str:
         """清理翻譯結果 (暫時不啟用)"""
@@ -140,19 +106,6 @@ class Translator():
         
         return text
 
-    def _build_modelfile_prompt(self, text: str, content_type: str) -> str:
-        """構建配合modelfile的簡潔提示詞"""
-        # 檢查是否有相關術語需要保持一致性
-        relevant_terms = self._get_relevant_terms(text)
-        terms_context = ""
-        if relevant_terms:
-            terms_context = f"\n已建立術語對照: {relevant_terms}"
-        
-        # 根據modelfile格式構建簡潔prompt
-        prompt = f"""內容類型：{content_type}; 翻譯內容：{text}; 術語對照表：{terms_context}翻譯輸出："""
-
-        return prompt
-
     def translate_single_text(self, text: str, content_type: str = "body", max_retries: int = 3) -> str:
         """
         翻譯單一段落文字。
@@ -165,7 +118,7 @@ class Translator():
         Returns:
             翻譯後的文本 (如果出現錯誤，返回空字串)
         """
-        prompt = self._build_modelfile_prompt(text, content_type)
+        prompt = f"""內容類型：{content_type}; 翻譯內容：{text};"""
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -173,9 +126,6 @@ class Translator():
                 if not translation:
                     logger.warning(f"翻譯出現錯誤，重新嘗試 (嘗試 {attempt}/{max_retries})")
                     continue
-
-                # 更新術語對照表
-                self._update_term_dictionary(text, translation)
                 
                 return translation
             
@@ -195,8 +145,15 @@ class Translator():
                 else:
                     logger.error("已達到最大重試次數，放棄翻譯該段落")
                     return ""
+            except KeyError as e:
+                logger.error(f"格式化錯誤 (嘗試 {attempt}/{max_retries}): {e}")
+                logger.error(f"原始文本: {text[:200]}...")
+                logger.error("提示: 文本中可能包含 LaTeX 公式或特殊格式導致字符串格式化失敗")
+                # KeyError 通常是代碼問題，不應重試
+                return ""
             except Exception as e:
                 logger.error(f"翻譯錯誤 (嘗試 {attempt}/{max_retries}): {e}")
+                logger.error(f"錯誤類型: {type(e).__name__}")
                 if attempt < max_retries:
                     wait_time = 2 ** attempt
                     logger.info(f"等待 {wait_time} 秒後重試...")
@@ -239,8 +196,6 @@ class Translator():
                 logger.info(f"偵測到翻譯進度: {progress_path}")
                 logger.info(f"重新載入翻譯進度: 剩餘 {self._check_translated_progress(content_list)} 個段落")
 
-            self._set_term_dictionary(progress_data.get("term_dictionary", {}))
-
             if self._check_translated_progress(content_list) == 0:
                 logger.info("檔案已全部翻譯完成，無需重複翻譯")
                 return self._save_translated_progress(content_list, file_name)
@@ -281,12 +236,16 @@ class Translator():
                 batch_sleep = buffer_time*5 - (end_time - start_time)
                 if batch_sleep > 0:
                     time.sleep(batch_sleep)
-            
+
             # 判斷內容類型
             content_type = self._classify_content_type(item)
 
             # 翻譯文本
-            original_text = item['text']
+            original_text = item.get('text', '')
+            if not original_text:
+                logger.warning(f"空文本，跳過段落: {original_text}")
+                continue
+
             translated_text = self.translate_single_text(
                 text=original_text,
                 content_type=content_type
@@ -312,7 +271,6 @@ class Translator():
             if self.verbose:
                 logger.info(f"   原文: {original_text[:50]}...")
                 logger.info(f"   譯文: {translated_text[:50]}...")
-                logger.info("")
 
             # 避免請求過於頻繁
             time.sleep(buffer_time)
@@ -344,7 +302,7 @@ class Translator():
     def _classify_content_type(self, item: Dict) -> str:
         """分類內容類型"""
         text = item.get('text', '').lower()
-        text_level = item.get('text_level')
+        text_level = item.get('text_level', -1)
         
         # 摘要判斷
         if 'abstract' in text:
@@ -385,7 +343,6 @@ class Translator():
         progress_info = {
             "content_list": progress_data,  # 原始翻譯數據
             "save_time": time.strftime('%Y-%m-%d %H:%M:%S'),
-            "term_dictionary": self.term_dictionary.copy(),  # 創建副本
             "translator_type": self.llm_service.model_name
         }
 

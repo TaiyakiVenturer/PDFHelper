@@ -1068,6 +1068,18 @@ ipcMain.handle('processed-docs:remove', async (_event, docId) => {
   const history = readHistory();
   const index = history.findIndex(rec => rec.sessionId === docId || rec.collectionName === docId);
   if (index === -1) return { ok: false, error: '找不到紀錄' };
+
+  const record = history[index];
+  const storedFileName = record.storedFileName || '';
+  if (storedFileName)
+  {
+    const result = await apiClient.removeFile(storedFileName);
+    if (result.success)
+      console.log('[processed-docs:remove] 已從後端刪除檔案:', storedFileName);
+    else
+      console.warn('[processed-docs:remove] 從後端刪除檔案失敗:', storedFileName, result.message);
+  }
+
   history.splice(index, 1);
   writeHistory(history);
   return { ok: true };

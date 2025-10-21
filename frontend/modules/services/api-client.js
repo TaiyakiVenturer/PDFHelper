@@ -225,7 +225,9 @@ class APIClient {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ target })
+            body: JSON.stringify({
+                file_name: target
+            })
         });
     }
 }

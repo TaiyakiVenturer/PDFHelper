@@ -119,7 +119,7 @@ class ChromaVectorStore:
             是否成功
         """
         if len(chunks) == 0 or len(embeddings) == 0 or len(chunks) != len(embeddings):
-            logger.error(f"片段列表: {chunks} 或embedding列表: {embeddings} 無效或長度不匹配，操作終止")
+            logger.error(f"片段列表: {len(chunks)} 或embedding列表: {len(embeddings)} 無效或長度不匹配，操作終止")
             return False
 
         if self.verbose:

@@ -220,13 +220,12 @@ class OpenAIService(BaseLLMService):
             return None
 
         if not self._in_multi_turn:
-            self._chat = []
+            self._chat = [{"role": "system", "content": system_prompt}] if system_prompt else []
             self._in_multi_turn = True
             if self.verbose:
                 logger.info("開始多輪對話")
 
-        self._chat.append({"role": "user", "content": prompt})
-        response = self.send_single_request(prompt, system_prompt=system_prompt, stream=False)
+        response = self.send_single_request(prompt, stream=False)
         if response is not None:
             self._chat.append({"role": "assistant", "content": response})
             return response

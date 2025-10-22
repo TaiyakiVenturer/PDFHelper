@@ -260,7 +260,6 @@ class Translator():
             translated_count += 1
 
             # 保存翻譯結果
-            item['text_en'] = original_text
             item['text_zh'] = translated_text
             item['translation_metadata'] = {
                 'model': self.llm_service.model_name,
@@ -277,10 +276,6 @@ class Translator():
 
         # 結束多輪對話
         self.send_translate_request("", end_chat=True)
-
-        # 翻譯結束後，統一移除原始文本
-        for item in content_list:
-            item.pop('text', None)
 
         # 保存翻譯結果
         output_path = os.path.join(os.path.dirname(self.progress_path), f"{file_name}_translated.json")

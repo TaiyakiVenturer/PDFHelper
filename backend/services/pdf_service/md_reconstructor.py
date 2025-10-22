@@ -37,7 +37,7 @@ class MarkdownReconstructor:
     def reconstruct(self, 
             json_name: str, 
             method: Literal['auto', 'ocr', 'text'], 
-            language: Literal['zh', 'en'] = 'zh'
+            mode: Literal['origin', 'translated']
         ) -> Optional[str]:
         """
         重組.md檔案
@@ -45,7 +45,7 @@ class MarkdownReconstructor:
         Args:
             file_name: 翻譯後的Json檔案名稱含副檔名 (例如: `example_translated.json`)
             method: 處理方法 (auto/ocr/text)
-            language: 語言選擇 (zh, en)
+            mode: 模式選擇 (origin/translated)
 
         Returns:
             str: 重組後的.md檔案路徑，失敗則回傳None
@@ -67,7 +67,7 @@ class MarkdownReconstructor:
 
         md_lines = ['<a id="content"></a>']
         for item in content_list:
-            content_type, content_value = self._classify_content_type(item, language)
+            content_type, content_value = self._classify_content_type(item, mode)
             if self.verbose:
                 logger.info(f"內容類型: {content_type}, 內容: {content_value[:50]}")
 
@@ -100,7 +100,7 @@ class MarkdownReconstructor:
 
         return md_file_path
 
-    def _classify_content_type(self, item: Dict, language: Literal['zh', 'en']) -> Tuple[str, str]:
+    def _classify_content_type(self, item: Dict, mode: Literal['origin', 'translated']) -> Tuple[str, str]:
         """
         分類內容類型
         
@@ -121,7 +121,7 @@ class MarkdownReconstructor:
         if original_type != 'text':
             return 'image', item.get('img_path', 'img_not_found.jpg')
         elif original_type == 'text':
-            return metadata_type, item.get(f'text_{language}', '')
+            return metadata_type, item.get('text' if mode == 'origin' else 'text_zh', '')
         else:
             return 'None', ''
 

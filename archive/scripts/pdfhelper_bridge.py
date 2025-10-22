@@ -736,7 +736,7 @@ def run_pipeline(
 			reconstruct_result: HelperResult = helper.reconstruct_markdown(
 				json_name=translated_json_path.name,
 				method=method,
-				language=language,  # type: ignore[arg-type]
+				mode=language,  # type: ignore[arg-type]
 			)
 			if reconstruct_result.success and reconstruct_result.data and reconstruct_result.data.get("markdown_path"):
 				md_path = Path(reconstruct_result.data["markdown_path"]).expanduser()

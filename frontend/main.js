@@ -303,12 +303,28 @@ function readSettings() {
 
 function writeSettings(data) {
   try {
+    // 先讀取現有設定，避免部分更新時清空其他欄位
+    const current = readSettings();
+    
+    // 三層合併：預設值 → 現有設定 → 新資料
     let toSave = {
-      translator: { ...defaultSettings.translator, ...(data.translator || {}) },
-      embedding: { ...defaultSettings.embedding, ...(data.embedding || {}) },
-      rag: { ...defaultSettings.rag, ...(data.rag || {}) },
-      theme: data.theme || defaultSettings.theme,
-      lang: data.lang || defaultSettings.lang
+      translator: {
+        ...defaultSettings.translator,
+        ...current.translator,
+        ...(data.translator || {})
+      },
+      embedding: {
+        ...defaultSettings.embedding,
+        ...current.embedding,
+        ...(data.embedding || {})
+      },
+      rag: {
+        ...defaultSettings.rag,
+        ...current.rag,
+        ...(data.rag || {})
+      },
+      theme: data.theme || current.theme || defaultSettings.theme,
+      lang: data.lang || current.lang || defaultSettings.lang
     };
     
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
@@ -458,10 +474,11 @@ ipcMain.handle('process:start', async (event, payload) => {
       sessionId 
     });
     method = "auto"; // 自動選擇解析方法
+    lang = "en";   // 目標語言英文
     const asyncResult = await apiClient.startFullProcessAsync(
       fileName,
       method,
-      "en"
+      lang
     );
 
     if (!asyncResult.success)
@@ -542,8 +559,7 @@ ipcMain.handle('process:start', async (event, payload) => {
           if (evtObj.type === 'done') {
             finalRecord.status = 'done';
             if (evtObj.metadata) {
-              finalRecord.metadata = evtObj.metadata;
-              finalRecord.language = evtObj.metadata.language || evtObj.metadata.lang || info.language || null;
+              finalRecord.language = lang || null;
               finalRecord.collectionName = evtObj.metadata.collection_name || info.collectionName || null;
               if (evtObj.metadata.translated_json_name) {
                 finalRecord.translatedJsonName = evtObj.metadata.translated_json_name;
@@ -557,7 +573,7 @@ ipcMain.handle('process:start', async (event, payload) => {
                   const reconstructResult = await apiClient.reconstructMarkdown(
                     evtObj.metadata.translated_json_name,
                     "auto",
-                    "zh"
+                    "translated"
                   );
 
                   if (reconstructResult.success && reconstructResult.data?.markdown_path) {
@@ -571,7 +587,6 @@ ipcMain.handle('process:start', async (event, payload) => {
                       evtObj.content = markdownContent;
                       evtObj.metadata.markdownPath = markdownPath;
                       finalRecord.markdownPath = markdownPath;
-                      finalRecord.metadata = { ...evtObj.metadata };
                       currentDocumentState.markdownPath = markdownPath;
 
                       win?.webContents.send('process:evt', evtObj);
@@ -715,30 +730,32 @@ ipcMain.handle('settings:load', () => {
 });
 
 ipcMain.handle('settings:save', async (_event, data) => {
+  // 本地寫入設定檔
   const result = writeSettings(data);
-  
-  // 同步更新後端配置（新版結構：支援分開設定）
+  console.log('[settings:save] 已寫入本地設定檔:', result);
+
+  // 同步更新後端配置
   try {
-    const translatorConfig = data.translator || {};
-    const embeddingConfig = data.embedding || {};
-    const ragConfig = data.rag || {};
-    
+    const translatorConfig = result.translator || {};
+    const embeddingConfig = result.embedding || {};
+    const ragConfig = result.rag || {};
+
     // 更新翻譯器配置
-    if (translatorConfig.apiKey && translatorConfig.company && translatorConfig.model) {
+    if (translatorConfig.model && ((translatorConfig.apiKey && translatorConfig.company) || translatorConfig.company === 'ollama')) {
       // 更新後端 API Key
       await apiClient.updateAPIKey("translator", translatorConfig.company, translatorConfig.apiKey, translatorConfig.model);
       console.log('[settings:save] 已更新翻譯器配置:', translatorConfig.company, translatorConfig.model);
     }
     
     // 更新 Embedding 配置
-    if (embeddingConfig.apiKey && embeddingConfig.company && embeddingConfig.model) {
+    if (embeddingConfig.model && ((embeddingConfig.apiKey && embeddingConfig.company) || embeddingConfig.company === 'ollama')) {
       // 更新後端 API Key
       await apiClient.updateAPIKey("embedding", embeddingConfig.company, embeddingConfig.apiKey, embeddingConfig.model);
       console.log('[settings:save] 已更新 Embedding 配置:', embeddingConfig.company, embeddingConfig.model);
     }
 
     // 更新 RAG 配置
-    if (ragConfig.apiKey && ragConfig.company && ragConfig.model) {
+    if (ragConfig.model && ((ragConfig.apiKey && ragConfig.company) || ragConfig.company === 'ollama')) {
       // 更新後端 API Key
       await apiClient.updateAPIKey("rag", ragConfig.company, ragConfig.apiKey, ragConfig.model);
       console.log('[settings:save] 已更新 RAG 配置:', ragConfig.company, ragConfig.model);
@@ -981,10 +998,8 @@ ipcMain.handle('processed-docs:list', async () => {
     .filter(rec => rec && (rec.done || rec.status === 'done' || rec.status === 'error'))
     .map(rec => {
       const titleSource = rec.metadata?.title
-        || rec.metadata?.document_name
-        || rec.metadata?.display_name
-        || rec.filePath
         || rec.storedFileName
+        || rec.filePath
         || rec.markdownPath
         || rec.sessionId;
       const statusCode = rec.status || (rec.done ? 'done' : '');

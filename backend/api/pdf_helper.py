@@ -2,6 +2,7 @@
 PDFHelper API 模塊 - 統一導出所有Service功能和設定，提供簡潔的接口給外部使用。
 """
 from typing import Literal, Dict, Any, Optional
+from enum import Enum, auto
 import time
 import os
 from pathlib import Path
@@ -35,6 +36,13 @@ class HelperResult:
     success: bool
     message: str
     data: Optional[Dict[str, Any]] = None
+
+class ProgressStage(Enum):
+    """檔案處理階段枚舉類別"""
+    UPLOADED_PDF = auto()
+    PROCESSED_PDF = auto()
+    TRANSLATED = auto()
+    RAG_ADDED = auto()
 
 class PDFHelper:
     """
@@ -337,73 +345,100 @@ class PDFHelper:
         Returns:
             HelperResult: 包含是否成功加入向量資料庫及加入資料庫集合名稱的統一格式
         """
-        from torch import cuda
-        device = "cuda" if cuda.is_available() else "cpu"
-
-        logger.info(f"[from_pdf_to_rag] 開始完整處理流程: {pdf_name}, 方法: {method}, 語言: {lang}, 設備: {device}")
-
-        # 提取PDF成JSON格式
-        mineru_results = self.process_pdf_to_json(
-            pdf_name, 
-            method=method, 
-            lang=lang, 
-            device=device
-        )
-        if not mineru_results.success:
-            ProgressManager.progress_fail("PDF處理失敗")
-            return mineru_results
-
-        # 獲取生成的JSON檔案路徑
-        json_path = mineru_results.data.get("output_file_paths").get("json")
-        if not json_path:
-            logger.error("未找到生成的JSON檔案，無法進行後續操作")
-            ProgressManager.progress_fail("未找到生成的JSON檔案")
-            return HelperResult(
-                success=False,
-                message="未找到生成的JSON檔案"
-            )
+        status = self._check_progress_status(pdf_name).data
+        stage = status.get('stage', -1)
+        stage_data = status.get('stage_data', None)
+        if stage == -1:
+            raise ValueError("無法確認檔案處理階段，請確保PDF已上傳")
         
-        if not os.path.exists(json_path):
-            logger.error(f"生成的JSON檔案不存在: {json_path}，無法進行後續操作")
-            ProgressManager.progress_fail("生成的JSON檔案不存在")
-            return HelperResult(
-                success=False,
-                message="生成的JSON檔案不存在"
-            )
-        ProgressManager.progress_update(30, "開始翻譯JSON內容", "translating-json")
-        
-        # 翻譯JSON內容
-        translated_path = self.translate_json_content(json_path)
-        if not translated_path.success:
-            ProgressManager.progress_fail("翻譯JSON內容遇到錯誤")
-            return HelperResult(
-                success=False,
-                message="翻譯JSON內容失敗"
-            )
-        ProgressManager.progress_update(67, "JSON內容翻譯完成，開始加入RAG引擎", "adding-to-rag")
-        
-        translated_json_path = translated_path.data.get("translated_file_path")
-        if not os.path.exists(translated_json_path):
-            ProgressManager.progress_fail("未找到翻譯後的JSON檔案")
-            logger.error(f"未找到翻譯後的JSON檔案 {translated_json_path}，無法進行後續操作")
-            return HelperResult(
-                success=False,
-                message="未找到翻譯後的JSON檔案"
-            )
-        ProgressManager.progress_update(70, "已獲取翻譯後的JSON檔案，開始加入RAG引擎", "adding-to-rag")
+        if stage <= ProgressStage.UPLOADED_PDF.value:
+            from torch import cuda
+            device = "cuda" if cuda.is_available() else "cpu"
 
-        # 將翻譯後的JSON加入RAG引擎
-        translated_json_name = Path(translated_json_path).name
-        rag_result = self.add_json_to_rag(translated_json_name)
-        if not rag_result.success:
-            ProgressManager.progress_fail("加入RAG引擎遇到錯誤")
-            logger.error(f"加入RAG引擎失敗: {rag_result.message}")
+            logger.info(f"[from_pdf_to_rag] 開始完整處理流程: {pdf_name}, 方法: {method}, 語言: {lang}, 設備: {device}")
+
+            # 提取PDF成JSON格式
+            mineru_results = self.process_pdf_to_json(
+                pdf_name, 
+                method=method, 
+                lang=lang, 
+                device=device
+            )
+            if not mineru_results.success:
+                ProgressManager.progress_fail("PDF處理失敗")
+                return mineru_results
         else:
+            ProgressManager.progress_update(27, "已跳過PDF處理階段，準備翻譯JSON內容", "translating-json")
+
+        file_name = pdf_name[:pdf_name.rfind(".")]
+        if stage <= ProgressStage.PROCESSED_PDF.value:
+            # 獲取生成的JSON檔案路徑
+            if stage < ProgressStage.PROCESSED_PDF.value:
+                json_path = mineru_results.data.get("output_file_paths").get("json")
+            else:
+                json_path = os.path.join(stage_data, method, file_name + "_content_list.json")
+            
+            if not os.path.exists(json_path):
+                logger.error(f"生成的JSON檔案不存在: {json_path}，無法進行後續操作")
+                ProgressManager.progress_fail("生成的JSON檔案不存在")
+                return HelperResult(
+                    success=False,
+                    message="生成的JSON檔案不存在"
+                )
+            ProgressManager.progress_update(30, "開始翻譯JSON內容", "translating-json")
+            
+            # 翻譯JSON內容
+            translated_path = self.translate_json_content(json_path)
+            if not translated_path.success:
+                ProgressManager.progress_fail("翻譯JSON內容遇到錯誤")
+                return HelperResult(
+                    success=False,
+                    message="翻譯JSON內容失敗"
+                )
+            ProgressManager.progress_update(67, "JSON內容翻譯完成，開始加入RAG引擎", "adding-to-rag")
+        else:
+            ProgressManager.progress_update(67, "已跳過JSON翻譯階段，準備加入RAG引擎", "adding-to-rag")
+        
+        if stage <= ProgressStage.TRANSLATED.value:
+            if stage < ProgressStage.TRANSLATED.value:
+                translated_json_path = translated_path.data.get("translated_file_path")
+            else:
+                translated_json_path = stage_data
+
+            if not os.path.exists(translated_json_path):
+                ProgressManager.progress_fail("未找到翻譯後的JSON檔案")
+                logger.error(f"未找到翻譯後的JSON檔案 {translated_json_path}，無法進行後續操作")
+                return HelperResult(
+                    success=False,
+                    message="未找到翻譯後的JSON檔案"
+                )
+            ProgressManager.progress_update(70, "已獲取翻譯後的JSON檔案，開始加入RAG引擎", "adding-to-rag")
+
+            # 將翻譯後的JSON加入RAG引擎
+            translated_json_name = Path(translated_json_path).name
+            rag_result = self.add_json_to_rag(translated_json_name)
+            if not rag_result.success:
+                ProgressManager.progress_fail("加入RAG引擎遇到錯誤")
+                logger.error(f"加入RAG引擎失敗: {rag_result.message}")
+            else:
+                ProgressManager.progress_complete({
+                    "collection_name": rag_result.data.get("collection_name"),
+                    "translated_json_name": translated_json_name
+                })
+                logger.info(f"文件成功加入RAG引擎: {translated_json_name}, 集合名稱: {rag_result.data.get('collection_name')}")
+
+        if stage == ProgressStage.RAG_ADDED.value:
             ProgressManager.progress_complete({
-                "collection_name": rag_result.data.get("collection_name"),
-                "translated_json_name": translated_json_name
+                "collection_name": file_name,
+                "translated_json_name": stage_data
             })
-            logger.info(f"文件成功加入RAG引擎: {translated_json_name}, 集合名稱: {rag_result.data.get('collection_name')}")
+
+            rag_result = HelperResult(
+                success=True,
+                message="文件已存在於RAG引擎中",
+                data={"collection_name": file_name}
+            )
+            logger.info(f"文件已存在於RAG引擎中: {file_name}")
 
         return rag_result
 
@@ -454,7 +489,7 @@ class PDFHelper:
     def reconstruct_markdown(self, 
             json_name: str, 
             method: Literal['auto', 'ocr', 'text'],
-            language: Literal['zh', 'en'] = 'zh'
+            mode: Literal['origin', 'translated']
         ) -> HelperResult:
         """
         重組.md檔案
@@ -470,12 +505,64 @@ class PDFHelper:
         finished_path = self.md_constructor.reconstruct(
             json_name=json_name,
             method=method,
-            language=language
+            mode=mode
         )
         return HelperResult(
             success=finished_path is not None,
             message="Markdown重組完成" if finished_path else "Markdown重組失敗",
             data={"markdown_path": finished_path} if finished_path else None
+        )
+
+    def _check_progress_status(self, file_name:str) -> HelperResult:
+        """
+        檢查當前檔案的處理進度
+
+        Args:
+            file_name: 檔案名稱
+        
+        Returns:
+            HelperResult: 包含當前處理階段的統一格式
+                - data(stage, stage_data): 包含當前處理階段及相關資料
+                - stage: 當前處理階段 (ProgressStage枚舉值)
+                - stage_data: 與當前階段相關的資料 (例如檔案路徑)
+        """
+        # 確保只保留檔案名稱，不包含副檔名
+        if file_name.find(".") != -1:
+            file_name = file_name[:file_name.rfind(".")]
+        
+        # 依照檔案結構組合完整路徑
+        pdf_name = file_name + ".pdf"
+        translated_name = file_name + "_translated.json"
+
+        pdf_path = os.path.join(self.config.instance_path, "pdfs", pdf_name)
+        mineru_path = os.path.join(self.config.instance_path, "mineru_outputs", file_name)
+        translated_path = os.path.join(self.config.instance_path, "translated_files", translated_name)
+
+        stage: ProgressStage = None
+        stage_data = None
+        if not os.path.exists(pdf_path):
+            stage = None
+            stage_data = None
+        elif not os.path.exists(mineru_path):
+            stage = ProgressStage.UPLOADED_PDF
+            stage_data = pdf_path
+        elif not os.path.exists(translated_path):
+            stage = ProgressStage.PROCESSED_PDF
+            stage_data = mineru_path
+        elif file_name not in self.rag_engine.vector_store.list_collections():
+            stage = ProgressStage.TRANSLATED
+            stage_data = translated_path
+        else:
+            stage = ProgressStage.RAG_ADDED
+            stage_data = translated_name
+        
+        return HelperResult(
+            success=True,
+            message="進度狀態獲取完成",
+            data={
+                "stage": stage.value if stage else -1,
+                "stage_data": stage_data
+            }
         )
 
     def remove_file_from_system(self, file_name: str) -> HelperResult:
@@ -500,7 +587,7 @@ class PDFHelper:
         pdf_path = os.path.join(self.config.instance_path, "pdfs", pdf_name)
         mineru_path = os.path.join(self.config.instance_path, "mineru_outputs", file_name)
         translate_progress_path = os.path.join(self.config.instance_path, "translated_files", "unfinished_file", progress_name)
-        translated_name = os.path.join(self.config.instance_path, "translated_files", translated_name)
+        translated_path = os.path.join(self.config.instance_path, "translated_files", translated_name)
         reconstruct_path = os.path.join(self.config.instance_path, "reconstructed_files", file_name)
 
         try:
@@ -524,12 +611,12 @@ class PDFHelper:
             else:
                 logger.warning(f"檔案不存在，無法移除: {translate_progress_path}")
 
-            if os.path.exists(translated_name):
-                os.remove(translated_name)
-                logger.info(f"已移除檔案: {translated_name}")
+            if os.path.exists(translated_path):
+                os.remove(translated_path)
+                logger.info(f"已移除檔案: {translated_path}")
             else:
-                logger.warning(f"檔案還未生成，無法移除: {translated_name}")
-            
+                logger.warning(f"檔案還未生成，無法移除: {translated_path}")
+
             if os.path.exists(reconstruct_path):
                 shutil.rmtree(reconstruct_path)
                 logger.info(f"已移除資料夾: {reconstruct_path}")

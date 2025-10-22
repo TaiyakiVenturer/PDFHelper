@@ -214,15 +214,17 @@ def reconstruct_markdown_endpoint():
         data = request.json
         json_name = data.get('json_name')
         method = data.get('method', 'auto')
-        language = data.get('lang', 'zh')
+        mode = data.get('mode')
 
         if not json_name:
             return jsonify({"success": False, "message": "缺少 json_name 參數"}), 400
+        if not mode:
+            return jsonify({"success": False, "message": "缺少 mode 參數"}), 400
 
         result = pdf_helper.reconstruct_markdown(
             json_name=json_name,
             method=method,
-            language=language
+            mode=mode
         )
         
         return jsonify({

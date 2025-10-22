@@ -44,10 +44,10 @@ declare class APIClient {
      * 重組 Markdown 文件
      * @param json_name - 翻譯後的Json檔案名稱含副檔名 (例如: `example_translated.json`)
      * @param method - 解析方法 (auto/txt/ocr)
-     * @param lang - 語言設定 (預設: zh)
+     * @param mode - 模式設定 (預設: origin/translated)
      * @returns Promise<ReconstructMarkdownResult>
      */
-    reconstructMarkdown(json_name: string, method: "auto" | "txt" | "ocr", lang: "zh" | "en"): Promise<ReconstructMarkdownResult>;
+    reconstructMarkdown(json_name: string, method: "auto" | "txt" | "ocr", mode: "origin" | "translated"): Promise<ReconstructMarkdownResult>;
     /**
      * 獲取系統健康狀態
      * @param showError - 是否顯示錯誤訊息

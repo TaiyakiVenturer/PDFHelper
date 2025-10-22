@@ -132,10 +132,10 @@ class APIClient {
      * 重組 Markdown 文件
      * @param json_name - 翻譯後的Json檔案名稱含副檔名 (例如: `example_translated.json`)
      * @param method - 解析方法 (auto/txt/ocr)
-     * @param lang - 語言設定 (預設: zh)
+     * @param mode - 模式設定 (預設: origin/translated)
      * @returns Promise<ReconstructMarkdownResult>
      */
-    async reconstructMarkdown(json_name, method, lang) {
+    async reconstructMarkdown(json_name, method, mode) {
         return this.request(config_1.API_ENDPOINTS.RECONSTRUCT_MARKDOWN, {
             method: "POST",
             headers: {
@@ -144,7 +144,7 @@ class APIClient {
             body: JSON.stringify({
                 json_name: json_name,
                 method: method,
-                lang: lang
+                mode: mode
             })
         });
     }

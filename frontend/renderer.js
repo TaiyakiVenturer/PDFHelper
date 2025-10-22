@@ -1857,7 +1857,7 @@ window.electronAPI?.onProcessEvent?.((evt) => {
 // --- Chat 邏輯 ---
 const chatState = {
   messages: [], // {role, content, references?, followups?, context?}
-  conversations: loadFromStorage(STORAGE_KEYS.chatHistory, []),
+  conversations: [], // 初始化為空，稍後從檔案載入
   activeId: null,
   suggestions: [],
   historySelectionId: null
@@ -1868,6 +1868,43 @@ const voiceState = {
   utterance: null
 };
 let activeWorkspaceTab = 'chat';
+
+// 從檔案載入聊天記錄
+async function loadConversationsFromFile() {
+  try {
+    const conversations = await window.electronAPI?.loadChatHistory?.();
+    if (Array.isArray(conversations) && conversations.length > 0) {
+      chatState.conversations = conversations;
+      console.log('[Chat] 已從檔案載入', conversations.length, '個對話');
+    } else {
+      // 如果檔案中沒有資料，嘗試從 localStorage 遷移
+      await migrateFromLocalStorage();
+    }
+  } catch (err) {
+    console.error('[Chat] 載入聊天記錄失敗:', err);
+    chatState.conversations = [];
+  }
+}
+
+// 從 localStorage 遷移到檔案系統
+async function migrateFromLocalStorage() {
+  try {
+    const oldData = loadFromStorage(STORAGE_KEYS.chatHistory, []);
+    if (Array.isArray(oldData) && oldData.length > 0) {
+      console.log('[Chat] 發現 localStorage 中的舊資料，正在遷移...', oldData.length, '個對話');
+      chatState.conversations = oldData;
+      await saveConversations();
+      // 清除 localStorage 中的資料
+      localStorage.removeItem(STORAGE_KEYS.chatHistory);
+      console.log('[Chat] 遷移完成，已清除 localStorage 中的舊資料');
+    } else {
+      chatState.conversations = [];
+    }
+  } catch (err) {
+    console.error('[Chat] 從 localStorage 遷移失敗:', err);
+    chatState.conversations = [];
+  }
+}
 
 function persistChatPrefs() {
   persistToStorage(STORAGE_KEYS.chatPrefs, chatPrefs);
@@ -1974,7 +2011,16 @@ function startNewConversation(initialTitle) {
 }
 
 function saveConversations() {
-  persistToStorage(STORAGE_KEYS.chatHistory, chatState.conversations);
+  // 改用檔案系統儲存
+  if (window.electronAPI?.saveChatHistory) {
+    return window.electronAPI.saveChatHistory(chatState.conversations).catch(err => {
+      console.error('[Chat] 儲存聊天記錄失敗:', err);
+      return false;
+    });
+  } else {
+    console.warn('[Chat] saveChatHistory API 未可用');
+    return Promise.resolve(false);
+  }
 }
 
 function updateConversationMetadata() {
@@ -2599,11 +2645,20 @@ chatHistoryListEl?.addEventListener('click', (event) => {
 btnVoiceInput?.addEventListener('click', startVoiceInput);
 btnVoiceOutput?.addEventListener('click', speakLastAssistantMessage);
 
-ensureActiveConversation();
-renderChat();
+// 初始化聊天記錄（從檔案載入）
+loadConversationsFromFile().then(() => {
+  ensureActiveConversation();
+  renderChat();
+  renderChatHistoryList();
+}).catch(err => {
+  console.error('[Chat] 初始化失敗:', err);
+  ensureActiveConversation();
+  renderChat();
+  renderChatHistoryList();
+});
+
 applySuggestionsVisibility();
 refreshSuggestedQuestions();
-renderChatHistoryList();
 ensureReaderContainers();
 hideSelectionPopover();
 updateSelectionPopoverActions('selection');

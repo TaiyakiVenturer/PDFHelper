@@ -272,11 +272,13 @@ const defaultSettings = {
 const projectRoot = path.join(__dirname, '..'); // 從 frontend 回到根目錄
 const uploadDir = path.join(projectRoot, 'backend', 'instance', 'pdfs');
 const historyPath = path.join(__dirname, 'instance', 'history.json');
+const chatHistoryPath = path.join(__dirname, 'instance', 'chat_history.json');
 const dropDebugPath = path.join(__dirname, 'instance', 'drop_debug.txt');
 const sessionTracker = new Map();
 
 console.log("[DEBUG] 設定檔路徑", settingsPath);
 console.log("[DEBUG] 歷史紀錄檔案", historyPath);
+console.log("[DEBUG] 聊天記錄檔案", chatHistoryPath);
 console.log("[DEBUG] 拖放偵錯檔案", dropDebugPath);
 console.log("[DEBUG] 上傳檔案夾", uploadDir);
 
@@ -356,6 +358,30 @@ function writeHistory(list) {
     return true;
   } catch (e) {
     console.error('寫入歷史失敗:', e);
+    return false;
+  }
+}
+
+// 聊天記錄 I/O
+function readChatHistory() {
+  try {
+    if (fs.existsSync(chatHistoryPath)) {
+      const raw = fs.readFileSync(chatHistoryPath, 'utf-8');
+      const json = JSON.parse(raw);
+      return Array.isArray(json) ? json : [];
+    }
+  } catch (e) {
+    console.error('讀取聊天記錄失敗:', e);
+  }
+  return [];
+}
+function writeChatHistory(conversations) {
+  try {
+    fs.mkdirSync(path.dirname(chatHistoryPath), { recursive: true });
+    fs.writeFileSync(chatHistoryPath, JSON.stringify(conversations || [], null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error('寫入聊天記錄失敗:', e);
     return false;
   }
 }
@@ -992,6 +1018,15 @@ ipcMain.handle('history:clear', () => {
   writeHistory([]);
   return true;
 });
+
+// IPC: 聊天記錄操作
+ipcMain.handle('chat:load-history', () => {
+  return readChatHistory();
+});
+ipcMain.handle('chat:save-history', async (_event, conversations) => {
+  return writeChatHistory(conversations);
+});
+
 ipcMain.handle('processed-docs:list', async () => {
   const history = readHistory();
   const items = history
@@ -1060,12 +1095,21 @@ ipcMain.handle('processed-docs:load', async (_event, docId) => {
   }
 
   const markdown = fs.readFileSync(markdownPath, 'utf-8');
-  const meta = { ...(record.metadata || {}) };
-  if (record.collectionName && !meta.collection_name) meta.collection_name = record.collectionName;
+  
+  // 建構 metadata 物件 - 優先使用頂層屬性，並確保 markdownPath 存在
+  const meta = { 
+    ...(record.metadata || {}),
+    // 從頂層屬性複製到 meta（新版格式相容）
+    collection_name: record.collectionName || record.metadata?.collection_name || '',
+    translated_json_name: record.translatedJsonName || record.metadata?.translated_json_name || '',
+    markdownPath: markdownPath, // 確保 markdownPath 一定存在
+    language: record.language || record.metadata?.language || record.metadata?.lang || 'zh'
+  };
+  
   const payload = {
     markdown,
     meta,
-    metadata: meta,
+    metadata: meta, // 保持相容性
     lang: record.language || meta.language || meta.lang || 'zh',
     sessionId: record.sessionId,
     filePath: record.filePath || '',

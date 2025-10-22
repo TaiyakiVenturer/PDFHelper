@@ -73,4 +73,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   logDropDebug: (data) => ipcRenderer.send('debug:drop-log', data)
   ,importTempFile: (name, bytes) => ipcRenderer.invoke('file:import-temp', { name, bytes })
   ,dropClipboardPaths: () => ipcRenderer.invoke('drop:clipboard-paths')
+  // 聊天記錄檔案操作
+  ,loadChatHistory: () => ipcRenderer.invoke('chat:load-history')
+  ,saveChatHistory: (conversations) => ipcRenderer.invoke('chat:save-history', conversations)
 });

@@ -27,6 +27,22 @@ export declare const API_ENDPOINTS: {
     readonly GET_PROGRESS: "api/get-progress";
     readonly REMOVE_FILE: "api/remove-file";
 };
+/**
+ * 語言對應表
+ */
+export declare const LANGUAGE_MAP: {
+    ch: string;
+    chinese_cht: string;
+    en: string;
+    korean: string;
+    japan: string;
+    th: string;
+    el: string;
+    latin: string;
+    arabic: string;
+    east_slavic: string;
+    devanagari: string;
+};
 import { type ProgressStageNames } from "../types/progress.js";
 /**
  * 用於翻譯進度階段名稱

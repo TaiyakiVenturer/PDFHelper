@@ -507,7 +507,7 @@ ipcMain.handle('process:start', async (event, payload) => {
     const asyncResult = await apiClient.startFullProcessAsync(
       fileName,
       method,
-      lang
+      lang,
     );
 
     if (!asyncResult.success)

@@ -41,14 +41,29 @@ class Translator():
 
         self.is_reference = False
 
+        # 支援的語言映射
+        self.LANG_MAP = {
+            "ch": "簡體中文",
+            "chinese_cht": "繁體中文",
+            "en": "英文",
+            "korean": "韓文",
+            "japan": "日文",
+            "th": "泰文",
+            "el": "希臘文",
+            "latin": "拉丁文",
+            "arabic": "阿拉伯文",
+            "east_slavic": "俄文 (烏克蘭文)",
+            "devanagari": "印度文 (尼泊爾文)"
+        }
+
     def is_available(self) -> bool:
         """檢查翻譯器是否可用"""
         return self.llm_service.is_available()
 
-    def _get_system_prompt(self) -> str:
+    def _get_system_prompt(self, target_lang: str) -> str:
         """獲取系統提示詞"""
         return """
-你是專業的學術論文翻譯專家，專精於英文學術文獻的繁體中文翻譯。
+你是專業的學術論文翻譯專家，專精於{target_lang}學術文獻的繁體中文翻譯。
 
 ## 翻譯原則與分類處理
 ### 內容類型：
@@ -73,13 +88,16 @@ class Translator():
 內容類型：{content_type}
 
 **重要：僅輸出翻譯結果，無需額外說明；上下文僅供參考，請勿將上下文內容複製到回答中**
-"""
+""".format(target_lang=target_lang, context="{context}", content_type="{content_type}")
 
-    def send_translate_request(self, prompt: str, end_chat: bool) -> str:
+    def send_translate_request(self, prompt: str, end_chat: bool, target_lang: str = "en") -> str:
         """發送翻譯請求給翻譯器"""
+        if target_lang not in self.LANG_MAP:
+            raise ValueError(f"不支援的目標語言: {target_lang}")
+
         return self.llm_service.send_multi_request(
             prompt, 
-            self._get_system_prompt(), 
+            self._get_system_prompt(target_lang=self.LANG_MAP.get(target_lang)), 
             end_chat=end_chat
         )
 
@@ -106,12 +124,18 @@ class Translator():
         
         return text
 
-    def translate_single_text(self, text: str, content_type: str = "body", max_retries: int = 3) -> str:
+    def translate_single_text(self, 
+            text: str, 
+            target_lang: str,
+            content_type: str = "body", 
+            max_retries: int = 3, 
+        ) -> str:
         """
         翻譯單一段落文字。
         
         Args:
             text: 要翻譯的文本
+            target_lang: 目標語言
             content_type: 內容類型 (title/abstract/body/reference)
             max_retries: 最大重試次數
             
@@ -122,7 +146,7 @@ class Translator():
 
         for attempt in range(1, max_retries + 1):
             try:
-                translation = self.send_translate_request(prompt, end_chat=False)
+                translation = self.send_translate_request(prompt, end_chat=False, target_lang=target_lang)
                 if not translation:
                     logger.warning(f"翻譯出現錯誤，重新嘗試 (嘗試 {attempt}/{max_retries})")
                     continue
@@ -167,6 +191,7 @@ class Translator():
 
     def translate_content_list(self, 
             content_list_path: str, 
+            target_lang: str,
             buffer_time: float = 0.5
         ) -> str:
         """
@@ -175,6 +200,7 @@ class Translator():
         Args:
             content_list_path: content_list.json檔案路徑
             buffer_time: 每次請求後的緩衝時間，避免過於頻繁請求
+            target_lang: 目標語言
             
         Returns:
             翻譯結果檔案路徑
@@ -248,7 +274,8 @@ class Translator():
 
             translated_text = self.translate_single_text(
                 text=original_text,
-                content_type=content_type
+                content_type=content_type,
+                target_lang=target_lang
             )
             if translated_text == "":
                 logger.error(f"翻譯失敗，跳過段落: {original_text}")

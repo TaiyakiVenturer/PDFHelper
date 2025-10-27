@@ -262,12 +262,13 @@ class PDFHelper:
             data=mineru_results if mineru_results["success"] else None
         )
 
-    def translate_json_content(self, json_path: str) -> HelperResult:
+    def translate_json_content(self, json_path: str, lang: str) -> HelperResult:
         """
         使用LLM服務翻譯JSON內容
         
         Args:
             json_path: JSON檔案路徑
+            lang: 目標語言
         
         Returns:
             HelperResult: 包含翻譯後的JSON檔案路徑的統一格式
@@ -284,7 +285,8 @@ class PDFHelper:
             start = time.time()
             translated_file_path = self.translator.translate_content_list(
                 content_list_path=json_path,
-                buffer_time=1.8 if hasattr(self.translator.llm_service, 'api_key') else 0,
+                target_lang=lang,
+                buffer_time=1.8 if hasattr(self.translator.llm_service, 'api_key') else 0
             )
             if self.verbose:
                 logger.info(f"JSON '{json_path}' 翻譯完成，輸出路徑: {translated_file_path}")
@@ -390,7 +392,7 @@ class PDFHelper:
             ProgressManager.progress_update(30, "開始翻譯JSON內容", "translating-json")
             
             # 翻譯JSON內容
-            translated_path = self.translate_json_content(json_path)
+            translated_path = self.translate_json_content(json_path, lang=lang)
             if not translated_path.success:
                 ProgressManager.progress_fail("翻譯JSON內容遇到錯誤")
                 return HelperResult(

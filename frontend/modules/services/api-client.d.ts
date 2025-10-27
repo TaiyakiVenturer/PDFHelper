@@ -1,3 +1,4 @@
+import { LANGUAGE_MAP } from "./config";
 import { ProcessPDFResult, TranslateJSONContentResult, AddJSONToRAGResult, AskQuestionResult, ReconstructMarkdownResult, GetSystemHealthResult, GetProgressResult, HelperResult } from "../types/results";
 /**
  * PDFHelper API Client
@@ -18,7 +19,7 @@ declare class APIClient {
      * @param device - 計算設備 (cuda/cpu)
      * @returns Promise<ProcessPDFResult>
      */
-    processPDF(pdf_name: string, method?: "auto" | "txt" | "ocr", lang?: string, device?: "cuda" | "cpu"): Promise<ProcessPDFResult>;
+    processPDF(pdf_name: string, method?: "auto" | "txt" | "ocr", lang?: keyof typeof LANGUAGE_MAP, device?: "cuda" | "cpu"): Promise<ProcessPDFResult>;
     /**
      * 翻譯 JSON 內容
      * @param json_path - JSON 檔案路徑
@@ -63,7 +64,7 @@ declare class APIClient {
      * @returns Promise<{ success: boolean; message: string; }>
      * @note 此方法會觸發後端的非同步任務, 前端應定期調用 getProcessingProgress 以獲取進度
      */
-    startFullProcessAsync(pdf_name: string, method: "auto" | "txt" | "ocr", lang?: string): Promise<{
+    startFullProcessAsync(pdf_name: string, method: "auto" | "txt" | "ocr", lang?: keyof typeof LANGUAGE_MAP): Promise<{
         success: boolean;
         message: string;
     }>;

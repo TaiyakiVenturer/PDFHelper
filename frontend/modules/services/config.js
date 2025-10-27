@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SERVER_STATUS_NAMES = exports.ProgressStages = exports.PROGRESS_STAGE_NAMES = exports.API_ENDPOINTS = exports.API_CONFIG = void 0;
+exports.SERVER_STATUS_NAMES = exports.ProgressStages = exports.PROGRESS_STAGE_NAMES = exports.LANGUAGE_MAP = exports.API_ENDPOINTS = exports.API_CONFIG = void 0;
 /**
  * API 伺服器配置
  *
@@ -31,6 +31,22 @@ exports.API_ENDPOINTS = {
     FULL_PROCESS: "api/full-process-async",
     GET_PROGRESS: "api/get-progress",
     REMOVE_FILE: "api/remove-file"
+};
+/**
+ * 語言對應表
+ */
+exports.LANGUAGE_MAP = {
+    "ch": "簡體中文",
+    "chinese_cht": "繁體中文",
+    "en": "英文",
+    "korean": "韓文",
+    "japan": "日文",
+    "th": "泰文",
+    "el": "希臘文",
+    "latin": "拉丁文",
+    "arabic": "阿拉伯文",
+    "east_slavic": "俄文 (烏克蘭文)",
+    "devanagari": "印度文 (尼泊爾文)"
 };
 const progress_js_1 = require("../types/progress.js");
 /**

@@ -226,7 +226,7 @@ class MinerUProcessor:
         # 移除副檔名取得原始檔名
         original_filename = os.path.splitext(pdf_name)[0]
         # 取得原始PDF路徑
-        original_pdf_path = os.path.join(self.default_path, pdf_name + ".pdf")
+        original_pdf_path = os.path.join(self.default_path, original_filename + ".pdf")
         # 檢查完整路徑長度
         test_path = os.path.join(os.path.abspath(self.output_dir), original_filename, method, f"{original_filename}_content_list.json")
 

@@ -89,9 +89,10 @@ declare class APIClient {
     /**
      * 移除 PDFHelper 儲存的檔案及資料
      * @param target - 要移除的檔案名稱 (不含路徑)
+     * @param method - 解析方法 (auto/txt/ocr)
      * @returns Promise<HelperResult<null>>
      */
-    removeFile(target: string): Promise<HelperResult<null>>;
+    removeFile(target: string, method: "auto" | "txt" | "ocr"): Promise<HelperResult<null>>;
 }
 export declare const apiClient: APIClient;
 export {};

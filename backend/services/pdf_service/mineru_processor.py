@@ -67,29 +67,13 @@ class MinerUProcessor:
                 - error (str): 錯誤訊息（如果有的話）
                 - returncode (int): 返回代碼
         """
-
         # 準備輸出路徑
-        original_pdf_path = os.path.join(self.default_path, pdf_name)
         output_path = os.path.abspath(self.output_dir)
         
-        # 處理超長檔名問題 (Windows 260字符路徑限制)
-        original_filename = os.path.splitext(pdf_name)[0]
+        # 檢查是否需要使用雜湊檔名
+        processing_filename, pdf_path = self._check_hashed_filename(pdf_name, method)
         
-        # 檢查完整路徑長度
-        test_path = os.path.join(output_path, original_filename, method, f"{original_filename}_content_list.json")
-        
-        import re
-        if len(test_path) > 250:  # 留一些緩衝空間
-            logger.warning(f"路徑過長，創建雜湊名稱副本:")
-            pdf_path, processing_filename = self._get_hashed_filename(original_filename, original_pdf_path)
-        elif not re.match(r"^[a-zA-Z0-9.-]+$", original_filename):  # original_filename != [a-zA-Z0-9.-]
-            logger.warning(f"檔案名稱出現非法字元，創建雜湊名稱副本:")
-            pdf_path, processing_filename = self._get_hashed_filename(original_filename, original_pdf_path)
-        else:   
-            pdf_path = original_pdf_path
-            processing_filename = original_filename
-            self._filename_mapping = None
-            
+        # 建立輸出子目錄
         expected_output_dir = os.path.join(output_path, processing_filename, method)
         os.makedirs(expected_output_dir, exist_ok=True)
 
@@ -226,8 +210,37 @@ class MinerUProcessor:
                 "error": str(e)
             }
 
-    def _get_hashed_filename(self, original_filename: str, original_pdf_path: str) -> Tuple[str, str]:
-        """生成短檔名以避免路徑過長問題"""
+    def _check_hashed_filename(self, pdf_name: str, method: str) -> Tuple[str, str]:
+        """
+        生成短檔名以避免路徑過長問題
+        
+        Args:
+            pdf_name: 原始檔案名稱 (包含副檔名)
+            method: 處理方法 (用於檢查路徑長度)
+        
+        Returns:
+            Tuple(processing_filename, pdf_path): 短檔名的PDF路徑和處理用的檔名
+                - processing_filename: 用於處理的檔名 (不含副檔名)
+                - pdf_path: 短檔名的PDF路徑 (包含副檔名)
+        """
+        # 移除副檔名取得原始檔名
+        original_filename = os.path.splitext(pdf_name)[0]
+        # 取得原始PDF路徑
+        original_pdf_path = os.path.join(self.default_path, pdf_name + ".pdf")
+        # 檢查完整路徑長度
+        test_path = os.path.join(os.path.abspath(self.output_dir), original_filename, method, f"{original_filename}_content_list.json")
+
+        import re
+        if len(test_path) > 250:  # 留一些緩衝空間
+            logger.warning(f"路徑過長，創建雜湊名稱副本:")
+        elif not re.match(r"^[a-zA-Z0-9.-]+$", original_filename):  # original_filename != [a-zA-Z0-9.-]
+            logger.warning(f"檔案名稱出現非法字元，創建雜湊名稱副本:")
+        elif len(original_filename) < 3 or len(original_filename) > 50:
+            logger.warning(f"檔案名稱過短或過長，創建雜湊名稱副本:")
+        else:   
+            self._filename_mapping = None
+            return original_filename, original_pdf_path
+
         # 創建短檔名版本
         import hashlib
         hash_part = hashlib.md5(original_filename.encode()).hexdigest()[:8]
@@ -240,7 +253,12 @@ class MinerUProcessor:
         # 創建短檔名的 PDF 副本
         import shutil
         short_pdf_path = os.path.join(self.default_path, short_pdf_name)
-        shutil.copy2(original_pdf_path, short_pdf_path)
+        if not os.path.exists(original_pdf_path):
+            logger.warning(f"原始PDF檔案不存在: {original_pdf_path}")
+        elif not os.path.exists(short_pdf_path):
+            shutil.copy2(original_pdf_path, short_pdf_path)
+        else:
+            logger.info(f"短檔名副本已存在: {short_pdf_path}")
         
         # 使用短檔名處理
         pdf_path = short_pdf_path
@@ -252,7 +270,7 @@ class MinerUProcessor:
             'short': short_filename,
             'short_pdf_path': short_pdf_path
         }
-        return pdf_path, processing_filename
+        return processing_filename, pdf_path
 
     def _update_progress(self, message: str):
         """更新處理進度"""

@@ -345,11 +345,13 @@ class PDFHelper:
         Returns:
             HelperResult: 包含是否成功加入向量資料庫及加入資料庫集合名稱的統一格式
         """
-        status = self._check_progress_status(pdf_name).data
+        status = self._check_progress_status(pdf_name, method).data
         stage = status.get('stage', -1)
         stage_data = status.get('stage_data', None)
         if stage == -1:
             raise ValueError("無法確認檔案處理階段，請確保PDF已上傳")
+
+        logger.info(f"[from_pdf_to_rag] 檔案當前處理階段: {ProgressStage(stage).name} ({stage})")
         
         if stage <= ProgressStage.UPLOADED_PDF.value:
             from torch import cuda
@@ -513,12 +515,13 @@ class PDFHelper:
             data={"markdown_path": finished_path} if finished_path else None
         )
 
-    def _check_progress_status(self, file_name:str) -> HelperResult:
+    def _check_progress_status(self, file_name: str, method: str) -> HelperResult:
         """
         檢查當前檔案的處理進度
 
         Args:
             file_name: 檔案名稱
+            method: 處理方法 (用於組合路徑)
         
         Returns:
             HelperResult: 包含當前處理階段的統一格式
@@ -529,13 +532,14 @@ class PDFHelper:
         # 確保只保留檔案名稱，不包含副檔名
         if file_name.find(".") != -1:
             file_name = file_name[:file_name.rfind(".")]
+
+        # 檢查是否會生成雜湊檔名
+        file_name, pdf_path = self.pdf_processor._check_hashed_filename(file_name, method)
         
         # 依照檔案結構組合完整路徑
-        pdf_name = file_name + ".pdf"
         translated_name = file_name + "_translated.json"
 
-        pdf_path = os.path.join(self.config.instance_path, "pdfs", pdf_name)
-        mineru_path = os.path.join(self.config.instance_path, "mineru_outputs", file_name)
+        mineru_path = os.path.join(self.config.instance_path, "mineru_outputs", file_name, method)
         translated_path = os.path.join(self.config.instance_path, "translated_files", translated_name)
 
         stage: ProgressStage = None
@@ -543,7 +547,7 @@ class PDFHelper:
         if not os.path.exists(pdf_path):
             stage = None
             stage_data = None
-        elif not os.path.exists(mineru_path):
+        elif not os.path.exists(mineru_path) or not os.listdir(mineru_path):
             stage = ProgressStage.UPLOADED_PDF
             stage_data = pdf_path
         elif not os.path.exists(translated_path):
@@ -565,7 +569,7 @@ class PDFHelper:
             }
         )
 
-    def remove_file_from_system(self, file_name: str) -> HelperResult:
+    def remove_file_from_system(self, file_name: str, method: str) -> HelperResult:
         """
         從系統中移除指定的檔案
         
@@ -579,12 +583,16 @@ class PDFHelper:
         if file_name.find(".") != -1:
             file_name = file_name[:file_name.rfind(".")]
 
-        # 依照檔案結構組合完整路徑
         pdf_name = file_name + ".pdf"
+
+        # 檢查是否會生成雜湊檔名
+        file_name, pdf_path = self.pdf_processor._check_hashed_filename(file_name, method)
+
+        # 依照檔案結構組合完整路徑
         progress_name = file_name + "_progress.json"
         translated_name = file_name + "_translated.json"
 
-        pdf_path = os.path.join(self.config.instance_path, "pdfs", pdf_name)
+        original_pdf_path = os.path.join(self.config.instance_path, "pdfs", pdf_name)
         mineru_path = os.path.join(self.config.instance_path, "mineru_outputs", file_name)
         translate_progress_path = os.path.join(self.config.instance_path, "translated_files", "unfinished_file", progress_name)
         translated_path = os.path.join(self.config.instance_path, "translated_files", translated_name)
@@ -592,6 +600,12 @@ class PDFHelper:
 
         try:
             import shutil
+
+            if os.path.exists(original_pdf_path):
+                os.remove(original_pdf_path)
+                logger.info(f"已移除檔案: {original_pdf_path}")
+            else:
+                logger.warning(f"檔案不存在，無法移除: {original_pdf_path}")
 
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)

@@ -298,11 +298,14 @@ def remove_file_endpoint():
     try:
         data = request.json
         file_name = data.get('file_name')
+        method = data.get('method')
         
         if not file_name:
             return jsonify({"success": False, "message": "缺少 file_name 參數"}), 400
+        if not method:
+            return jsonify({"success": False, "message": "缺少 method 參數"}), 400
 
-        result = pdf_helper.remove_file_from_system(file_name)
+        result = pdf_helper.remove_file_from_system(file_name, method)
         
         return jsonify({
             'success': result.success,

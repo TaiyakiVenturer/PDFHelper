@@ -476,6 +476,8 @@ ipcMain.handle('process:start', async (event, payload) => {
       timestamp: Date.now()
     });
 
+    method = "auto"; // 自動選擇解析方法
+    lang = "en";   // 目標語言英文
     const startAt = Date.now();
     sessionTracker.set(sessionId, {
       filePath,
@@ -484,7 +486,9 @@ ipcMain.handle('process:start', async (event, payload) => {
       embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
       createdAt: startAt,
       updatedAt: startAt,
-      lastStatus: '已上傳 PDF'
+      lastStatus: '已上傳 PDF',
+      language: lang,
+      method: method
     });
 
     // 更新後端的 API Key 和模型（分開更新）
@@ -499,8 +503,7 @@ ipcMain.handle('process:start', async (event, payload) => {
       embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
       sessionId 
     });
-    method = "auto"; // 自動選擇解析方法
-    lang = "en";   // 目標語言英文
+    
     const asyncResult = await apiClient.startFullProcessAsync(
       fileName,
       method,
@@ -558,7 +561,9 @@ ipcMain.handle('process:start', async (event, payload) => {
             storedFileName: fileName,
             translator: `${translatorConfig.company}/${translatorConfig.model}`,
             embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            language: lang,
+            method: method
           };
           sessionTracker.set(sessionId, {
             ...info,
@@ -570,22 +575,23 @@ ipcMain.handle('process:start', async (event, payload) => {
           const info = sessionTracker.get(sessionId) || {};
           const finalRecord = {
             sessionId,
-            filePath: info.filePath || filePath,
-            storedFileName: info.storedFileName || fileName,
-            translator: info.translator || `${translatorConfig.company}/${translatorConfig.model}`,
-            embedding: info.embedding || `${embeddingConfig.company}/${embeddingConfig.model}`,
-            createdAt: info.createdAt || Date.now(),
-            updatedAt: Date.now(),
             status: evtObj.type,
             lastStatus: evtObj.status || evtObj.error || '',
             done: evtObj.type === 'done',
-            error: evtObj.type === 'error' ? String(evtObj.error || '') : null
+            error: evtObj.type === 'error' ? String(evtObj.error || '') : null,
+            createdAt: info.createdAt || Date.now(),
+            updatedAt: Date.now(),
+            translator: info.translator || `${translatorConfig.company}/${translatorConfig.model}`,
+            embedding: info.embedding || `${embeddingConfig.company}/${embeddingConfig.model}`,
+            storedFileName: info.storedFileName || fileName,
+            language: lang,
+            method: method,
+            filePath: info.filePath || filePath
           };
 
           if (evtObj.type === 'done') {
             finalRecord.status = 'done';
             if (evtObj.metadata) {
-              finalRecord.language = lang || null;
               finalRecord.collectionName = evtObj.metadata.collection_name || info.collectionName || null;
               if (evtObj.metadata.translated_json_name) {
                 finalRecord.translatedJsonName = evtObj.metadata.translated_json_name;
@@ -1130,9 +1136,10 @@ ipcMain.handle('processed-docs:remove', async (_event, docId) => {
 
   const record = history[index];
   const storedFileName = record.storedFileName || '';
+  const method = record.method || 'auto';
   if (storedFileName)
   {
-    const result = await apiClient.removeFile(storedFileName);
+    const result = await apiClient.removeFile(storedFileName, method);
     if (result.success)
       console.log('[processed-docs:remove] 已從後端刪除檔案:', storedFileName);
     else

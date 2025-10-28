@@ -54,8 +54,7 @@ class MinerUProcessor:
             lang: 語言設定
             formula: 是否解析公式
             table: 是否解析表格
-            device: 設備模式
-            verbose: 是否啟用詳細模式
+            device: 設備模式 (cuda/cpu)
 
         Returns:
             Dict ([str, Any]): 包含處理結果的字典
@@ -71,7 +70,7 @@ class MinerUProcessor:
         output_path = os.path.abspath(self.output_dir)
         
         # 檢查是否需要使用雜湊檔名
-        processing_filename, pdf_path = self._check_hashed_filename(pdf_name, method)
+        processing_filename, pdf_path = self._check_hashed_filename(pdf_name)
         
         # 建立輸出子目錄
         expected_output_dir = os.path.join(output_path, processing_filename, method)
@@ -210,9 +209,9 @@ class MinerUProcessor:
                 "error": str(e)
             }
 
-    def _check_hashed_filename(self, pdf_name: str, method: str) -> Tuple[str, str]:
+    def _check_hashed_filename(self, pdf_name: str) -> Tuple[str, str]:
         """
-        生成短檔名以避免路徑過長問題
+        檢查是否需要使用雜湊檔名來避免路徑過長或非法字元問題。
         
         Args:
             pdf_name: 原始檔案名稱 (包含副檔名)
@@ -227,8 +226,8 @@ class MinerUProcessor:
         original_filename = os.path.splitext(pdf_name)[0]
         # 取得原始PDF路徑
         original_pdf_path = os.path.join(self.default_path, original_filename + ".pdf")
-        # 檢查完整路徑長度
-        test_path = os.path.join(os.path.abspath(self.output_dir), original_filename, method, f"{original_filename}_content_list.json")
+        # 檢查完整路徑長度 (假設method為'auto')
+        test_path = os.path.join(os.path.abspath(self.output_dir), original_filename, 'auto', f"{original_filename}_content_list.json")
 
         import re
         if len(test_path) > 250:  # 留一些緩衝空間

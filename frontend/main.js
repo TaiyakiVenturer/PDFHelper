@@ -488,7 +488,6 @@ ipcMain.handle('process:start', async (event, payload) => {
       updatedAt: startAt,
       lastStatus: '已上傳 PDF',
       language: lang,
-      method: method
     });
 
     // 更新後端的 API Key 和模型（分開更新）
@@ -507,7 +506,7 @@ ipcMain.handle('process:start', async (event, payload) => {
     const asyncResult = await apiClient.startFullProcessAsync(
       fileName,
       method,
-      lang,
+      lang
     );
 
     if (!asyncResult.success)
@@ -563,7 +562,6 @@ ipcMain.handle('process:start', async (event, payload) => {
             embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
             createdAt: Date.now(),
             language: lang,
-            method: method
           };
           sessionTracker.set(sessionId, {
             ...info,
@@ -585,7 +583,6 @@ ipcMain.handle('process:start', async (event, payload) => {
             embedding: info.embedding || `${embeddingConfig.company}/${embeddingConfig.model}`,
             storedFileName: info.storedFileName || fileName,
             language: lang,
-            method: method,
             filePath: info.filePath || filePath
           };
 
@@ -1136,10 +1133,9 @@ ipcMain.handle('processed-docs:remove', async (_event, docId) => {
 
   const record = history[index];
   const storedFileName = record.storedFileName || '';
-  const method = record.method || 'auto';
   if (storedFileName)
   {
-    const result = await apiClient.removeFile(storedFileName, method);
+    const result = await apiClient.removeFile(storedFileName);
     if (result.success)
       console.log('[processed-docs:remove] 已從後端刪除檔案:', storedFileName);
     else

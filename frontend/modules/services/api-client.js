@@ -217,10 +217,9 @@ class APIClient {
     /**
      * 移除 PDFHelper 儲存的檔案及資料
      * @param target - 要移除的檔案名稱 (不含路徑)
-     * @param method - 解析方法 (auto/txt/ocr)
      * @returns Promise<HelperResult<null>>
      */
-    async removeFile(target, method) {
+    async removeFile(target) {
         return this.request(config_1.API_ENDPOINTS.REMOVE_FILE, {
             method: "POST",
             headers: {
@@ -228,7 +227,6 @@ class APIClient {
             },
             body: JSON.stringify({
                 file_name: target,
-                method: method
             })
         });
     }

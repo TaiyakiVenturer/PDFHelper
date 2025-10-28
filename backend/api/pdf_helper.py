@@ -536,7 +536,7 @@ class PDFHelper:
             file_name = file_name[:file_name.rfind(".")]
 
         # 檢查是否會生成雜湊檔名
-        file_name, pdf_path = self.pdf_processor._check_hashed_filename(file_name, method)
+        file_name, pdf_path = self.pdf_processor._check_hashed_filename(file_name)
         
         # 依照檔案結構組合完整路徑
         translated_name = file_name + "_translated.json"
@@ -571,7 +571,7 @@ class PDFHelper:
             }
         )
 
-    def remove_file_from_system(self, file_name: str, method: str) -> HelperResult:
+    def remove_file_from_system(self, file_name: str) -> HelperResult:
         """
         從系統中移除指定的檔案
         
@@ -588,7 +588,7 @@ class PDFHelper:
         pdf_name = file_name + ".pdf"
 
         # 檢查是否會生成雜湊檔名
-        file_name, pdf_path = self.pdf_processor._check_hashed_filename(file_name, method)
+        file_name, pdf_path = self.pdf_processor._check_hashed_filename(file_name)
 
         # 依照檔案結構組合完整路徑
         progress_name = file_name + "_progress.json"

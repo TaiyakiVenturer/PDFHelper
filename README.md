@@ -30,6 +30,26 @@ PDFHelper 是一個基於 AI 的智能 PDF 處理系統，提供 PDF 解析、�
 - **Marked.js** - Markdown 渲染引擎
 - **KaTeX** - LaTeX 數學公式渲染
 
+## :busts_in_silhouette: 團隊成員與貢獻 (Team & Contributions)
+
+本專案為 3 人團隊合作開發。主要分工如下：
+
+* **[TaiyakiVenturer] (https://github.com/TaiyakiVenturer) (專案組長 | 後端 & AI 架構師)**
+    * 負責整體專案架構設計、技術選型 (Flask RESTful API, ChromaDB, RAG 等) 與開發任務規劃。
+   * 主導並開發所有 Python 後端 API 服務 (`backend/` 目錄下)。
+   * 設計並實作核心 RAG 系統，整合向量資料庫 (ChromaDB) 與大型語言模型服務。
+   * 定義前後端溝通介面與 API 規範。
+
+* **[linj80912] (https://github.com/linj80912) (前端開發者)**
+    * 負責 `PDFHelper` 的前端介面開發與實作 (使用 Electron, JavaScripts)。
+   * 根據 API 規範與後端進行串接與整合。
+
+* **[eason0616] (https://github.com/eason0616) (後端開發者 | 測試與整合)**
+    * 負責後端系統的**整合測試**與**錯誤分析**。
+   * 驗證專案在**全新環境下的初始化流程**（例如 `git clone` 後的環境建置），確保部署的順暢性。
+   * 執行**探索性測試**以發現潛在的運行時錯誤 (Runtime Errors) 與邊界條件問題。
+   * 提供詳細的錯誤報告與回饋，協助**改善後端錯誤處理機制**與**提升系統穩定性**。
+
 ## 🚀 快速開始
 
 ### 環境需求

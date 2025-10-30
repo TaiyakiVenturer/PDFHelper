@@ -89,6 +89,10 @@ const btnDeleteFile = document.getElementById('btnDeleteFile');
 const processingView = document.getElementById('processingView');
 const wrapUpload = document.querySelector('.wrap');
 const resultView = document.getElementById('resultView');
+const processingOptionsEl = document.getElementById('processingOptions');
+const processingMethodInputs = Array.from(document.querySelectorAll('input[name="processingMethod"]'));
+const processingLanguageSelect = document.getElementById('processingLanguage');
+const processingSummaryEl = document.getElementById('processingSummary');
 let mdContainer = document.getElementById('mdContainer');
 let mdContainerSecondary = document.getElementById('mdContainerSecondary');
 let readerContentEl = document.querySelector('.reader-content');
@@ -108,8 +112,6 @@ const secondarySourceSelect = document.getElementById('secondarySource');
 const btnSyncScroll = document.getElementById('btnSyncScroll');
 const tocSidebar = document.getElementById('tocSidebar');
 const tocListEl = document.getElementById('tocList');
-const btnTocExpand = document.getElementById('btnTocExpand');
-const btnTocCollapse = document.getElementById('btnTocCollapse');
 const btnPrevSection = document.getElementById('btnPrevSection');
 const btnNextSection = document.getElementById('btnNextSection');
 const searchInputEl = document.getElementById('searchInput');
@@ -118,11 +120,6 @@ const btnSearchNext = document.getElementById('btnSearchNext');
 const btnSearchClear = document.getElementById('btnSearchClear');
 const searchCounterEl = document.getElementById('searchCounter');
 const contextChipsEl = document.getElementById('contextChips');
-const selectionPopover = document.getElementById('selectionPopover');
-const btnHighlightSelection = document.getElementById('btnHighlightSelection');
-const btnRemoveHighlight = document.getElementById('btnRemoveHighlight');
-const btnNoteSelection = document.getElementById('btnNoteSelection');
-const btnAskSelection = document.getElementById('btnAskSelection');
 const referenceTrailEl = document.getElementById('referenceTrail');
 const btnAddBookmark = document.getElementById('btnAddBookmark');
 const btnExportBookmarks = document.getElementById('btnExportBookmarks');
@@ -147,6 +144,12 @@ const chatHistoryBackdrop = document.getElementById('chatHistoryBackdrop');
 const chatHistoryListEl = document.getElementById('chatHistoryList');
 const btnVoiceInput = document.getElementById('btnVoiceInput');
 const btnVoiceOutput = document.getElementById('btnVoiceOutput');
+const chatPlaybackEl = document.getElementById('chatPlayback');
+const chatPlaybackSnippet = document.getElementById('chatPlaybackSnippet');
+const btnPlaybackToggle = document.getElementById('btnPlaybackToggle');
+const chatPlaybackToggleIcon = document.getElementById('chatPlaybackToggleIcon');
+const chatPlaybackToggleText = document.getElementById('chatPlaybackToggleText');
+const btnPlaybackStop = document.getElementById('btnPlaybackStop');
 const workspaceTabButtons = document.querySelectorAll('.workspace-tab');
 const workspacePanels = document.querySelectorAll('.tab-panel');
 const workspaceActionGroups = document.querySelectorAll('.tab-actions');
@@ -174,7 +177,138 @@ function ensureReaderContainers() {
 document.addEventListener('DOMContentLoaded', ensureReaderContainers);
 ensureReaderContainers();
 
-const WORKSPACE_TABS = new Set(['chat', 'notes', 'saved']);
+const DEFAULT_MATH_RENDER_OPTIONS = {
+  delimiters: [
+    { left: '$$', right: '$$', display: true },
+    { left: '\\[', right: '\\]', display: true },
+    { left: '\\(', right: '\\)', display: false },
+    { left: '$', right: '$', display: false }
+  ],
+  throwOnError: false,
+  strict: 'ignore'
+};
+
+function cloneMathRenderOptions(source) {
+  const base = (source && typeof source === 'object') ? source : DEFAULT_MATH_RENDER_OPTIONS;
+  const delimiters = Array.isArray(base.delimiters) && base.delimiters.length
+    ? base.delimiters.map(item => ({ ...item }))
+    : DEFAULT_MATH_RENDER_OPTIONS.delimiters.map(item => ({ ...item }));
+  return {
+    ...base,
+    delimiters,
+    throwOnError: typeof base.throwOnError === 'boolean' ? base.throwOnError : false,
+    strict: base.strict ?? 'ignore',
+    macros: typeof base.macros === 'object' && base.macros ? { ...base.macros } : undefined
+  };
+}
+
+function getMathRenderOptions() {
+  if (!window.__pdfHelperMathOptions) {
+    window.__pdfHelperMathOptions = cloneMathRenderOptions(DEFAULT_MATH_RENDER_OPTIONS);
+  }
+  return cloneMathRenderOptions(window.__pdfHelperMathOptions);
+}
+
+function renderMathInContainer(container) {
+  if (!container) return;
+  const options = getMathRenderOptions();
+  let attempted = false;
+  if (typeof window.renderMathInElement === 'function') {
+    try {
+      window.renderMathInElement(container, options);
+      attempted = true;
+    } catch (err) {
+      console.warn('LaTeX 渲染失敗:', err);
+    }
+  }
+  if (typeof window.katex?.renderToString === 'function') {
+    fallbackRenderMath(container, options);
+    attempted = true;
+  }
+  if (!attempted) {
+    console.debug('KaTeX 尚未載入，等待後續再次渲染');
+  }
+}
+
+function fallbackRenderMath(container, options) {
+  const mathRegex = /(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$|\\\[[\s\S]+?\\\]|\\\([\s\S]*?\\\))/g;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.parentElement) return NodeFilter.FILTER_REJECT;
+      const text = node.textContent;
+      if (!text) return NodeFilter.FILTER_REJECT;
+      mathRegex.lastIndex = 0;
+      if (!mathRegex.test(text)) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement.closest('.katex, pre, code, script, style')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  const nodes = [];
+  while (walker.nextNode()) {
+    nodes.push(walker.currentNode);
+  }
+
+  nodes.forEach(node => {
+  const text = node.textContent;
+  mathRegex.lastIndex = 0;
+    if (!text) return;
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    let match;
+
+    while ((match = mathRegex.exec(text)) !== null) {
+      const { index } = match;
+      if (index > lastIndex) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex, index)));
+      }
+      const raw = match[0];
+      let mathContent = '';
+      let displayMode = false;
+      if (raw.startsWith('$$') && raw.endsWith('$$')) {
+        mathContent = raw.slice(2, -2);
+        displayMode = true;
+      } else if (raw.startsWith('\\[') && raw.endsWith('\\]')) {
+        mathContent = raw.slice(2, -2);
+        displayMode = true;
+      } else if (raw.startsWith('\\(') && raw.endsWith('\\)')) {
+        mathContent = raw.slice(2, -2);
+      } else if (raw.startsWith('$') && raw.endsWith('$')) {
+        mathContent = raw.slice(1, -1);
+      } else {
+        mathContent = raw;
+      }
+
+      try {
+        const html = window.katex.renderToString(mathContent, {
+          throwOnError: options.throwOnError,
+          strict: options.strict,
+          displayMode,
+          macros: options.macros
+        });
+        const wrapper = document.createElement(displayMode ? 'div' : 'span');
+        wrapper.innerHTML = html;
+        fragment.appendChild(wrapper);
+      } catch (err) {
+        console.warn('KaTeX 後備渲染失敗:', err);
+        fragment.appendChild(document.createTextNode(raw));
+      }
+
+      lastIndex = mathRegex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+
+    if (fragment.childNodes.length) {
+      node.parentNode?.replaceChild(fragment, node);
+    }
+    mathRegex.lastIndex = 0;
+  });
+}
+
+const WORKSPACE_TABS = new Set(['chat', 'saved']);
 
 function setWorkspaceTab(tab) {
   const next = (tab && WORKSPACE_TABS.has(tab)) ? tab : 'chat';
@@ -335,6 +469,24 @@ const chatPrefs = loadFromStorage(STORAGE_KEYS.chatPrefs, { suggestionsCollapsed
 const processedDocsState = { items: [], loading: false };
 const referenceTrail = [];
 const selectionState = { range: null, text: '', headingId: null, fromSecondary: false, highlightId: null };
+const processingPrefs = { method: 'auto', language: 'auto' };
+const PROCESSING_METHOD_LABELS = { auto: '自動', ocr: 'OCR', txt: '純文字' };
+const PROCESSING_LANGUAGE_LABELS = {
+  auto: '自動偵測',
+  ch: '簡體中文',
+  chinese_cht: '繁體中文',
+  en: '英文',
+  korean: '韓文',
+  japan: '日文',
+  th: '泰文',
+  el: '希臘文',
+  latin: '拉丁文',
+  arabic: '阿拉伯文',
+  east_slavic: '俄文 (烏克蘭文)',
+  devanagari: '印度文 (尼泊爾文)'
+};
+const SUPPORTED_PROCESS_METHODS = new Set(Object.keys(PROCESSING_METHOD_LABELS));
+const SUPPORTED_SOURCE_LANGUAGES = new Set(Object.keys(PROCESSING_LANGUAGE_LABELS));
 const noteComposerState = { editingId: null, headingId: null, snippet: '' };
 let activeHeadingId = null;
 let headingObserver = null;
@@ -399,24 +551,9 @@ function renderMarkdown() {
     const html = convertMarkdownToHtml(src, markdownPath);
     mdContainer.innerHTML = html;
     console.log('Markdown 渲染成功，HTML 長度:', html.length);
-  activeHeadingId = null;
+    activeHeadingId = null;
     postProcessMarkdown();
-    
-    // 渲染 LaTeX（KaTeX auto-render）
-    if (window.renderMathInElement) {
-      try {
-        window.renderMathInElement(mdContainer, {
-          delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$', display: false }
-          ],
-          throwOnError: false
-        });
-        console.log('LaTeX 渲染完成');
-      } catch (katexError) {
-        console.warn('LaTeX 渲染失敗:', katexError);
-      }
-    }
+    renderMathInContainer(mdContainer);
     enableSplitView(Boolean(readerPrefs.split), false);
     applyAnnotations();
     renderHighlights();
@@ -732,19 +869,7 @@ function renderSecondaryMarkdown() {
   const markdownPath = resultState.meta?.markdownPath || '';
   const html = convertMarkdownToHtml(altMarkdown, markdownPath);
   setSecondaryContent(html);
-  if (window.renderMathInElement) {
-    try {
-      window.renderMathInElement(mdContainerSecondary, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '$', right: '$', display: false }
-        ],
-        throwOnError: false
-      });
-    } catch (err) {
-      console.warn('Secondary LaTeX 渲染失敗:', err);
-    }
-  }
+  renderMathInContainer(mdContainerSecondary);
 }
 
 function cloneHtmlForSecondary(html) {
@@ -831,41 +956,49 @@ function markMatches(container, query, className) {
   if (!container || !query) return [];
   const hits = [];
   const needle = query.toLowerCase();
+  const textNodes = [];
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (!node.parentElement) return NodeFilter.FILTER_REJECT;
       if (!node.textContent) return NodeFilter.FILTER_REJECT;
-      if (node.parentElement.closest('.selection-popover, .chat-input')) return NodeFilter.FILTER_REJECT;
+  if (node.parentElement.closest('.chat-input, mark.search-hit')) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }
   });
   while (walker.nextNode()) {
-    const node = walker.currentNode;
+    textNodes.push(walker.currentNode);
+  }
+
+  textNodes.forEach(node => {
+    if (!node.parentNode) return;
     const text = node.textContent || '';
     const lower = text.toLowerCase();
     let index = lower.indexOf(needle);
-    if (index === -1) continue;
-    const fragments = [];
+    if (index === -1) return;
+
+    const fragment = document.createDocumentFragment();
     let lastIndex = 0;
+
     while (index !== -1) {
       if (index > lastIndex) {
-        fragments.push(document.createTextNode(text.slice(lastIndex, index)));
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex, index)));
       }
       const match = document.createElement('mark');
       match.className = className;
       match.textContent = text.slice(index, index + query.length);
-      fragments.push(match);
+      fragment.appendChild(match);
       hits.push(match);
       lastIndex = index + query.length;
       index = lower.indexOf(needle, lastIndex);
     }
+
     if (lastIndex < text.length) {
-      fragments.push(document.createTextNode(text.slice(lastIndex)));
+      fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
     }
-    const parent = node.parentNode;
-    fragments.forEach(fragment => parent.insertBefore(fragment, node));
-    parent.removeChild(node);
-  }
+
+    node.parentNode.replaceChild(fragment, node);
+  });
+
   return hits;
 }
 
@@ -1078,7 +1211,7 @@ function openNoteComposer(options = {}) {
   noteComposerContext.textContent = noteComposerState.snippet ? `引用：${noteComposerState.snippet.slice(0, 80)}` : '一般筆記';
   noteComposerEl.hidden = false;
   noteComposerInput.focus();
-  setWorkspaceTab('notes');
+  setWorkspaceTab('saved');
 }
 
 function closeNoteComposer() {
@@ -1244,34 +1377,16 @@ function findHighlightWrapper(node) {
   return node.parentElement?.closest('mark.annotation-highlight') || null;
 }
 
-function updateSelectionPopoverActions(mode = 'selection') {
-  const hasText = Boolean(selectionState.text);
-  const inHighlightMode = mode === 'highlight';
-  if (btnHighlightSelection) {
-    btnHighlightSelection.hidden = inHighlightMode;
-    btnHighlightSelection.disabled = !hasText;
-  }
-  if (btnRemoveHighlight) {
-    btnRemoveHighlight.hidden = !inHighlightMode;
-    btnRemoveHighlight.disabled = !selectionState.highlightId;
-  }
-  if (btnNoteSelection) btnNoteSelection.disabled = !hasText;
-  if (btnAskSelection) btnAskSelection.disabled = !hasText;
-}
-
 function clearSelection() {
   selectionState.range = null;
   selectionState.text = '';
   selectionState.headingId = null;
   selectionState.fromSecondary = false;
   selectionState.highlightId = null;
-  hideSelectionPopover();
-  updateSelectionPopoverActions('selection');
   renderContextChips();
 }
 
-function handleSelectionCapture(fromSecondary = false, options = {}) {
-  const { triggerPopover = false, anchorEvent = null } = options;
+function handleSelectionCapture(fromSecondary = false) {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) {
     clearSelection();
@@ -1300,38 +1415,8 @@ function handleSelectionCapture(fromSecondary = false, options = {}) {
   if (!selectionState.text && highlightWrapper) {
     selectionState.text = (highlightWrapper.textContent || '').trim();
   }
-  updateSelectionPopoverActions(selectionState.highlightId ? 'highlight' : 'selection');
-  if (triggerPopover && selectionState.text) {
-    showSelectionPopover({ range, anchorEvent });
-  } else {
-    hideSelectionPopover();
-  }
   renderContextChips();
   return Boolean(selectionState.text);
-}
-
-function handleReaderContextMenu(event, fromSecondary = false) {
-  ensureReaderContainers();
-  const highlightTarget = event.target.closest('mark.annotation-highlight');
-  if (highlightTarget?.dataset?.annotationId) {
-    event.preventDefault();
-    selectionState.range = null;
-    selectionState.text = (highlightTarget.textContent || '').trim();
-    selectionState.headingId = findHeadingIdForNode(highlightTarget, fromSecondary) || activeHeadingId;
-    selectionState.fromSecondary = fromSecondary;
-    selectionState.highlightId = highlightTarget.dataset.annotationId;
-    updateSelectionPopoverActions('highlight');
-    renderContextChips();
-    showSelectionPopover({ anchorEvent: event });
-    return;
-  }
-  const valid = handleSelectionCapture(fromSecondary, { triggerPopover: false });
-  if (valid && selectionState.text) {
-    event.preventDefault();
-    showSelectionPopover({ range: selectionState.range, anchorEvent: event });
-  } else {
-    hideSelectionPopover();
-  }
 }
 
 function findHeadingIdForNode(node, fromSecondary = false) {
@@ -1348,72 +1433,6 @@ function findHeadingIdForNode(node, fromSecondary = false) {
   return null;
 }
 
-function showSelectionPopover({ range, anchorEvent } = {}) {
-  if (!selectionPopover) return;
-  updateSelectionPopoverActions(selectionState.highlightId ? 'highlight' : 'selection');
-  let rect = null;
-  if (anchorEvent) {
-    rect = {
-      top: anchorEvent.clientY,
-      left: anchorEvent.clientX,
-      width: 0,
-      height: 0
-    };
-  } else if (range) {
-    rect = range.getBoundingClientRect();
-  }
-  if (!rect || (rect.width === 0 && rect.height === 0 && !anchorEvent)) {
-    hideSelectionPopover();
-    return;
-  }
-  selectionPopover.hidden = false;
-  const popRect = selectionPopover.getBoundingClientRect();
-  const baseTop = rect.top + window.scrollY;
-  const baseLeft = rect.left + window.scrollX;
-  const top = anchorEvent
-    ? Math.max(40, baseTop - popRect.height - 8)
-    : Math.max(40, baseTop - popRect.height - 8);
-  const left = Math.max(16, baseLeft);
-  selectionPopover.style.top = `${top}px`;
-  selectionPopover.style.left = `${left}px`;
-}
-
-function hideSelectionPopover() {
-  if (!selectionPopover) return;
-  selectionPopover.hidden = true;
-}
-
-function createHighlightFromSelection() {
-  if (!selectionState.range || !selectionState.text) {
-    showToast('請先選取文字', 'warning', 1400);
-    return;
-  }
-  const snippet = selectionState.text.slice(0, 200);
-  const id = `ann-${Date.now()}`;
-  const heading = resultState.headings.find(h => h.id === selectionState.headingId) || getCurrentHeading();
-  const highlight = {
-    id,
-    snippet,
-    headingId: selectionState.headingId || heading?.id || '',
-    headingText: heading?.text || '',
-    createdAt: Date.now()
-  };
-  annotationState.highlights.push(highlight);
-  persistToStorage(STORAGE_KEYS.annotations, annotationState);
-  reapplyHighlight(selectionState.fromSecondary ? mdContainerSecondary : mdContainer, highlight, selectionState.fromSecondary);
-  if (!selectionState.fromSecondary) {
-    reapplyHighlight(mdContainerSecondary, highlight, true);
-  } else {
-    reapplyHighlight(mdContainer, highlight, false);
-  }
-  renderContextChips();
-  renderHighlights();
-  setWorkspaceTab('saved');
-  showToast('標註完成', 'success', 1400);
-  window.getSelection()?.removeAllRanges();
-  clearSelection();
-}
-
 function removeHighlightById(id) {
   if (!id) return false;
   const idx = annotationState.highlights.findIndex(ann => ann.id === id);
@@ -1427,42 +1446,6 @@ function removeHighlightById(id) {
   });
   renderHighlights();
   return true;
-}
-
-function removeHighlightFromSelection() {
-  if (!selectionState.highlightId) {
-    showToast('找不到對應的標註', 'warning', 1400);
-    return;
-  }
-  const removed = removeHighlightById(selectionState.highlightId);
-  if (!removed) {
-    showToast('標註不存在或已移除', 'warning', 1400);
-    clearSelection();
-    return;
-  }
-  showToast('標註已移除', 'info', 1400);
-  window.getSelection()?.removeAllRanges();
-  clearSelection();
-}
-
-function composeNoteFromSelection() {
-  if (!selectionState.text) {
-    showToast('請先選取文字', 'warning', 1400);
-    return;
-  }
-  openNoteComposer({
-    snippet: selectionState.text,
-    headingId: selectionState.headingId || getCurrentHeading()?.id
-  });
-}
-
-function queueQuestionFromSelection() {
-  if (!selectionState.text) {
-    showToast('請先選取文字', 'warning', 1400);
-    return;
-  }
-  enqueueChatQuestion(selectionState.text);
-  clearSelection();
 }
 
 function openReaderInNewWindow() {
@@ -1496,11 +1479,44 @@ function showFiles(paths) {
   fileList.innerHTML = items || '';
 }
 
+function updateProcessingSummary() {
+  if (!processingSummaryEl) return;
+  const methodLabel = PROCESSING_METHOD_LABELS[processingPrefs.method] || PROCESSING_METHOD_LABELS.auto;
+  const languageLabel = PROCESSING_LANGUAGE_LABELS[processingPrefs.language] || PROCESSING_LANGUAGE_LABELS.auto;
+  processingSummaryEl.innerHTML = `<strong>${escapeHtml(methodLabel)}</strong> · ${escapeHtml(languageLabel)}`;
+}
+
+function resetProcessingOptions() {
+  processingPrefs.method = 'auto';
+  processingPrefs.language = 'auto';
+  processingMethodInputs.forEach(input => {
+    input.checked = input.value === 'auto';
+  });
+  if (processingLanguageSelect) {
+    processingLanguageSelect.value = 'auto';
+  }
+  updateProcessingSummary();
+}
+
+function setProcessingOptionsVisibility(visible) {
+  if (!processingOptionsEl) return;
+  if (visible) {
+    processingOptionsEl.hidden = false;
+    processingOptionsEl.removeAttribute('aria-hidden');
+    updateProcessingSummary();
+  } else {
+    processingOptionsEl.hidden = true;
+    processingOptionsEl.setAttribute('aria-hidden', 'true');
+    resetProcessingOptions();
+  }
+}
+
 let pendingPdfPaths = [];
 function updateActionButtons() {
   const hasFile = pendingPdfPaths.length > 0;
   if (btnStart) btnStart.style.display = hasFile ? 'inline-block' : 'none';
   if (btnDeleteFile) btnDeleteFile.style.display = hasFile ? 'inline-block' : 'none';
+  setProcessingOptionsVisibility(hasFile);
 }
 
 function setUploadControlsVisible(visible) {
@@ -1535,6 +1551,21 @@ btnUpload?.addEventListener('click', async () => {
 dropZone?.addEventListener('click', async () => {
   const paths = await window.electronAPI?.openFileDialog?.();
   if (paths && paths.length) handleFiles(paths);
+});
+
+processingMethodInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    const value = input.value;
+    processingPrefs.method = SUPPORTED_PROCESS_METHODS.has(value) ? value : 'auto';
+    updateProcessingSummary();
+  });
+});
+
+processingLanguageSelect?.addEventListener('change', () => {
+  const value = processingLanguageSelect.value || 'auto';
+  processingPrefs.language = SUPPORTED_SOURCE_LANGUAGES.has(value) ? value : 'auto';
+  updateProcessingSummary();
 });
 
 // 移除整卡片點擊以避免誤觸
@@ -1694,7 +1725,9 @@ btnStart?.addEventListener('click', async () => {
     const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
     
     // 只傳遞 filePath 和 sessionId，後端會從 settings.json 讀取配置
-    const result = await window.electronAPI?.startProcessing?.({ filePath, sessionId });
+  const method = SUPPORTED_PROCESS_METHODS.has(processingPrefs.method) ? processingPrefs.method : 'auto';
+  const lang = SUPPORTED_SOURCE_LANGUAGES.has(processingPrefs.language) ? processingPrefs.language : 'auto';
+  const result = await window.electronAPI?.startProcessing?.({ filePath, sessionId, method, lang });
     
     if (result?.ok) {
       startedSuccessfully = true;
@@ -1865,7 +1898,10 @@ const chatState = {
 const voiceState = {
   recognition: null,
   listening: false,
-  utterance: null
+  utterance: null,
+  playing: false,
+  paused: false,
+  messageText: ''
 };
 let activeWorkspaceTab = 'chat';
 
@@ -1955,6 +1991,7 @@ function renderChat() {
     return `<div class="msg ${roleClass}">${body}${references}${followups}</div>`;
   }).join('');
   chatListEl.innerHTML = html;
+  renderMathInContainer(chatListEl);
   chatListEl.scrollTop = chatListEl.scrollHeight;
 }
 
@@ -1974,6 +2011,7 @@ function getActiveConversation() {
 }
 
 function ensureActiveConversation() {
+  stopChatPlayback();
   if (chatState.activeId) {
     const existing = getActiveConversation();
     if (existing) {
@@ -2004,6 +2042,7 @@ function startNewConversation(initialTitle) {
   chatState.messages = conv.messages;
   chatState.historySelectionId = conv.id;
   if (chatInputEl) chatInputEl.value = '';
+  stopChatPlayback();
   renderChat();
   saveConversations();
   renderChatHistoryList(conv.id);
@@ -2039,6 +2078,7 @@ function loadConversation(id) {
   if (!conv) return;
   chatState.activeId = id;
   chatState.messages = conv.messages;
+  stopChatPlayback();
   renderChat();
 }
 
@@ -2250,23 +2290,135 @@ function enqueueChatQuestion(text, autoSend = false) {
   if (autoSend) sendChat();
 }
 
+function showChatPlaybackControls(text) {
+  if (!chatPlaybackEl || !chatPlaybackSnippet) return;
+  const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+  chatPlaybackSnippet.textContent = cleaned
+    ? (cleaned.length > 160 ? `${cleaned.slice(0, 160)}...` : cleaned)
+    : '內容不可用';
+  chatPlaybackEl.hidden = false;
+  chatPlaybackEl.setAttribute('aria-hidden', 'false');
+}
+
+function hideChatPlaybackControls() {
+  if (!chatPlaybackEl) return;
+  chatPlaybackEl.hidden = true;
+  chatPlaybackEl.setAttribute('aria-hidden', 'true');
+  if (chatPlaybackSnippet) chatPlaybackSnippet.textContent = '';
+  updateChatPlaybackControls();
+}
+
+function updateChatPlaybackControls() {
+  if (!btnPlaybackToggle || !btnPlaybackStop || !chatPlaybackToggleIcon || !chatPlaybackToggleText) return;
+  const hasUtterance = Boolean(voiceState.utterance);
+  btnPlaybackToggle.disabled = !hasUtterance;
+  btnPlaybackStop.disabled = !hasUtterance;
+  if (!hasUtterance) {
+    chatPlaybackToggleIcon.textContent = '▶';
+    chatPlaybackToggleText.textContent = '播放';
+    return;
+  }
+  if (voiceState.paused) {
+    chatPlaybackToggleIcon.textContent = '▶';
+    chatPlaybackToggleText.textContent = '播放';
+  } else {
+    chatPlaybackToggleIcon.textContent = '⏸';
+    chatPlaybackToggleText.textContent = '暫停';
+  }
+}
+
+function startChatPlayback(text) {
+  const synth = window.speechSynthesis;
+  if (!synth) {
+    showToast('裝置不支援語音播放', 'warning', 1600);
+    return;
+  }
+  const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) {
+    showToast('訊息內容為空，無法播放', 'warning', 1400);
+    return;
+  }
+
+  synth.cancel();
+
+  const utter = new SpeechSynthesisUtterance(cleaned);
+  voiceState.utterance = utter;
+  voiceState.playing = true;
+  voiceState.paused = false;
+  voiceState.messageText = cleaned;
+
+  utter.onstart = () => {
+    if (voiceState.utterance !== utter) return;
+    voiceState.playing = true;
+    voiceState.paused = false;
+    updateChatPlaybackControls();
+  };
+  utter.onend = () => {
+    if (voiceState.utterance !== utter) return;
+    voiceState.playing = false;
+    voiceState.paused = false;
+    voiceState.utterance = null;
+    voiceState.messageText = '';
+    hideChatPlaybackControls();
+  };
+  utter.onpause = () => {
+    if (voiceState.utterance !== utter) return;
+    voiceState.paused = true;
+    updateChatPlaybackControls();
+  };
+  utter.onresume = () => {
+    if (voiceState.utterance !== utter) return;
+    voiceState.paused = false;
+    updateChatPlaybackControls();
+  };
+  utter.onerror = () => {
+    if (voiceState.utterance !== utter) return;
+    showToast('語音播放時發生錯誤', 'error', 1600);
+    voiceState.playing = false;
+    voiceState.paused = false;
+    voiceState.utterance = null;
+    voiceState.messageText = '';
+    hideChatPlaybackControls();
+  };
+
+  showChatPlaybackControls(cleaned);
+  synth.speak(utter);
+  updateChatPlaybackControls();
+}
+
+function toggleChatPlayback() {
+  const synth = window.speechSynthesis;
+  if (!synth || !voiceState.utterance) return;
+  if (voiceState.paused) {
+    synth.resume();
+    voiceState.paused = false;
+  } else if (voiceState.playing) {
+    synth.pause();
+    voiceState.paused = true;
+  } else if (voiceState.messageText) {
+    startChatPlayback(voiceState.messageText);
+    return;
+  }
+  updateChatPlaybackControls();
+}
+
+function stopChatPlayback() {
+  const synth = window.speechSynthesis;
+  if (synth) synth.cancel();
+  voiceState.playing = false;
+  voiceState.paused = false;
+  voiceState.utterance = null;
+  voiceState.messageText = '';
+  hideChatPlaybackControls();
+}
+
 function speakLastAssistantMessage() {
   const assistantMsg = [...chatState.messages].reverse().find(m => m.role === 'assistant');
   if (!assistantMsg || !assistantMsg.content) {
     showToast('尚無可朗讀的回覆', 'warning', 1400);
     return;
   }
-  const synth = window.speechSynthesis;
-  if (!synth) {
-    showToast('裝置不支援語音播放', 'warning', 1600);
-    return;
-  }
-  if (voiceState.utterance) {
-    synth.cancel();
-  }
-  const utter = new SpeechSynthesisUtterance(assistantMsg.content);
-  voiceState.utterance = utter;
-  synth.speak(utter);
+  startChatPlayback(assistantMsg.content);
 }
 
 function initVoiceRecognition() {
@@ -2442,22 +2594,6 @@ btnToggleToc?.addEventListener('click', () => {
   readerPrefs.tocVisible = visible;
   persistToStorage(STORAGE_KEYS.readerPrefs, readerPrefs);
 });
-
-function toggleTocLevels(hideSubLevels) {
-  if (!tocListEl) return;
-  tocListEl.querySelectorAll('.toc-item').forEach(item => {
-    const match = item.className.match(/toc-level-(\d)/);
-    const level = match ? Number(match[1]) : 1;
-    if (hideSubLevels && level > 2) {
-      item.style.display = 'none';
-    } else {
-      item.style.display = '';
-    }
-  });
-}
-
-btnTocCollapse?.addEventListener('click', () => toggleTocLevels(true));
-btnTocExpand?.addEventListener('click', () => toggleTocLevels(false));
 
 btnToggleSplit?.addEventListener('click', () => {
   enableSplitView(!readerPrefs.split);
@@ -2642,8 +2778,9 @@ chatHistoryListEl?.addEventListener('click', (event) => {
   renderChatHistoryList(id);
 });
 
-btnVoiceInput?.addEventListener('click', startVoiceInput);
 btnVoiceOutput?.addEventListener('click', speakLastAssistantMessage);
+btnPlaybackToggle?.addEventListener('click', toggleChatPlayback);
+btnPlaybackStop?.addEventListener('click', stopChatPlayback);
 
 // 初始化聊天記錄（從檔案載入）
 loadConversationsFromFile().then(() => {
@@ -2657,11 +2794,13 @@ loadConversationsFromFile().then(() => {
   renderChatHistoryList();
 });
 
+resetProcessingOptions();
+setProcessingOptionsVisibility(false);
 applySuggestionsVisibility();
 refreshSuggestedQuestions();
 ensureReaderContainers();
-hideSelectionPopover();
-updateSelectionPopoverActions('selection');
+hideChatPlaybackControls();
+updateChatPlaybackControls();
 setWorkspaceTab(activeWorkspaceTab);
 const tocInitiallyVisible = Boolean(readerPrefs.tocVisible);
 if (tocSidebar) tocSidebar.classList.toggle('hidden', !tocInitiallyVisible);
@@ -2675,27 +2814,16 @@ btnSyncScroll?.classList.toggle('active', Boolean(readerPrefs.syncScroll));
 
 mdContainer?.addEventListener('mouseup', () => handleSelectionCapture(false));
 mdContainer?.addEventListener('keyup', () => handleSelectionCapture(false));
-mdContainer?.addEventListener('contextmenu', (event) => handleReaderContextMenu(event, false));
 mdContainerSecondary?.addEventListener('mouseup', () => handleSelectionCapture(true));
 mdContainerSecondary?.addEventListener('keyup', () => handleSelectionCapture(true));
-mdContainerSecondary?.addEventListener('contextmenu', (event) => handleReaderContextMenu(event, true));
 
 mdContainer?.addEventListener('scroll', () => {
-  hideSelectionPopover();
   updateScrollProgressIndicator();
 });
-mdContainerSecondary?.addEventListener('scroll', hideSelectionPopover);
 
-document.addEventListener('mousedown', (event) => {
-  if (selectionPopover?.hidden) return;
-  if (selectionPopover.contains(event.target)) return;
-  hideSelectionPopover();
+mdContainerSecondary?.addEventListener('scroll', () => {
+  updateScrollProgressIndicator();
 });
-
-btnHighlightSelection?.addEventListener('click', createHighlightFromSelection);
-btnRemoveHighlight?.addEventListener('click', removeHighlightFromSelection);
-btnNoteSelection?.addEventListener('click', composeNoteFromSelection);
-btnAskSelection?.addEventListener('click', queueQuestionFromSelection);
 
 renderBookmarks();
 renderNotes();

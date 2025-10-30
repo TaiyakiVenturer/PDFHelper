@@ -14,6 +14,9 @@ let currentDocumentState = {
   sessionId: null
 };
 
+const SUPPORTED_PROCESS_METHODS = new Set(['auto', 'ocr', 'txt']);
+const SUPPORTED_SOURCE_LANGUAGES = new Set(['auto', 'ch', 'chinese_cht', 'en', 'korean', 'japan', 'th', 'el', 'latin', 'arabic', 'east_slavic', 'devanagari']);
+
 // 啟動畫面狀態
 let splashWindow = null;
 let splashReady = false;
@@ -440,7 +443,7 @@ ipcMain.handle('file:delete', async (_event, fileName) => {
 
 // IPC: 啟動處理流程 (使用 apiClient 呼叫 HTTP API)
 ipcMain.handle('process:start', async (event, payload) => {
-  const { filePath, sessionId } = payload || {};
+  const { filePath, sessionId, method: rawMethod, lang: rawLang } = payload || {};
   if (!filePath) return { ok: false, error: '缺少檔案路徑' };
   
   try {
@@ -467,6 +470,9 @@ ipcMain.handle('process:start', async (event, payload) => {
     fs.copyFileSync(filePath, targetPath);
     console.log('[process:start] PDF 已複製到:', targetPath);
     
+    const method = SUPPORTED_PROCESS_METHODS.has(rawMethod) ? rawMethod : 'auto';
+    const lang = SUPPORTED_SOURCE_LANGUAGES.has(rawLang) ? rawLang : 'auto';
+
     // 發送初始進度
     win?.webContents.send('process:evt', {
       type: 'progress',
@@ -476,18 +482,17 @@ ipcMain.handle('process:start', async (event, payload) => {
       timestamp: Date.now()
     });
 
-    method = "auto"; // 自動選擇解析方法
-    lang = "en";   // 目標語言英文
     const startAt = Date.now();
     sessionTracker.set(sessionId, {
       filePath,
       storedFileName: fileName,
       translator: `${translatorConfig.company}/${translatorConfig.model}`,
       embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
+      method,
+      lang,
       createdAt: startAt,
       updatedAt: startAt,
-      lastStatus: '已上傳 PDF',
-      language: lang,
+      lastStatus: '已上傳 PDF'
     });
 
     // 更新後端的 API Key 和模型（分開更新）
@@ -500,9 +505,10 @@ ipcMain.handle('process:start', async (event, payload) => {
       fileName, 
       translator: `${translatorConfig.company}/${translatorConfig.model}`,
       embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
-      sessionId 
+      sessionId,
+      method,
+      lang 
     });
-    
     const asyncResult = await apiClient.startFullProcessAsync(
       fileName,
       method,
@@ -560,8 +566,7 @@ ipcMain.handle('process:start', async (event, payload) => {
             storedFileName: fileName,
             translator: `${translatorConfig.company}/${translatorConfig.model}`,
             embedding: `${embeddingConfig.company}/${embeddingConfig.model}`,
-            createdAt: Date.now(),
-            language: lang,
+            createdAt: Date.now()
           };
           sessionTracker.set(sessionId, {
             ...info,
@@ -573,22 +578,22 @@ ipcMain.handle('process:start', async (event, payload) => {
           const info = sessionTracker.get(sessionId) || {};
           const finalRecord = {
             sessionId,
+            filePath: info.filePath || filePath,
+            storedFileName: info.storedFileName || fileName,
+            translator: info.translator || `${translatorConfig.company}/${translatorConfig.model}`,
+            embedding: info.embedding || `${embeddingConfig.company}/${embeddingConfig.model}`,
+            createdAt: info.createdAt || Date.now(),
+            updatedAt: Date.now(),
             status: evtObj.type,
             lastStatus: evtObj.status || evtObj.error || '',
             done: evtObj.type === 'done',
-            error: evtObj.type === 'error' ? String(evtObj.error || '') : null,
-            createdAt: info.createdAt || Date.now(),
-            updatedAt: Date.now(),
-            translator: info.translator || `${translatorConfig.company}/${translatorConfig.model}`,
-            embedding: info.embedding || `${embeddingConfig.company}/${embeddingConfig.model}`,
-            storedFileName: info.storedFileName || fileName,
-            language: lang,
-            filePath: info.filePath || filePath
+            error: evtObj.type === 'error' ? String(evtObj.error || '') : null
           };
 
           if (evtObj.type === 'done') {
             finalRecord.status = 'done';
             if (evtObj.metadata) {
+              finalRecord.language = lang || null;
               finalRecord.collectionName = evtObj.metadata.collection_name || info.collectionName || null;
               if (evtObj.metadata.translated_json_name) {
                 finalRecord.translatedJsonName = evtObj.metadata.translated_json_name;

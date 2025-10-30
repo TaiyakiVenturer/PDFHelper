@@ -35,6 +35,8 @@
         --scrollbar-track: #0b1220;
         --scrollbar-thumb: rgba(148,163,184,0.6);
         --scrollbar-thumb-hover: rgba(226,232,240,0.9);
+        --highlight-bg: rgba(14,165,233,0.32);
+        --highlight-border: rgba(14,165,233,0.62);
       }
       :root[data-theme="light"] {
         --bg: #f8fafc; /* slate-50 */
@@ -57,6 +59,8 @@
         --scrollbar-track: #e2e8f0;
         --scrollbar-thumb: rgba(100,116,139,0.65);
         --scrollbar-thumb-hover: rgba(30,41,59,0.75);
+        --highlight-bg: rgba(2,132,199,0.24);
+        --highlight-border: rgba(2,132,199,0.55);
       }
       html, body {
         height: 100%;
@@ -131,6 +135,64 @@
       .upload-btn:hover { background: var(--accent-hover-bg); transform: translateY(-1px); box-shadow: 0 6px 14px rgba(0,0,0,0.25); }
       .formats { margin-top: 8px; color: var(--muted); font-size: 14px; }
       .filelist { border-top: 1px dashed var(--border); margin-top: 16px; padding-top: 12px; text-align: left; color: var(--muted); font-size: 13px; }
+      .processing-options {
+        margin-top: 16px;
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface-2);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        text-align: left;
+      }
+      .processing-options[hidden] { display: none; }
+      .processing-options .option-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      .processing-options .option-title { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+      .processing-options .option-row { display: flex; flex-direction: column; gap: 6px; }
+      .processing-options .option-label { font-size: 14px; font-weight: 600; color: var(--text); }
+      .processing-options .option-help { font-size: 12px; color: var(--muted); margin: 0; }
+      .processing-options .method-group { display: flex; gap: 8px; flex-wrap: wrap; }
+      .processing-options .method-pill { position: relative; display: inline-flex; }
+      .processing-options .method-pill input { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+      .processing-options .method-pill span {
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--button-bg);
+        color: var(--muted);
+        cursor: pointer;
+        transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 120ms ease;
+      }
+      .processing-options .method-pill span:hover { border-color: var(--accent-border); color: var(--accent-bg); }
+      .processing-options .method-pill input:checked + span {
+        background: rgba(14,165,233,0.18);
+        border-color: var(--accent-border);
+        color: var(--accent-bg);
+        transform: translateY(-1px);
+      }
+      .processing-options .option-select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--button-bg);
+        color: var(--text);
+        transition: border-color 160ms ease, background-color 160ms ease;
+      }
+      .processing-options .option-select:focus {
+        border-color: var(--accent-border);
+        box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+        outline: none;
+      }
+      .processing-options .option-summary {
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .processing-options .option-summary strong { color: var(--accent-bg); font-weight: 600; }
 
       /* 底部工具列 */
   .footer { position: fixed; left: 0; right: 0; bottom: 0; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--titlebar); border-top: 1px solid var(--border); transition: background-color 220ms ease, border-color 220ms ease; }
@@ -244,7 +306,7 @@
   .provider-badge.ollama { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.45); color: #22c55e; }
 
       /* 結果畫面佈局 */
-  .result-wrap { display: grid; grid-template-columns: 1fr 340px; gap: 16px; height: 100%; padding: 16px 16px 8px 16px; }
+  .result-wrap { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 420px); gap: 16px; height: 100%; padding: 16px 16px 8px 16px; }
   .result-main { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 16px 16px 8px 16px; display: flex; flex-direction: column; overflow: hidden; }
   /* Markdown 內容樣式 */
       .markdown h1 { font-size: 24px; margin: 12px 0; }
@@ -280,7 +342,6 @@
   .followup-btn:hover { background: var(--button-hover-bg); color: var(--text); }
   .workspace-header { display:flex; align-items:center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 8px; flex-wrap: nowrap; }
   .workspace-title-group { display:flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .workspace-caption { font-size: 12px; color: var(--muted); line-height: 1.4; }
   .workspace-section { flex: 1; min-height: 0; }
   .workspace-tabs { display:flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
   .workspace-tabs::-webkit-scrollbar { height: 4px; }
@@ -288,12 +349,28 @@
   .workspace-tab { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease; white-space: nowrap; flex-shrink: 0; }
   .workspace-tab:hover { background: var(--button-hover-bg); color: var(--text); }
   .workspace-tab.active { background: rgba(14,165,233,0.18); border-color: var(--accent-border); color: var(--text); }
-  .workspace-actions { display:flex; align-items:center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; justify-content: flex-end; }
-  .workspace-actions .tab-actions { display:flex; align-items:center; gap: 8px; }
+  .workspace-actions { display:flex; flex-direction:column; gap: 10px; margin-bottom: 14px; align-items:stretch; }
+  .workspace-actions .tab-actions { display:flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
   .workspace-actions .tab-actions[hidden] { display:none; }
+  .workspace-actions .tab-actions .btn-icon,
+  .workspace-actions .tab-actions .btn { flex: 1 1 auto; min-width: 110px; }
   .workspace-panels { flex:1; min-height:0; display:flex; flex-direction: column; gap: 12px; }
-  .workspace-panels .tab-panel { flex:1; min-height:0; display:flex; flex-direction: column; gap: 12px; }
+  .workspace-panels .tab-panel { flex:1; min-height:0; display:flex; flex-direction: column; gap: 12px; overflow: auto; padding-right: 4px; }
   .workspace-panels .tab-panel[hidden] { display: none; }
+  .chat-toolbar { display:flex; align-items:center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); margin-bottom: 12px; flex-wrap: wrap; }
+  .chat-toolbar-btn { display:flex; align-items:center; gap: 6px; flex: 0 1 160px; justify-content: center; }
+  .chat-toolbar-btn .icon { font-size: 15px; }
+  .chat-toolbar-btn span { white-space: nowrap; }
+  .chat-playback { display:flex; align-items:center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); margin-bottom: 12px; }
+  .chat-playback[hidden] { display: none; }
+  .chat-playback .playback-info { flex:1; min-width: 0; display:flex; flex-direction: column; gap: 4px; }
+  .chat-playback .playback-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  .chat-playback .playback-snippet { font-size: 13px; color: var(--text); line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-playback .playback-controls { display:flex; align-items:center; gap: 8px; }
+  .chat-playback .playback-btn { display:flex; align-items:center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease; }
+  .chat-playback .playback-btn:hover:not(:disabled) { background: var(--button-hover-bg); color: var(--text); transform: translateY(-1px); }
+  .chat-playback .playback-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .chat-playback .playback-btn .icon { font-size: 14px; }
   .highlight-list { display:flex; flex-direction: column; gap: 8px; max-height: 100%; overflow: auto; }
   .highlight-card { border: 1px solid var(--border); background: var(--surface-2); border-radius: 12px; padding: 10px 12px; display:flex; flex-direction: column; gap: 6px; }
   .highlight-snippet { font-size: 14px; line-height: 1.6; }
@@ -308,7 +385,7 @@
   @media (max-width: 720px) {
     .workspace-header { flex-direction: column; align-items: stretch; gap: 10px; }
     .workspace-tabs { width: 100%; }
-    .workspace-actions { justify-content: flex-start; }
+      .workspace-actions { justify-content: flex-start; }
   }
   /* Processing 日誌區域 */
   .proc-log { margin-top: 14px; max-height: 300px; overflow: auto; text-align: left; border: 1px dashed var(--border); border-radius: 10px; padding: 12px; color: var(--muted); background: var(--surface-2); }
@@ -484,28 +561,6 @@
   .chat-actions { display: flex; gap: 6px; }
   .chat-input textarea { width: 100%; }
 
-  /* ─── Inline Tools ───────────────────────────────────────────────────────── */
-  .selection-popover {
-    position: fixed;
-    z-index: 1200;
-    display: flex;
-    gap: 6px;
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 6px;
-    box-shadow: 0 12px 24px rgba(0,0,0,0.35);
-  }
-  .selection-popover button {
-    padding: 6px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--button-bg);
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .selection-popover button:hover { background: var(--button-hover-bg); color: var(--text); }
-
   .reference-trail { display: none !important; pointer-events: none; }
   .trail-item { font-size: 12px; color: var(--muted); cursor: pointer; }
 
@@ -535,7 +590,12 @@
 
   .search-hit { background: rgba(14,165,233,0.35); color: inherit; border-radius: 4px; padding: 0 2px; }
   .search-hit.active-hit { outline: 2px solid var(--accent-border); }
-  .annotation-highlight { background: rgba(249,115,22,0.25); padding: 0 2px; border-radius: 4px; }
+  .annotation-highlight {
+    background: var(--highlight-bg);
+    padding: 0 2px;
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px var(--highlight-border);
+  }
 
   @media (max-width: 1280px) {
     .reader-content { grid-template-columns: 1fr; }
@@ -574,6 +634,44 @@
         <button id="btnUpload" class="upload-btn">選擇檔案</button>
         <div id="dropZone" class="upload-zone" title="點擊或拖放 PDF 檔案">將 PDF 檔案拖曳到這裡，或點擊此區選擇檔案</div>
   <div id="fileList" class="filelist" aria-live="polite" aria-atomic="true"></div>
+        <div id="processingOptions" class="processing-options" hidden aria-hidden="true">
+          <div class="option-header">
+            <span class="option-title">PDF 處理設定</span>
+            <span id="processingSummary" class="option-summary"></span>
+          </div>
+          <div class="option-row" role="group" aria-label="處理方法">
+            <span class="option-label">處理方法</span>
+            <div class="method-group">
+              <label class="method-pill"><input type="radio" name="processingMethod" value="auto" checked><span>自動</span></label>
+              <label class="method-pill"><input type="radio" name="processingMethod" value="ocr"><span>OCR</span></label>
+              <label class="method-pill"><input type="radio" name="processingMethod" value="txt"><span>純文字</span></label>
+            </div>
+            <p class="option-help">自動會優先使用原生文字，必要時切換 OCR 或純文字匯出。</p>
+          </div>
+          <div class="option-row">
+            <span class="option-label">原文語言</span>
+            <select id="processingLanguage" class="option-select" aria-label="原文語言">
+              <option value="auto" selected>自動偵測</option>
+              <optgroup label="常用">
+                <option value="en">英文</option>
+                <option value="korean">韓文</option>
+                <option value="japan">日文</option>
+                <option value="chinese_cht">繁體中文</option>
+                <option value="ch">簡體中文</option>
+              </optgroup>
+              <optgroup label="其他語言">
+                
+                <option value="th">泰文</option>
+                <option value="el">希臘文</option>
+                <option value="latin">拉丁文</option>
+                <option value="arabic">阿拉伯文</option>
+                <option value="east_slavic">俄文 (烏克蘭文)</option>
+                <option value="devanagari">印度文 (尼泊爾文)</option>
+              </optgroup>
+            </select>
+            <p class="option-help">預設會自動使用英文，也可手動指定以提升準確度。</p>
+          </div>
+        </div>
         <div style="margin-top:12px; display:flex; gap:8px; justify-content:center; align-items:center;">
           <button id="btnDeleteFile" class="btn" style="display:none;">刪除</button>
           <button id="btnStart" class="btn btn-primary" style="display:none; min-width: 120px;">開始解析</button>
@@ -665,10 +763,6 @@
             <nav id="tocSidebar" class="toc hidden" aria-label="文件目錄">
               <div class="toc-header">
                 <span>目錄</span>
-                <div class="toc-actions">
-                  <button id="btnTocExpand" class="btn-icon" type="button" title="展開全部">＋</button>
-                  <button id="btnTocCollapse" class="btn-icon" type="button" title="摺疊全部">－</button>
-                </div>
               </div>
               <div id="tocList" class="toc-list"></div>
             </nav>
@@ -693,32 +787,52 @@
             <div class="workspace-header">
               <div class="workspace-title-group">
                 <h3 id="workspaceTitle">學習工作區</h3>
-                <span class="workspace-caption">集中管理聊天、筆記與書籤標註</span>
               </div>
               <div class="workspace-tabs" role="tablist" aria-label="功能切換">
                 <button class="workspace-tab active" type="button" role="tab" data-tab="chat" aria-selected="true">聊天</button>
-                <button class="workspace-tab" type="button" role="tab" data-tab="saved" aria-selected="false">書籤・標註</button>
-                <button class="workspace-tab" type="button" role="tab" data-tab="notes" aria-selected="false">筆記</button>
+                <button class="workspace-tab" type="button" role="tab" data-tab="saved" aria-selected="false">書籤・標註・筆記</button>
               </div>
             </div>
             <div class="workspace-actions">
-              <div class="tab-actions" data-tab="chat">
-                <button id="btnChatNew" class="btn-icon" type="button" title="新對話">＋</button>
-                <button id="btnChatHistory" class="btn-icon" type="button" title="聊天歷史">🕘</button>
-                <button id="btnVoiceInput" class="btn-icon" type="button" title="語音輸入">🎙️</button>
-                <button id="btnVoiceOutput" class="btn-icon" type="button" title="語音播放">🔊</button>
-              </div>
               <div class="tab-actions" data-tab="saved" hidden>
                 <button id="btnAddBookmark" class="btn-icon" type="button" title="加入書籤">＋</button>
                 <button id="btnExportBookmarks" class="btn-icon" type="button" title="匯出書籤">⇩</button>
-                <button id="btnClearHighlights" class="btn" type="button" title="清除所有標註">清除標註</button>
-              </div>
-              <div class="tab-actions" data-tab="notes" hidden>
                 <button id="btnCreateNote" class="btn" type="button" title="新增筆記">新增筆記</button>
+                <button id="btnClearHighlights" class="btn" type="button" title="清除所有標註">清除標註</button>
               </div>
             </div>
             <div class="workspace-panels">
               <div class="tab-panel" data-tab="chat">
+                <div class="chat-toolbar" role="toolbar" aria-label="聊天工具">
+                  <button id="btnChatNew" class="btn chat-toolbar-btn" type="button">
+                    <span class="icon">＋</span>
+                    <span>新對話</span>
+                  </button>
+                  <button id="btnChatHistory" class="btn chat-toolbar-btn" type="button">
+                    <span class="icon">🕘</span>
+                    <span>歷史紀錄</span>
+                  </button>
+                  <button id="btnVoiceOutput" class="btn chat-toolbar-btn" type="button">
+                    <span class="icon">🔊</span>
+                    <span>朗讀回覆</span>
+                  </button>
+                </div>
+                <div id="chatPlayback" class="chat-playback" hidden aria-hidden="true">
+                  <div class="playback-info">
+                    <span class="playback-label">語音播放</span>
+                    <span id="chatPlaybackSnippet" class="playback-snippet"></span>
+                  </div>
+                  <div class="playback-controls">
+                    <button id="btnPlaybackToggle" class="playback-btn" type="button" disabled>
+                      <span id="chatPlaybackToggleIcon" class="icon">▶</span>
+                      <span id="chatPlaybackToggleText">播放</span>
+                    </button>
+                    <button id="btnPlaybackStop" class="playback-btn" type="button" disabled>
+                      <span class="icon">■</span>
+                      <span>停止</span>
+                    </button>
+                  </div>
+                </div>
                 <div id="suggestionContainer" class="suggestion-container">
                   <div class="suggestion-header">
                     <span>推薦問題</span>
@@ -747,8 +861,6 @@
                   </div>
                   <div id="highlightList" class="highlight-list"></div>
                 </div>
-              </div>
-              <div class="tab-panel" data-tab="notes" hidden>
                 <div class="subsection" aria-labelledby="noteTitle">
                   <div class="subsection-header">
                     <h4 id="noteTitle">筆記</h4>
@@ -944,12 +1056,6 @@
         </div>
       </div>
     </div>
-    <div id="selectionPopover" class="selection-popover" hidden>
-      <button id="btnHighlightSelection" type="button">標註</button>
-      <button id="btnRemoveHighlight" type="button" hidden>取消標註</button>
-      <button id="btnNoteSelection" type="button">筆記</button>
-      <button id="btnAskSelection" type="button">就此提問</button>
-    </div>
     <div id="referenceTrail" class="reference-trail" aria-live="polite" hidden></div>
     <div id="chatHistoryBackdrop" class="modal-backdrop">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="chatHistoryTitle">
@@ -990,10 +1096,22 @@
       });
     </script>
     <!-- KaTeX for LaTeX 渲染 -->
+    <script>
+      window.__pdfHelperMathOptions = {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '\\[', right: '\\]', display: true },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '$', right: '$', display: false }
+        ],
+        throwOnError: false,
+        strict: 'ignore'
+      };
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-NiZ6m19m7m5J5O0bApbtf0Q7sB4Hq5Xb7qYj1yXkQ2k1i2H8f9q2m0z1x3y4z5a" crossorigin="anonymous">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-2qfVgJpYkQZy7bZ9o8mLThlOeYwGQmj2Qm4oUYv1bU40g1N3v2b2jv9nK8fZxJ2Z" crossorigin="anonymous"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-mQ93rYc9x8Rz6mO3H5vA7+1d0W6C3bFk5U3bF1QdO4CkZzYv0b2m1xQzC8k9L6+e" crossorigin="anonymous"
-      onload="renderMathInElement(document.body, {delimiters:[{left:'$$', right:'$$', display:true},{left:'$', right:'$', display:false}], throwOnError:false});"></script>
+  onload="renderMathInElement(document.body, (window.__pdfHelperMathOptions || {delimiters:[{left:'$$', right:'$$', display:true},{left:'\\[', right:'\\]', display:true},{left:'\\(', right:'\\)', display:false},{left:'$', right:'$', display:false}], throwOnError:false}));"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

@@ -596,6 +596,16 @@
     border-radius: 4px;
     box-shadow: inset 0 0 0 1px var(--highlight-border);
   }
+  html[data-theme="dark"] .annotation-highlight {
+    background: rgba(56,189,248,0.42);
+    color: #e2f3ff;
+    box-shadow: inset 0 0 0 1px rgba(125,211,252,0.9), 0 0 0 2px rgba(14,165,233,0.18);
+  }
+  html[data-theme="light"] .annotation-highlight {
+    background: rgba(14,165,233,0.28);
+    color: inherit;
+    box-shadow: inset 0 0 0 1px rgba(14,165,233,0.55);
+  }
 
   @media (max-width: 1280px) {
     .reader-content { grid-template-columns: 1fr; }

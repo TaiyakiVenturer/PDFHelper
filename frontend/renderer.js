@@ -156,6 +156,26 @@ const workspaceActionGroups = document.querySelectorAll('.tab-actions');
 const highlightListEl = document.getElementById('highlightList');
 const btnClearHighlights = document.getElementById('btnClearHighlights');
 
+const CONTEXT_MENU_ACTIONS = [
+  { id: 'query', label: '查詢' },
+  { id: 'copy', label: '複製' },
+  { id: 'highlight', label: '標註' },
+  { id: 'remove-highlight', label: '取消標註' },
+  { id: 'ask', label: '提問' }
+];
+let contextMenuEl = null;
+const contextMenuButtons = Object.create(null);
+const contextMenuState = {
+  visible: false,
+  type: null,
+  fromSecondary: false,
+  selectionText: '',
+  selectionRaw: '',
+  target: null,
+  highlightId: ''
+};
+let contextMenuStylesInjected = false;
+
 function ensureReaderContainers() {
   if (!mdContainer || !mdContainer.isConnected) {
     mdContainer = document.getElementById('mdContainer');
@@ -176,6 +196,422 @@ function ensureReaderContainers() {
 
 document.addEventListener('DOMContentLoaded', ensureReaderContainers);
 ensureReaderContainers();
+
+function injectContextMenuStyles() {
+  if (contextMenuStylesInjected) return;
+  const style = document.createElement('style');
+  style.textContent = `
+    .pdfhelper-context-menu {
+      position: fixed;
+      min-width: 160px;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.36);
+      padding: 6px 0;
+      z-index: 1400;
+      display: none;
+    }
+    .pdfhelper-context-menu.show {
+      display: block;
+      animation: pdfhelperContextMenuFade 120ms ease-out;
+    }
+    .pdfhelper-context-menu__item {
+      display: block;
+      width: 100%;
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      text-align: left;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .pdfhelper-context-menu__item:hover {
+      background: var(--button-hover-bg);
+    }
+    .pdfhelper-context-menu__item:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    @keyframes pdfhelperContextMenuFade {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  `;
+  document.head.appendChild(style);
+  contextMenuStylesInjected = true;
+}
+
+function ensureContextMenuElement() {
+  if (contextMenuEl) return contextMenuEl;
+  injectContextMenuStyles();
+  const menu = document.createElement('div');
+  menu.className = 'pdfhelper-context-menu';
+  menu.setAttribute('role', 'menu');
+  CONTEXT_MENU_ACTIONS.forEach(action => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pdfhelper-context-menu__item';
+    btn.dataset.action = action.id;
+    btn.textContent = action.label;
+    btn.setAttribute('role', 'menuitem');
+    btn.addEventListener('click', () => runContextMenuAction(action.id));
+    menu.appendChild(btn);
+    contextMenuButtons[action.id] = btn;
+  });
+  document.body.appendChild(menu);
+  contextMenuEl = menu;
+  return menu;
+}
+
+function isResultViewActive() {
+  if (!resultView) return false;
+  const display = window.getComputedStyle(resultView).display;
+  return display !== 'none';
+}
+
+function isWithinContentArea(target) {
+  return Boolean(target?.closest?.('.markdown-panel'));
+}
+
+function isWithinChatArea(target) {
+  return Boolean(target?.closest?.('.chat-list, .chat-input'));
+}
+
+function getInputSelectionText(target) {
+  let el = null;
+  if (target instanceof HTMLTextAreaElement) {
+    el = target;
+  } else if (target instanceof HTMLInputElement && target.type !== 'password') {
+    el = target;
+  } else {
+    const container = target?.closest?.('.chat-input');
+    if (container) {
+      const candidate = container.querySelector('textarea, input[type="text"], input[type="search"], input[type="url"]');
+      if (candidate instanceof HTMLTextAreaElement || (candidate instanceof HTMLInputElement && candidate.type !== 'password')) {
+        el = candidate;
+      }
+    }
+  }
+  if (!el) return null;
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  if (typeof start !== 'number' || typeof end !== 'number' || end <= start) return '';
+  return el.value.slice(start, end);
+}
+
+function extractSelectionText(target, contextType) {
+  let raw = '';
+  if (contextType === 'chat') {
+    const inputSelection = getInputSelectionText(target);
+    if (inputSelection !== null) {
+      raw = inputSelection;
+    } else {
+      const selection = window.getSelection();
+      raw = selection ? selection.toString() : '';
+    }
+  } else {
+    const selection = window.getSelection();
+    raw = selection ? selection.toString() : '';
+  }
+  return { raw, text: raw.trim() };
+}
+
+function updateContextMenuAvailability() {
+  ensureContextMenuElement();
+  const hasSelection = Boolean(contextMenuState.selectionText);
+  ['query', 'copy', 'ask'].forEach(id => {
+    const btn = contextMenuButtons[id];
+    if (btn) btn.disabled = !hasSelection;
+  });
+  const highlightBtn = contextMenuButtons.highlight;
+  if (highlightBtn) {
+    highlightBtn.disabled = contextMenuState.type !== 'content' || !hasSelection;
+  }
+  const removeBtn = contextMenuButtons['remove-highlight'];
+  if (removeBtn) {
+    removeBtn.disabled = !contextMenuState.highlightId;
+  }
+}
+
+function positionContextMenu(x, y) {
+  const menu = ensureContextMenuElement();
+  menu.style.display = 'block';
+  menu.classList.add('show');
+  menu.style.visibility = 'hidden';
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  const rect = menu.getBoundingClientRect();
+  const margin = 8;
+  let left = x;
+  let top = y;
+  if (left + rect.width + margin > window.innerWidth) {
+    left = Math.max(margin, window.innerWidth - rect.width - margin);
+  } else {
+    left = Math.max(margin, left);
+  }
+  if (top + rect.height + margin > window.innerHeight) {
+    top = Math.max(margin, window.innerHeight - rect.height - margin);
+  } else {
+    top = Math.max(margin, top);
+  }
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.style.visibility = 'visible';
+  contextMenuState.visible = true;
+}
+
+function hideContextMenu() {
+  if (!contextMenuEl) return;
+  contextMenuEl.classList.remove('show');
+  contextMenuEl.style.display = 'none';
+  contextMenuEl.style.visibility = 'hidden';
+  contextMenuState.visible = false;
+  contextMenuState.type = null;
+  contextMenuState.fromSecondary = false;
+  contextMenuState.selectionText = '';
+  contextMenuState.selectionRaw = '';
+  contextMenuState.target = null;
+  contextMenuState.highlightId = '';
+}
+
+async function copyTextToClipboard(text) {
+  if (!text) return false;
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.warn('Clipboard API failed', err);
+    }
+  }
+  try {
+    const active = document.activeElement;
+    const helper = document.createElement('textarea');
+    helper.value = text;
+    helper.style.position = 'fixed';
+    helper.style.opacity = '0';
+    helper.style.pointerEvents = 'none';
+    helper.style.transform = 'translate(-9999px, -9999px)';
+    document.body.appendChild(helper);
+    helper.focus();
+    helper.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(helper);
+    if (active && typeof active.focus === 'function') {
+      try { active.focus({ preventScroll: true }); }
+      catch { active.focus(); }
+    }
+    return ok;
+  } catch (err) {
+    console.error('Clipboard fallback failed', err);
+    return false;
+  }
+}
+
+async function runContextMenuAction(actionId) {
+  const snapshot = {
+    type: contextMenuState.type,
+    fromSecondary: contextMenuState.fromSecondary,
+    selectionText: contextMenuState.selectionText,
+    selectionRaw: contextMenuState.selectionRaw,
+    target: contextMenuState.target,
+    highlightId: contextMenuState.highlightId
+  };
+  hideContextMenu();
+  switch (actionId) {
+    case 'query': {
+      const query = snapshot.selectionText;
+      if (!query) {
+        showToast('請先選取文字', 'info', 1400);
+        return;
+      }
+      if (searchInputEl) {
+        searchInputEl.value = query;
+        highlightSearchQuery(query);
+        try { searchInputEl.focus({ preventScroll: true }); }
+        catch { searchInputEl.focus(); }
+        showToast('已將選取文字填入搜尋', 'success', 1200);
+      } else {
+        showToast('找不到搜尋欄位', 'warning', 1600);
+      }
+      return;
+    }
+    case 'copy': {
+      const text = snapshot.selectionRaw || snapshot.selectionText;
+      if (!text) {
+        showToast('沒有可複製的文字', 'info', 1400);
+        return;
+      }
+      const ok = await copyTextToClipboard(text);
+      showToast(ok ? '已複製到剪貼簿' : '複製失敗', ok ? 'success' : 'error', 1400);
+      return;
+    }
+    case 'highlight': {
+      if (snapshot.type !== 'content') {
+        showToast('標註僅適用於內容區域', 'info', 1400);
+        return;
+      }
+      selectionState.fromSecondary = snapshot.fromSecondary;
+      const captured = handleSelectionCapture(snapshot.fromSecondary);
+      const effectiveText = selectionState.text || snapshot.selectionText;
+      if (!captured && !effectiveText) {
+        showToast('請先選取要標註的內容', 'info', 1400);
+        return;
+      }
+      if (!selectionState.text && effectiveText) {
+        selectionState.text = effectiveText;
+      }
+      if (!selectionState.range) {
+        const selection = window.getSelection();
+        if (selection?.rangeCount) {
+          try {
+            const nativeRange = selection.getRangeAt(0);
+            const container = selectionState.fromSecondary ? mdContainerSecondary : mdContainer;
+            if (container?.contains(nativeRange.commonAncestorContainer)) {
+              selectionState.range = nativeRange.cloneRange();
+            }
+          } catch {}
+        }
+      }
+      if (!selectionState.headingId) {
+        const node = selectionState.range?.startContainer || snapshot.target || null;
+        selectionState.headingId = findHeadingIdForNode(node || mdContainer, selectionState.fromSecondary) || activeHeadingId || '';
+      }
+      if (!selectionState.text && effectiveText) {
+        selectionState.text = effectiveText;
+      }
+      if (!selectionState.text) {
+        showToast('請先選取要標註的內容', 'info', 1400);
+        return;
+      }
+      createHighlightFromSelection();
+      return;
+    }
+    case 'remove-highlight': {
+      const highlightId = snapshot.highlightId;
+      if (!highlightId) {
+        showToast('找不到要取消的標註', 'info', 1400);
+        return;
+      }
+      const removed = removeHighlightById(highlightId);
+      if (removed) {
+        if (selectionState.highlightId === highlightId) {
+          selectionState.highlightId = null;
+          selectionState.text = '';
+          selectionState.range = null;
+        }
+        renderContextChips();
+        showToast('標註已移除', 'info', 1400);
+      } else {
+        showToast('無法移除標註', 'error', 1500);
+      }
+      return;
+    }
+    case 'ask': {
+      const source = snapshot.selectionText;
+      if (!source) {
+        showToast('請先選取文字', 'info', 1400);
+        return;
+      }
+      const trimmed = source.length > 1200 ? `${source.slice(0, 1200)}…` : source;
+      const prompt = `請針對以下內容說明重點：\n${trimmed}`;
+      setWorkspaceTab('chat');
+      enqueueChatQuestion(prompt, false);
+      if (chatInputEl) {
+        try { chatInputEl.focus({ preventScroll: true }); }
+        catch { chatInputEl.focus(); }
+      }
+      showToast('已將選取內容帶入提問', 'success', 1400);
+      return;
+    }
+    default:
+      return;
+  }
+}
+
+function handleContextMenuEvent(event) {
+  if (!isResultViewActive()) {
+    hideContextMenu();
+    return;
+  }
+  const target = event.target;
+  const inContent = isWithinContentArea(target);
+  const inChat = !inContent && isWithinChatArea(target);
+  if (!inContent && !inChat) {
+    hideContextMenu();
+    return;
+  }
+  event.preventDefault();
+  ensureContextMenuElement();
+  contextMenuState.type = inContent ? 'content' : 'chat';
+  contextMenuState.fromSecondary = inContent && Boolean(target?.closest?.('#secondaryPanel'));
+  contextMenuState.target = target instanceof Node ? target : null;
+  if (contextMenuState.type === 'content') {
+    handleSelectionCapture(contextMenuState.fromSecondary);
+  }
+  const selectionInfo = extractSelectionText(target, contextMenuState.type);
+  contextMenuState.selectionRaw = selectionInfo.raw;
+  contextMenuState.selectionText = selectionInfo.text;
+  const highlightWrapper = target?.closest?.('mark.annotation-highlight');
+  if (highlightWrapper) {
+    contextMenuState.highlightId = highlightWrapper.dataset?.annotationId || '';
+    if (!contextMenuState.selectionText) {
+      const ann = annotationState.highlights.find(ann => ann.id === contextMenuState.highlightId);
+      const snippet = ann?.snippet || highlightWrapper.textContent || '';
+      contextMenuState.selectionRaw = snippet;
+      contextMenuState.selectionText = snippet.trim();
+    }
+    selectionState.highlightId = contextMenuState.highlightId;
+  } else {
+    contextMenuState.highlightId = '';
+  }
+  if (contextMenuState.type === 'content' && !contextMenuState.selectionText && selectionState.text) {
+    contextMenuState.selectionRaw = selectionState.text;
+    contextMenuState.selectionText = selectionState.text.trim();
+  }
+  if (contextMenuState.type === 'content' && contextMenuState.selectionText) {
+    const selection = window.getSelection();
+    if (selection?.rangeCount) {
+      try {
+        const nativeRange = selection.getRangeAt(0);
+        const container = contextMenuState.fromSecondary ? mdContainerSecondary : mdContainer;
+        if (container?.contains(nativeRange.commonAncestorContainer)) {
+          selectionState.range = nativeRange.cloneRange();
+          selectionState.text = contextMenuState.selectionText;
+          selectionState.headingId = findHeadingIdForNode(nativeRange.startContainer, contextMenuState.fromSecondary) || selectionState.headingId || activeHeadingId || '';
+          selectionState.fromSecondary = contextMenuState.fromSecondary;
+        }
+      } catch {}
+    }
+    if (!selectionState.text) {
+      selectionState.text = contextMenuState.selectionText;
+    }
+    if (!selectionState.headingId) {
+      selectionState.headingId = activeHeadingId || '';
+    }
+    selectionState.fromSecondary = contextMenuState.fromSecondary;
+  }
+  updateContextMenuAvailability();
+  positionContextMenu(event.clientX, event.clientY);
+}
+
+function handleContextMenuDocumentClick(event) {
+  if (!contextMenuState.visible) return;
+  if (contextMenuEl?.contains(event.target)) return;
+  hideContextMenu();
+}
+
+function handleContextMenuKeydown(event) {
+  if (event.key === 'Escape' && contextMenuState.visible) {
+    hideContextMenu();
+  }
+}
+
+function handleContextMenuScroll() {
+  if (contextMenuState.visible) hideContextMenu();
+}
 
 const DEFAULT_MATH_RENDER_OPTIONS = {
   delimiters: [
@@ -705,6 +1141,7 @@ function renderToc() {
   }).join('');
   tocListEl.innerHTML = html || '<div class="muted">尚無標題</div>';
   highlightActiveToc();
+  renderMathInContainer(tocListEl);
 }
 
 function activateTocItem(id) {
@@ -779,6 +1216,7 @@ function renderContextChips() {
     chips.push({ id: latest.id, label: `標註：${latest.snippet.slice(0, 24)}` });
   }
   contextChipsEl.innerHTML = chips.map(chip => `<span class="context-chip" data-chip-id="${escapeHtml(chip.id)}">${escapeHtml(chip.label)}</span>`).join('');
+  renderMathInContainer(contextChipsEl);
 }
 
 function addToReferenceTrail(id) {
@@ -802,6 +1240,7 @@ function renderReferenceTrail() {
   referenceTrailEl.innerHTML = referenceTrail
     .map(item => `<span class="trail-item" data-id="${escapeHtml(item.id)}">${escapeHtml(item.text)}</span>`)
     .join('');
+  renderMathInContainer(referenceTrailEl);
 }
 
 function populateSecondarySourceOptions() {
@@ -1164,6 +1603,7 @@ function renderBookmarks() {
       </li>`;
   }).join('');
   bookmarkListEl.innerHTML = html;
+  renderMathInContainer(bookmarkListEl);
 }
 
 function scrollToBookmark(bookmark) {
@@ -1283,6 +1723,7 @@ function renderNotes() {
       </div>`;
   }).join('');
   noteListEl.innerHTML = html;
+  renderMathInContainer(noteListEl);
 }
 
 function removeNote(id) {
@@ -1319,6 +1760,7 @@ function renderHighlights() {
       </div>`;
   }).join('');
   highlightListEl.innerHTML = html;
+  renderMathInContainer(highlightListEl);
 }
 
 function focusHighlight(id) {
@@ -1350,6 +1792,68 @@ function clearAllHighlights() {
   renderHighlights();
   renderContextChips();
   showToast('已清除所有標註', 'info', 1400);
+}
+
+function createHighlightFromSelection() {
+  ensureReaderContainers();
+  const snippet = selectionState.text;
+  if (!snippet) {
+    showToast('請先選取要標註的內容', 'info', 1400);
+    return false;
+  }
+  const headingId = selectionState.headingId || getCurrentHeading()?.id || '';
+  const duplicate = annotationState.highlights.some(ann => ann.snippet === snippet && ann.headingId === headingId);
+  if (duplicate) {
+    showToast('這段內容已經標註過', 'info', 1400);
+    return false;
+  }
+  const id = `ann-${Date.now()}`;
+  const container = selectionState.fromSecondary ? mdContainerSecondary : mdContainer;
+  if (!container) {
+    showToast('無法取得標註區域', 'error', 1500);
+    return false;
+  }
+  const range = selectionState.range?.cloneRange?.() || null;
+  let applied = false;
+  if (range) {
+    try {
+      const wrapper = document.createElement('mark');
+      wrapper.className = 'annotation-highlight';
+      wrapper.dataset.annotationId = id;
+      range.surroundContents(wrapper);
+      applied = true;
+    } catch (err) {
+      console.warn('Highlight wrapping failed, fallback to snippet lookup', err);
+    }
+  }
+  if (!applied) {
+    wrapSnippetInContainer(container, snippet, id, 'annotation-highlight', selectionState.fromSecondary);
+  }
+  const markerExists = Boolean(
+    mdContainer?.querySelector?.(`mark.annotation-highlight[data-annotation-id="${escapeCssId(id)}"]`) ||
+    mdContainerSecondary?.querySelector?.(`mark.annotation-highlight[data-annotation-id="${escapeCssId(id)}"]`)
+  );
+  if (!markerExists) {
+    showToast('無法建立標註', 'error', 1500);
+    return false;
+  }
+  const heading = resultState.headings.find(h => h.id === headingId) || null;
+  annotationState.highlights.push({
+    id,
+    snippet,
+    headingId,
+    headingText: heading?.text || '',
+    createdAt: Date.now()
+  });
+  persistToStorage(STORAGE_KEYS.annotations, annotationState);
+  applyAnnotations();
+  renderHighlights();
+  selectionState.highlightId = id;
+  renderContextChips();
+  try { window.getSelection()?.removeAllRanges(); }
+  catch {}
+  showToast('已建立標註', 'success', 1400);
+  return true;
 }
 
 function locateNote(id) {
@@ -2811,6 +3315,13 @@ if (btnToggleToc) {
 }
 btnToggleSplit?.classList.toggle('active', Boolean(readerPrefs.split));
 btnSyncScroll?.classList.toggle('active', Boolean(readerPrefs.syncScroll));
+
+document.addEventListener('contextmenu', handleContextMenuEvent);
+document.addEventListener('click', handleContextMenuDocumentClick);
+document.addEventListener('keydown', handleContextMenuKeydown);
+window.addEventListener('blur', hideContextMenu);
+window.addEventListener('resize', hideContextMenu);
+document.addEventListener('scroll', handleContextMenuScroll, true);
 
 mdContainer?.addEventListener('mouseup', () => handleSelectionCapture(false));
 mdContainer?.addEventListener('keyup', () => handleSelectionCapture(false));

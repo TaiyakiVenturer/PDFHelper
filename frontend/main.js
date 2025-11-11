@@ -606,7 +606,7 @@ ipcMain.handle('process:start', async (event, payload) => {
                   console.log('[process:start] 開始重組 Markdown:', evtObj.metadata.translated_json_name);
                   const reconstructResult = await apiClient.reconstructMarkdown(
                     evtObj.metadata.translated_json_name,
-                    "auto",
+                    method,
                     "translated"
                   );
 

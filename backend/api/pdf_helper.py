@@ -190,9 +190,10 @@ class PDFHelper:
                 api_key=api_key,
                 verbose=self.translator.verbose
             )
+            success = self.translator.llm_service.is_available()
             return HelperResult(
-                success=self.translator.llm_service.is_available(),
-                message="翻譯服務API金鑰更新成功" if self.translator.llm_service.is_available() else "翻譯服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+                success=success,
+                message="翻譯服務API金鑰更新成功" if success else "翻譯服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
             )
         elif service == "embedding":
             self.rag_engine.embedding_service.llm_service = self._create_llm_service(
@@ -201,9 +202,10 @@ class PDFHelper:
                 api_key=api_key,
                 verbose=self.rag_engine.embedding_service.verbose
             )
+            success = self.rag_engine.embedding_service.llm_service.is_available()
             return HelperResult(
-                success=self.rag_engine.embedding_service.llm_service.is_available(),
-                message="Embedding服務API金鑰更新成功" if self.rag_engine.embedding_service.llm_service.is_available() else "Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+                success=success,
+                message="Embedding服務API金鑰更新成功" if success else "Embedding服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
             )
         elif service == "rag":
             self.rag_engine.llm_service = self._create_llm_service(
@@ -212,9 +214,10 @@ class PDFHelper:
                 api_key=api_key,
                 verbose=self.rag_engine.verbose
             )
+            success = self.rag_engine.llm_service.is_available()
             return HelperResult(
-                success=self.rag_engine.llm_service.is_available(),
-                message="RAG服務API金鑰更新成功" if self.rag_engine.llm_service.is_available() else "RAG服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
+                success=success,
+                message="RAG服務API金鑰更新成功" if success else "RAG服務API金鑰更新失敗，請檢查金鑰或模型名稱是否正確"
             )
         else:
             return HelperResult(

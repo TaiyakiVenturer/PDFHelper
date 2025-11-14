@@ -95,76 +95,75 @@ const processingLanguageSelect = document.getElementById('processingLanguage');
 const processingSummaryEl = document.getElementById('processingSummary');
 let mdContainer = document.getElementById('mdContainer');
 let mdContainerSecondary = document.getElementById('mdContainerSecondary');
-let readerContentEl = document.querySelector('.reader-content');
-const btnNewFile = document.getElementById('btnNewFile');
-// Chat UI elements
-const chatListEl = document.getElementById('chatList');
-const chatInputEl = document.getElementById('chatInput');
-const btnChatSend = document.getElementById('btnChatSend');
-// Reader enhancement elements
-const docMetaSummary = document.getElementById('docMetaSummary');
-const btnToggleToc = document.getElementById('btnToggleToc');
-const btnToggleSplit = document.getElementById('btnToggleSplit');
-const btnOpenNewWindow = document.getElementById('btnOpenNewWindow');
 let readerPanels = document.getElementById('readerPanels');
 let secondaryPanel = document.getElementById('secondaryPanel');
-const secondarySourceSelect = document.getElementById('secondarySource');
-const btnSyncScroll = document.getElementById('btnSyncScroll');
-const tocSidebar = document.getElementById('tocSidebar');
+let readerContentEl = document.getElementById('readerContent');
+let tocSidebar = document.getElementById('tocSidebar');
+let chatListEl = document.getElementById('chatList');
+const docMetaSummary = document.getElementById('docMetaSummary');
 const tocListEl = document.getElementById('tocList');
-const btnPrevSection = document.getElementById('btnPrevSection');
-const btnNextSection = document.getElementById('btnNextSection');
+const referenceTrailEl = document.getElementById('referenceTrail');
+const workspaceTabButtons = Array.from(document.querySelectorAll('.workspace-tab'));
+const workspacePanels = Array.from(document.querySelectorAll('.workspace-panels .tab-panel'));
+const workspaceActionGroups = Array.from(document.querySelectorAll('.workspace-actions .tab-actions'));
 const searchInputEl = document.getElementById('searchInput');
 const btnSearchPrev = document.getElementById('btnSearchPrev');
 const btnSearchNext = document.getElementById('btnSearchNext');
 const btnSearchClear = document.getElementById('btnSearchClear');
-const searchCounterEl = document.getElementById('searchCounter');
 const contextChipsEl = document.getElementById('contextChips');
-const referenceTrailEl = document.getElementById('referenceTrail');
+const btnPrevSection = document.getElementById('btnPrevSection');
+const btnNextSection = document.getElementById('btnNextSection');
+const btnToggleToc = document.getElementById('btnToggleToc');
+const btnToggleSplit = document.getElementById('btnToggleSplit');
+const btnOpenNewWindow = document.getElementById('btnOpenNewWindow');
+const btnNewFile = document.getElementById('btnNewFile');
+const btnSyncScroll = document.getElementById('btnSyncScroll');
+const secondarySourceSelect = document.getElementById('secondarySource');
 const btnAddBookmark = document.getElementById('btnAddBookmark');
 const btnExportBookmarks = document.getElementById('btnExportBookmarks');
-const bookmarkListEl = document.getElementById('bookmarkList');
 const btnCreateNote = document.getElementById('btnCreateNote');
+const btnClearHighlights = document.getElementById('btnClearHighlights');
+const bookmarkListEl = document.getElementById('bookmarkList');
+const highlightListEl = document.getElementById('highlightList');
 const noteListEl = document.getElementById('noteList');
 const noteComposerEl = document.getElementById('noteComposer');
 const noteComposerInput = document.getElementById('noteComposerInput');
 const noteComposerContext = document.getElementById('noteComposerContext');
-const btnNoteSave = document.getElementById('btnNoteSave');
 const btnNoteCancel = document.getElementById('btnNoteCancel');
-const suggestedQuestionsEl = document.getElementById('suggestedQuestions');
+const btnNoteSave = document.getElementById('btnNoteSave');
 const suggestionContainerEl = document.getElementById('suggestionContainer');
 const btnToggleSuggestions = document.getElementById('btnToggleSuggestions');
+const suggestedQuestionsEl = document.getElementById('suggestedQuestions');
+const chatPlaybackEl = document.getElementById('chatPlayback');
+const chatPlaybackSnippet = document.getElementById('chatPlaybackSnippet');
+const btnPlaybackToggle = document.getElementById('btnPlaybackToggle');
+const btnPlaybackStop = document.getElementById('btnPlaybackStop');
+const chatPlaybackToggleIcon = document.getElementById('chatPlaybackToggleIcon');
+const chatPlaybackToggleText = document.getElementById('chatPlaybackToggleText');
 const btnChatNew = document.getElementById('btnChatNew');
 const btnChatHistory = document.getElementById('btnChatHistory');
+const btnVoiceOutput = document.getElementById('btnVoiceOutput');
+const chatInputEl = document.getElementById('chatInput');
+const btnChatSend = document.getElementById('btnChatSend');
+const chatHistoryBackdrop = document.getElementById('chatHistoryBackdrop');
+const chatHistoryListEl = document.getElementById('chatHistoryList');
 const btnChatHistoryClose = document.getElementById('btnChatHistoryClose');
 const btnChatHistoryClose2 = document.getElementById('btnChatHistoryClose2');
 const btnChatHistoryDelete = document.getElementById('btnChatHistoryDelete');
 const btnChatHistoryLoad = document.getElementById('btnChatHistoryLoad');
-const chatHistoryBackdrop = document.getElementById('chatHistoryBackdrop');
-const chatHistoryListEl = document.getElementById('chatHistoryList');
-const btnVoiceInput = document.getElementById('btnVoiceInput');
-const btnVoiceOutput = document.getElementById('btnVoiceOutput');
-const chatPlaybackEl = document.getElementById('chatPlayback');
-const chatPlaybackSnippet = document.getElementById('chatPlaybackSnippet');
-const btnPlaybackToggle = document.getElementById('btnPlaybackToggle');
-const chatPlaybackToggleIcon = document.getElementById('chatPlaybackToggleIcon');
-const chatPlaybackToggleText = document.getElementById('chatPlaybackToggleText');
-const btnPlaybackStop = document.getElementById('btnPlaybackStop');
-const workspaceTabButtons = document.querySelectorAll('.workspace-tab');
-const workspacePanels = document.querySelectorAll('.tab-panel');
-const workspaceActionGroups = document.querySelectorAll('.tab-actions');
-const highlightListEl = document.getElementById('highlightList');
-const btnClearHighlights = document.getElementById('btnClearHighlights');
+const mathRenderQueue = new Set();
+let isMathEngineReady = false;
 
-const CONTEXT_MENU_ACTIONS = [
+const CONTEXT_MENU_ACTIONS = Object.freeze([
   { id: 'query', label: '查詢' },
   { id: 'copy', label: '複製' },
   { id: 'highlight', label: '標註' },
   { id: 'remove-highlight', label: '取消標註' },
   { id: 'ask', label: '提問' }
-];
+]);
+
+const contextMenuButtons = {};
 let contextMenuEl = null;
-const contextMenuButtons = Object.create(null);
 const contextMenuState = {
   visible: false,
   type: null,
@@ -174,92 +173,80 @@ const contextMenuState = {
   target: null,
   highlightId: ''
 };
-let contextMenuStylesInjected = false;
 
 function ensureReaderContainers() {
-  if (!mdContainer || !mdContainer.isConnected) {
-    mdContainer = document.getElementById('mdContainer');
+  const doc = document;
+  if (!mdContainer || !doc.contains(mdContainer)) mdContainer = doc.getElementById('mdContainer');
+  if (!mdContainerSecondary || !doc.contains(mdContainerSecondary)) {
+    mdContainerSecondary = doc.getElementById('mdContainerSecondary');
   }
-  if (!mdContainerSecondary || !mdContainerSecondary.isConnected) {
-    mdContainerSecondary = document.getElementById('mdContainerSecondary');
-  }
-  if (!readerContentEl || !readerContentEl.isConnected) {
-    readerContentEl = document.querySelector('.reader-content');
-  }
-  if (!readerPanels || !readerPanels.isConnected) {
-    readerPanels = document.getElementById('readerPanels');
-  }
-  if (!secondaryPanel || !secondaryPanel.isConnected) {
-    secondaryPanel = document.getElementById('secondaryPanel');
+  if (!readerPanels || !doc.contains(readerPanels)) readerPanels = doc.getElementById('readerPanels');
+  if (!secondaryPanel || !doc.contains(secondaryPanel)) secondaryPanel = doc.getElementById('secondaryPanel');
+  if (!readerContentEl || !doc.contains(readerContentEl)) readerContentEl = doc.getElementById('readerContent');
+  if (!tocSidebar || !doc.contains(tocSidebar)) tocSidebar = doc.getElementById('tocSidebar');
+  if (!chatListEl || !doc.contains(chatListEl)) chatListEl = doc.getElementById('chatList');
+}
+
+function flushMathRenderQueue() {
+  if (!isMathEngineReady) return;
+  const mathJax = window.MathJax;
+  if (!mathJax || typeof mathJax.typesetPromise !== 'function') return;
+  const targets = Array.from(mathRenderQueue).filter(Boolean);
+  if (!targets.length) return;
+  mathRenderQueue.clear();
+  mathJax.typesetPromise(targets).catch(err => {
+    console.warn('MathJax 渲染失敗:', err);
+  });
+}
+
+function renderMathInContainer(container) {
+  if (!container) return;
+  mathRenderQueue.add(container);
+  if (isMathEngineReady) {
+    flushMathRenderQueue();
   }
 }
 
-document.addEventListener('DOMContentLoaded', ensureReaderContainers);
-ensureReaderContainers();
-
-function injectContextMenuStyles() {
-  if (contextMenuStylesInjected) return;
-  const style = document.createElement('style');
-  style.textContent = `
-    .pdfhelper-context-menu {
-      position: fixed;
-      min-width: 160px;
-      background: var(--surface-1);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.36);
-      padding: 6px 0;
-      z-index: 1400;
-      display: none;
-    }
-    .pdfhelper-context-menu.show {
-      display: block;
-      animation: pdfhelperContextMenuFade 120ms ease-out;
-    }
-    .pdfhelper-context-menu__item {
-      display: block;
-      width: 100%;
-      padding: 8px 16px;
-      background: transparent;
-      border: none;
-      text-align: left;
-      color: var(--text);
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .pdfhelper-context-menu__item:hover {
-      background: var(--button-hover-bg);
-    }
-    .pdfhelper-context-menu__item:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-    @keyframes pdfhelperContextMenuFade {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-  `;
-  document.head.appendChild(style);
-  contextMenuStylesInjected = true;
+function handleMathEngineReady() {
+  isMathEngineReady = true;
+  flushMathRenderQueue();
 }
 
+window.addEventListener('pdfhelper:math-ready', handleMathEngineReady);
+if (window.MathJax?.typesetPromise) {
+  handleMathEngineReady();
+}
 function ensureContextMenuElement() {
-  if (contextMenuEl) return contextMenuEl;
-  injectContextMenuStyles();
+  ensureReaderContainers();
+  if (contextMenuEl && document.body.contains(contextMenuEl)) return contextMenuEl;
+  if (contextMenuEl?.parentNode) {
+    contextMenuEl.parentNode.removeChild(contextMenuEl);
+  }
+
   const menu = document.createElement('div');
-  menu.className = 'pdfhelper-context-menu';
+  menu.className = 'context-menu';
   menu.setAttribute('role', 'menu');
-  CONTEXT_MENU_ACTIONS.forEach(action => {
+  menu.tabIndex = -1;
+
+  CONTEXT_MENU_ACTIONS.forEach((action) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'pdfhelper-context-menu__item';
+    btn.className = `context-menu__item context-menu__item--${action.id}`;
     btn.dataset.action = action.id;
     btn.textContent = action.label;
-    btn.setAttribute('role', 'menuitem');
-    btn.addEventListener('click', () => runContextMenuAction(action.id));
+    btn.disabled = true;
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      runContextMenuAction(action.id);
+    });
+    btn.addEventListener('pointerdown', (event) => event.preventDefault());
     menu.appendChild(btn);
     contextMenuButtons[action.id] = btn;
   });
+
+  menu.addEventListener('contextmenu', (event) => event.preventDefault());
+  menu.addEventListener('pointerdown', (event) => event.preventDefault());
+
   document.body.appendChild(menu);
   contextMenuEl = menu;
   return menu;
@@ -611,137 +598,6 @@ function handleContextMenuKeydown(event) {
 
 function handleContextMenuScroll() {
   if (contextMenuState.visible) hideContextMenu();
-}
-
-const DEFAULT_MATH_RENDER_OPTIONS = {
-  delimiters: [
-    { left: '$$', right: '$$', display: true },
-    { left: '\\[', right: '\\]', display: true },
-    { left: '\\(', right: '\\)', display: false },
-    { left: '$', right: '$', display: false }
-  ],
-  throwOnError: false,
-  strict: 'ignore'
-};
-
-function cloneMathRenderOptions(source) {
-  const base = (source && typeof source === 'object') ? source : DEFAULT_MATH_RENDER_OPTIONS;
-  const delimiters = Array.isArray(base.delimiters) && base.delimiters.length
-    ? base.delimiters.map(item => ({ ...item }))
-    : DEFAULT_MATH_RENDER_OPTIONS.delimiters.map(item => ({ ...item }));
-  return {
-    ...base,
-    delimiters,
-    throwOnError: typeof base.throwOnError === 'boolean' ? base.throwOnError : false,
-    strict: base.strict ?? 'ignore',
-    macros: typeof base.macros === 'object' && base.macros ? { ...base.macros } : undefined
-  };
-}
-
-function getMathRenderOptions() {
-  if (!window.__pdfHelperMathOptions) {
-    window.__pdfHelperMathOptions = cloneMathRenderOptions(DEFAULT_MATH_RENDER_OPTIONS);
-  }
-  return cloneMathRenderOptions(window.__pdfHelperMathOptions);
-}
-
-function renderMathInContainer(container) {
-  if (!container) return;
-  const options = getMathRenderOptions();
-  let attempted = false;
-  if (typeof window.renderMathInElement === 'function') {
-    try {
-      window.renderMathInElement(container, options);
-      attempted = true;
-    } catch (err) {
-      console.warn('LaTeX 渲染失敗:', err);
-    }
-  }
-  if (typeof window.katex?.renderToString === 'function') {
-    fallbackRenderMath(container, options);
-    attempted = true;
-  }
-  if (!attempted) {
-    console.debug('KaTeX 尚未載入，等待後續再次渲染');
-  }
-}
-
-function fallbackRenderMath(container, options) {
-  const mathRegex = /(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$|\\\[[\s\S]+?\\\]|\\\([\s\S]*?\\\))/g;
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      if (!node.parentElement) return NodeFilter.FILTER_REJECT;
-      const text = node.textContent;
-      if (!text) return NodeFilter.FILTER_REJECT;
-      mathRegex.lastIndex = 0;
-      if (!mathRegex.test(text)) return NodeFilter.FILTER_REJECT;
-      if (node.parentElement.closest('.katex, pre, code, script, style')) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    }
-  });
-
-  const nodes = [];
-  while (walker.nextNode()) {
-    nodes.push(walker.currentNode);
-  }
-
-  nodes.forEach(node => {
-  const text = node.textContent;
-  mathRegex.lastIndex = 0;
-    if (!text) return;
-    const fragment = document.createDocumentFragment();
-    let lastIndex = 0;
-    let match;
-
-    while ((match = mathRegex.exec(text)) !== null) {
-      const { index } = match;
-      if (index > lastIndex) {
-        fragment.appendChild(document.createTextNode(text.slice(lastIndex, index)));
-      }
-      const raw = match[0];
-      let mathContent = '';
-      let displayMode = false;
-      if (raw.startsWith('$$') && raw.endsWith('$$')) {
-        mathContent = raw.slice(2, -2);
-        displayMode = true;
-      } else if (raw.startsWith('\\[') && raw.endsWith('\\]')) {
-        mathContent = raw.slice(2, -2);
-        displayMode = true;
-      } else if (raw.startsWith('\\(') && raw.endsWith('\\)')) {
-        mathContent = raw.slice(2, -2);
-      } else if (raw.startsWith('$') && raw.endsWith('$')) {
-        mathContent = raw.slice(1, -1);
-      } else {
-        mathContent = raw;
-      }
-
-      try {
-        const html = window.katex.renderToString(mathContent, {
-          throwOnError: options.throwOnError,
-          strict: options.strict,
-          displayMode,
-          macros: options.macros
-        });
-        const wrapper = document.createElement(displayMode ? 'div' : 'span');
-        wrapper.innerHTML = html;
-        fragment.appendChild(wrapper);
-      } catch (err) {
-        console.warn('KaTeX 後備渲染失敗:', err);
-        fragment.appendChild(document.createTextNode(raw));
-      }
-
-      lastIndex = mathRegex.lastIndex;
-    }
-
-    if (lastIndex < text.length) {
-      fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
-    }
-
-    if (fragment.childNodes.length) {
-      node.parentNode?.replaceChild(fragment, node);
-    }
-    mathRegex.lastIndex = 0;
-  });
 }
 
 const WORKSPACE_TABS = new Set(['chat', 'saved']);

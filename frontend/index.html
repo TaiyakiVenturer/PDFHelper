@@ -1105,23 +1105,37 @@
         }, 100);
       });
     </script>
-    <!-- KaTeX for LaTeX 渲染 -->
+    <!-- MathJax for LaTeX 渲染 -->
     <script>
-      window.__pdfHelperMathOptions = {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '\\[', right: '\\]', display: true },
-          { left: '\\(', right: '\\)', display: false },
-          { left: '$', right: '$', display: false }
-        ],
-        throwOnError: false,
-        strict: 'ignore'
+      window.MathJax = {
+        tex: {
+          inlineMath: [ ['$', '$'], ['\\(', '\\)'] ],
+          displayMath: [ ['$$', '$$'], ['\\[', '\\]'] ],
+          processEscapes: true,
+          processEnvironments: true
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoreHtmlClass: 'no-mathjax',
+          processHtmlClass: 'mathjax-process'
+        },
+        startup: {
+          typeset: false,
+          ready: () => {
+            MathJax.startup.defaultReady();
+            const eventName = 'pdfhelper:math-ready';
+            try {
+              window.dispatchEvent(new CustomEvent(eventName));
+            } catch (err) {
+              const evt = document.createEvent('Event');
+              evt.initEvent(eventName, true, true);
+              window.dispatchEvent(evt);
+            }
+          }
+        }
       };
     </script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-NiZ6m19m7m5J5O0bApbtf0Q7sB4Hq5Xb7qYj1yXkQ2k1i2H8f9q2m0z1x3y4z5a" crossorigin="anonymous">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-2qfVgJpYkQZy7bZ9o8mLThlOeYwGQmj2Qm4oUYv1bU40g1N3v2b2jv9nK8fZxJ2Z" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-mQ93rYc9x8Rz6mO3H5vA7+1d0W6C3bFk5U3bF1QdO4CkZzYv0b2m1xQzC8k9L6+e" crossorigin="anonymous"
-  onload="renderMathInElement(document.body, (window.__pdfHelperMathOptions || {delimiters:[{left:'$$', right:'$$', display:true},{left:'\\[', right:'\\]', display:true},{left:'\\(', right:'\\)', display:false},{left:'$', right:'$', display:false}], throwOnError:false}));"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

@@ -1,13 +1,14 @@
 {
-  "name": "electron-text-display",
+  "name": "pdfhelper-desktop",
   "version": "0.1.0",
-  "description": "顯示文字的簡易 Electron App",
+  "description": "PDFHelper 桌面版：一鍵解析 PDF、翻譯、標註並啟動 RAG 聊天",
   "main": "main.js",
   "scripts": {
     "start": "chcp 65001 >NUL && electron .",
     "pack": "chcp 65001 >NUL && electron-packager . PDFHelper --platform=win32 --arch=x64 --out=dist --overwrite",
     "prepare-python": "chcp 65001 >NUL && scripts\\build-python-env.cmd",
-  "dist": "chcp 65001 >NUL && electron-builder --win nsis"
+    "dist": "chcp 65001 >NUL && electron-builder --win nsis",
+    "dist:linux": "chcp 65001 >NUL && electron-builder --linux AppImage"
   },
   "devDependencies": {
     "electron": "^38.1.2",
@@ -19,7 +20,7 @@
   },
   "build": {
     "appId": "com.pdfhelper.desktop",
-    "productName": "PDFHelper",
+    "productName": "PDFHelper Desktop",
     "compression": "maximum",
     "directories": {
       "buildResources": "build",
@@ -50,6 +51,19 @@
         "to": "scripts/setup-python.cmd"
       }
     ],
+    "win": {
+      "icon": "build/icons/pdfhelper.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "build/icons",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,

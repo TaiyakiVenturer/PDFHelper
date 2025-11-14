@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
   },
   checkUpdates: () => ipcRenderer.invoke('app:check-updates')
+  ,openReleasePage: (url) => ipcRenderer.invoke('app:open-release-page', url)
   ,listModels: (company, apiKey, modelType) => ipcRenderer.invoke('models:list', company, apiKey, modelType)
   ,historyList: () => ipcRenderer.invoke('history:list')
   ,historyClear: () => ipcRenderer.invoke('history:clear')

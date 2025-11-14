@@ -3588,6 +3588,9 @@ const btnModalClose = document.getElementById('btnModalClose');
 const lblVersion = document.getElementById('lblVersion');
 const btnUpdateInModal = document.getElementById('btnUpdateInModal');
 const updateStatus = document.getElementById('updateStatus');
+const btnDownloadUpdate = document.getElementById('btnDownloadUpdate');
+const DEFAULT_RELEASE_URL = 'https://github.com/TaiyakiVenturer/PDFHelper/releases/latest';
+let latestReleaseInfo = null;
 
 // 三組服務的 DOM 元素
 const translatorElements = {
@@ -3665,6 +3668,20 @@ function closeModal() {
   modalBackdrop.classList.remove('show');
   // 等待過場結束後隱藏
   setTimeout(() => { if (modalBackdrop) modalBackdrop.style.display = 'none'; }, 220);
+}
+
+function resetUpdateControls() {
+  latestReleaseInfo = null;
+  if (updateStatus) {
+    updateStatus.classList.remove('show', 'ok', 'info', 'error');
+    updateStatus.textContent = '尚未檢查更新';
+  }
+  if (btnDownloadUpdate) {
+    btnDownloadUpdate.hidden = true;
+    btnDownloadUpdate.disabled = false;
+    btnDownloadUpdate.dataset.releaseUrl = DEFAULT_RELEASE_URL;
+    btnDownloadUpdate.textContent = '下載更新';
+  }
 }
 
 function setProviderBadge(badgeEl, company) {
@@ -3780,8 +3797,7 @@ btnSettings?.addEventListener('click', async () => {
   document.querySelectorAll('input[name="theme"]').forEach((el) => {
     if (el instanceof HTMLInputElement) el.checked = false;
   });
-  updateStatus?.classList.remove('show', 'ok', 'info', 'error');
-  if (updateStatus) updateStatus.textContent = '尚未檢查更新';
+  resetUpdateControls();
   if (lblVersion) lblVersion.textContent = '-';
 
   const services = [translatorElements, embeddingElements, ragElements];
@@ -3887,29 +3903,68 @@ window.addEventListener('keydown', (e) => {
 btnUpdateInModal?.addEventListener('click', async () => {
   if (!btnUpdateInModal || !updateStatus) return;
   btnUpdateInModal.disabled = true;
+  if (btnDownloadUpdate) {
+    btnDownloadUpdate.hidden = true;
+    btnDownloadUpdate.disabled = true;
+  }
   updateStatus.classList.remove('ok', 'error', 'info');
   updateStatus.classList.add('show', 'info');
   updateStatus.innerHTML = `<span class="spinner" aria-hidden="true"></span> 正在檢查更新…`;
   try {
     const res = await window.electronAPI?.checkUpdates?.();
     if (!res) throw new Error('無回應');
-    const { currentVersion, hasUpdate, message } = res;
+    latestReleaseInfo = res;
+    const { currentVersion, hasUpdate, message, latestVersion, releaseName, releaseUrl, assets } = res;
+    const latestLabel = latestVersion || releaseName || '';
     if (hasUpdate) {
       updateStatus.classList.remove('info', 'error');
       updateStatus.classList.add('ok');
-      updateStatus.textContent = `有新版本可用！目前版本 ${currentVersion}`;
+      const labelText = latestLabel ? `發現新版本 ${latestLabel}（目前 ${currentVersion}）` : `有新版本可用！目前版本 ${currentVersion}`;
+      updateStatus.textContent = labelText;
+      if (btnDownloadUpdate) {
+        const targetUrl = releaseUrl || DEFAULT_RELEASE_URL;
+        btnDownloadUpdate.dataset.releaseUrl = targetUrl;
+        btnDownloadUpdate.textContent = Array.isArray(assets) && assets.length ? '下載更新' : '開啟發布頁面';
+        btnDownloadUpdate.hidden = false;
+        btnDownloadUpdate.disabled = false;
+      }
     } else {
       updateStatus.classList.remove('ok', 'error');
       updateStatus.classList.add('info');
-      updateStatus.textContent = message || `目前版本 ${currentVersion}，已是最新`;
+      const fallback = latestLabel ? `最新版本為 ${latestLabel}` : '';
+      updateStatus.textContent = message || `目前版本 ${currentVersion}，已是最新${fallback ? `（${fallback}）` : ''}`;
+      if (btnDownloadUpdate) {
+        btnDownloadUpdate.hidden = true;
+        btnDownloadUpdate.disabled = false;
+      }
     }
   } catch (err) {
     console.error('檢查更新失敗', err);
+    latestReleaseInfo = null;
     updateStatus.classList.remove('ok', 'info');
     updateStatus.classList.add('show', 'error');
     updateStatus.textContent = '檢查更新失敗，請稍後再試';
+    if (btnDownloadUpdate) {
+      btnDownloadUpdate.hidden = true;
+      btnDownloadUpdate.disabled = false;
+    }
   } finally {
     btnUpdateInModal.disabled = false;
+  }
+});
+
+btnDownloadUpdate?.addEventListener('click', async () => {
+  if (!btnDownloadUpdate) return;
+  const target = btnDownloadUpdate.dataset.releaseUrl || latestReleaseInfo?.releaseUrl || DEFAULT_RELEASE_URL;
+  if (!target) return;
+  btnDownloadUpdate.disabled = true;
+  try {
+    await window.electronAPI?.openReleasePage?.(target);
+  } catch (err) {
+    console.error('開啟更新頁面失敗', err);
+    showToast('無法開啟更新頁面', 'error', 2000);
+  } finally {
+    btnDownloadUpdate.disabled = false;
   }
 });
 

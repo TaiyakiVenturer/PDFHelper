@@ -107,6 +107,7 @@ const workspaceTabButtons = Array.from(document.querySelectorAll('.workspace-tab
 const workspacePanels = Array.from(document.querySelectorAll('.workspace-panels .tab-panel'));
 const workspaceActionGroups = Array.from(document.querySelectorAll('.workspace-actions .tab-actions'));
 const searchInputEl = document.getElementById('searchInput');
+const searchCounterEl = document.getElementById('searchCounter');
 const btnSearchPrev = document.getElementById('btnSearchPrev');
 const btnSearchNext = document.getElementById('btnSearchNext');
 const btnSearchClear = document.getElementById('btnSearchClear');

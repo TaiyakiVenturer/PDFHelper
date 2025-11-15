@@ -87,6 +87,50 @@
       }
       *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
       *::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+      /* 自訂右鍵選單樣式 */
+      .context-menu {
+        position: fixed;
+        min-width: 160px;
+        max-width: 220px;
+        width: max-content;
+        padding: 4px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--surface-1);
+        box-shadow: 0 20px 36px rgba(2,6,23,0.55);
+        display: none;
+        opacity: 0;
+        transform: translateY(6px) scale(0.98);
+        transition: opacity 120ms ease, transform 120ms ease, border-color 160ms ease;
+        z-index: 1600;
+      }
+      .context-menu.show {
+        opacity: 1;
+        transform: none;
+      }
+      .context-menu__item {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease;
+      }
+      .context-menu__item:hover:not(:disabled) {
+        background: var(--button-hover-bg);
+        border-color: var(--border);
+        color: var(--accent-bg);
+        transform: translateX(1px);
+      }
+      .context-menu__item:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
       /* 自訂標題列（可拖曳區域） */
       .titlebar {
         -webkit-app-region: drag; /* 允許拖曳 */
@@ -236,6 +280,7 @@
   .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 12px; align-items: center; margin: 0; }
   .field label { margin: 0; color: var(--muted); font-size: 13px; align-self: flex-start; padding-top: 6px; }
   .field .input, .field .select, .field .input-group, .field .field-text { width: 100%; }
+  .field-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .input, .select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--button-bg); color: var(--text); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease; min-height: 40px; line-height: 1.2; outline: none; }
   .input:focus, .select:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px rgba(2,132,199,0.25); }
   .input-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
@@ -1030,7 +1075,10 @@
                 </div>
                 <div class="field field-inline">
                   <div class="field-text">目前版本：<span id="lblVersion">-</span></div>
-                  <button id="btnUpdateInModal" class="btn" type="button">檢查更新</button>
+                  <div class="field-actions">
+                    <button id="btnUpdateInModal" class="btn" type="button">檢查更新</button>
+                    <button id="btnDownloadUpdate" class="btn btn-primary" type="button" hidden>下載更新</button>
+                  </div>
                 </div>
                 <div id="updateStatus" class="update-status" aria-live="polite">尚未檢查更新</div>
               </div>

@@ -783,6 +783,63 @@ let activeHeadingId = null;
 let headingObserver = null;
 let syncScrollActive = Boolean(readerPrefs.syncScroll);
 let scrollProgress = 0;
+let activeDocumentKey = null;
+let activeDocumentTitle = '';
+
+function getNotesForDocument(docKey) {
+  if (!docKey) return [];
+  return noteState.items.filter(item => item.docKey === docKey);
+}
+
+function getActiveDocumentNotes() {
+  return getNotesForDocument(activeDocumentKey);
+}
+
+function adoptLegacyNotesForDocument(docKey, docTitle) {
+  if (!docKey || !noteState.items.length) return;
+  const headingIds = new Set((resultState.headings || []).map(h => h.id));
+  if (!headingIds.size) return;
+  let mutated = false;
+  noteState.items.forEach(note => {
+    if (note.docKey) return;
+    if (note.headingId && headingIds.has(note.headingId)) {
+      note.docKey = docKey;
+      note.docTitle = docTitle || note.docTitle || note.headingText || '';
+      mutated = true;
+    }
+  });
+  if (mutated) {
+    persistToStorage(STORAGE_KEYS.notes, noteState.items);
+  }
+}
+
+function getHighlightsForDocument(docKey) {
+  if (!docKey) return [];
+  return annotationState.highlights.filter(ann => ann.docKey === docKey);
+}
+
+function getActiveDocumentHighlights() {
+  return getHighlightsForDocument(activeDocumentKey);
+}
+
+function adoptLegacyHighlightsForDocument(docKey, docTitle) {
+  if (!docKey || !annotationState.highlights.length) return;
+  const headingIds = new Set((resultState.headings || []).map(h => h.id));
+  let mutated = false;
+  annotationState.highlights.forEach(ann => {
+    if (ann.docKey) return;
+    const headingMatches = ann.headingId && headingIds.has(ann.headingId);
+    const snippetMatches = ann.snippet && currentMarkdown().includes(ann.snippet);
+    if (headingMatches || snippetMatches) {
+      ann.docKey = docKey;
+      ann.docTitle = docTitle || ann.docTitle || ann.headingText || '';
+      mutated = true;
+    }
+  });
+  if (mutated) {
+    persistToStorage(STORAGE_KEYS.annotations, annotationState);
+  }
+}
 
 function cloneValue(value) {
   if (value === null || typeof value !== 'object') return value;
@@ -1069,8 +1126,9 @@ function renderContextChips() {
   if (selectionState.text) {
     chips.push({ id: 'selection', label: `選取：${selectionState.text.slice(0, 30)}` });
   }
-  if (annotationState.highlights?.length) {
-    const latest = annotationState.highlights[annotationState.highlights.length - 1];
+  const docHighlights = getActiveDocumentHighlights();
+  if (docHighlights.length) {
+    const latest = docHighlights[docHighlights.length - 1];
     chips.push({ id: latest.id, label: `標註：${latest.snippet.slice(0, 24)}` });
   }
   contextChipsEl.innerHTML = chips.map(chip => `<span class="context-chip" data-chip-id="${escapeHtml(chip.id)}">${escapeHtml(chip.label)}</span>`).join('');
@@ -1258,8 +1316,10 @@ function updateSearchCounter() {
 
 function applyAnnotations() {
   ensureReaderContainers();
-  if (!annotationState?.highlights?.length) return;
-  annotationState.highlights.forEach(ann => {
+  if (!annotationState?.highlights?.length || !activeDocumentKey) return;
+  const highlights = getActiveDocumentHighlights();
+  if (!highlights.length) return;
+  highlights.forEach(ann => {
     reapplyHighlight(mdContainer, ann);
     if (!secondaryPanel?.hidden && mdContainerSecondary) {
       reapplyHighlight(mdContainerSecondary, ann, true);
@@ -1431,6 +1491,10 @@ function exportBookmarks() {
 
 function openNoteComposer(options = {}) {
   if (!noteComposerEl || !noteComposerInput || !noteComposerContext) return;
+  if (!activeDocumentKey) {
+    showToast('請先載入文件再新增筆記', 'warning', 1800);
+    return;
+  }
   noteComposerState.editingId = options.id || null;
   noteComposerState.headingId = options.headingId || selectionState.headingId || (getCurrentHeading()?.id ?? null);
   noteComposerState.snippet = options.snippet || selectionState.text || '';
@@ -1458,15 +1522,29 @@ function saveNoteFromComposer() {
     showToast('筆記內容不可為空', 'error', 1600);
     return;
   }
+  if (!activeDocumentKey) {
+    showToast('請先載入文件再儲存筆記', 'warning', 1800);
+    return;
+  }
   const heading = resultState.headings.find(h => h.id === noteComposerState.headingId) || getCurrentHeading();
+  const docTitle = activeDocumentTitle || deriveDocumentTitle(resultState.meta || {}, {
+    filePath: resultState.meta?.markdownPath,
+    title: resultState.meta?.title
+  });
   if (noteComposerState.editingId) {
     const target = noteState.items.find(n => n.id === noteComposerState.editingId);
     if (target) {
+      if (target.docKey && target.docKey !== activeDocumentKey) {
+        showToast('此筆記屬於其他文件，請先開啟對應文件', 'warning', 2200);
+        return;
+      }
       target.text = text;
       target.updatedAt = Date.now();
       target.headingId = heading?.id || '';
       target.headingText = heading?.text || '';
       target.snippet = noteComposerState.snippet || '';
+      target.docKey = activeDocumentKey;
+      target.docTitle = docTitle || target.docTitle || '';
     }
   } else {
     noteState.items.unshift({
@@ -1476,7 +1554,9 @@ function saveNoteFromComposer() {
       headingText: heading?.text || '',
       snippet: noteComposerState.snippet || '',
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      docKey: activeDocumentKey,
+      docTitle: docTitle || ''
     });
   }
   persistToStorage(STORAGE_KEYS.notes, noteState.items);
@@ -1488,11 +1568,16 @@ function saveNoteFromComposer() {
 
 function renderNotes() {
   if (!noteListEl) return;
-  if (!noteState.items.length) {
+  if (!activeDocumentKey) {
+    noteListEl.innerHTML = '<div class="muted">請先載入文件以檢視筆記</div>';
+    return;
+  }
+  const notes = getActiveDocumentNotes();
+  if (!notes.length) {
     noteListEl.innerHTML = '<div class="muted">尚無筆記</div>';
     return;
   }
-  const html = noteState.items.map(item => {
+  const html = notes.map(item => {
     const date = new Date(item.updatedAt || item.createdAt);
     return `
       <div class="note-card" data-id="${escapeHtml(item.id)}">
@@ -1525,11 +1610,15 @@ function removeNote(id) {
 
 function renderHighlights() {
   if (!highlightListEl) return;
-  if (!annotationState.highlights.length) {
+  if (!activeDocumentKey) {
+    highlightListEl.innerHTML = '<div class="muted">請先載入文件以檢視標註</div>';
+    return;
+  }
+  const items = [...getActiveDocumentHighlights()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  if (!items.length) {
     highlightListEl.innerHTML = '<div class="muted">尚無標註</div>';
     return;
   }
-  const items = [...annotationState.highlights].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const html = items.map(ann => {
     const heading = ann.headingText || resultState.headings.find(h => h.id === ann.headingId)?.text || '';
     const timestamp = ann.createdAt ? new Date(ann.createdAt).toLocaleTimeString() : '';
@@ -1567,29 +1656,41 @@ function focusHighlight(id) {
 }
 
 function clearAllHighlights() {
-  if (!annotationState.highlights.length) {
+  if (!activeDocumentKey) {
+    showToast('請先載入文件', 'info', 1400);
+    return;
+  }
+  const currentHighlights = getActiveDocumentHighlights();
+  if (!currentHighlights.length) {
     showToast('沒有標註可清除', 'info', 1400);
     return;
   }
-  annotationState.highlights = [];
+  const idsToRemove = new Set(currentHighlights.map(ann => ann.id));
+  annotationState.highlights = annotationState.highlights.filter(ann => ann.docKey !== activeDocumentKey);
   persistToStorage(STORAGE_KEYS.annotations, annotationState);
   [mdContainer, mdContainerSecondary].forEach(container => {
-    container?.querySelectorAll('mark.annotation-highlight').forEach(unwrapHighlightElement);
+    container?.querySelectorAll('mark.annotation-highlight').forEach(mark => {
+      if (idsToRemove.has(mark.dataset?.annotationId)) unwrapHighlightElement(mark);
+    });
   });
   renderHighlights();
   renderContextChips();
-  showToast('已清除所有標註', 'info', 1400);
+  showToast('已清除本文件的標註', 'info', 1400);
 }
 
 function createHighlightFromSelection() {
   ensureReaderContainers();
+  if (!activeDocumentKey) {
+    showToast('請先載入文件再建立標註', 'warning', 1800);
+    return false;
+  }
   const snippet = selectionState.text;
   if (!snippet) {
     showToast('請先選取要標註的內容', 'info', 1400);
     return false;
   }
   const headingId = selectionState.headingId || getCurrentHeading()?.id || '';
-  const duplicate = annotationState.highlights.some(ann => ann.snippet === snippet && ann.headingId === headingId);
+  const duplicate = annotationState.highlights.some(ann => ann.docKey === activeDocumentKey && ann.snippet === snippet && ann.headingId === headingId);
   if (duplicate) {
     showToast('這段內容已經標註過', 'info', 1400);
     return false;
@@ -1630,7 +1731,9 @@ function createHighlightFromSelection() {
     snippet,
     headingId,
     headingText: heading?.text || '',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    docKey: activeDocumentKey,
+    docTitle: activeDocumentTitle || heading?.text || ''
   });
   persistToStorage(STORAGE_KEYS.annotations, annotationState);
   applyAnnotations();
@@ -2113,6 +2216,13 @@ window.electronAPI?.onProcessEvent?.((evt) => {
     resultState.meta = evt.metadata || null;
     clearSelection();
     renderMarkdown();
+    handleDocumentChange(resultState.meta, {
+      sessionId: evt.sessionId,
+      title: evt.metadata?.title || evt.metadata?.document_name || '',
+      historyTitle: evt.metadata?.document_name || '',
+      documentTitle: evt.metadata?.document_name || evt.metadata?.title || '',
+      filePath: evt.metadata?.markdownPath || evt.metadata?.sourceFile || ''
+    });
     if (processingView) processingView.style.display = 'none';
   resetProcessingLogsUI();
     if (resultView) resultView.style.display = 'block';
@@ -2253,7 +2363,7 @@ function renderChat() {
   const html = chatState.messages.map(msg => {
     const roleClass = msg.role === 'assistant' ? 'assistant' : (msg.role === 'user' ? 'user' : 'system');
     const body = `<div class="msg-content">${formatChatHtml(msg.content || '')}</div>`;
-    const referenceList = Array.isArray(msg.references)
+    const referenceList = (msg.role === 'assistant' && Array.isArray(msg.references))
       ? msg.references.filter(ref => ref && ref.headingId)
       : [];
     const references = referenceList.length
@@ -2306,25 +2416,160 @@ function ensureActiveConversation() {
   return startNewConversation();
 }
 
-function startNewConversation(initialTitle) {
-  const conv = {
-    id: `conv-${Date.now()}`,
-    title: initialTitle || '新的對話',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    messages: []
-  };
-  chatState.conversations.unshift(conv);
-  if (chatState.conversations.length > 40) chatState.conversations.length = 40;
+function focusConversation(conv) {
+  if (!conv) return;
   chatState.activeId = conv.id;
   chatState.messages = conv.messages;
   chatState.historySelectionId = conv.id;
   if (chatInputEl) chatInputEl.value = '';
   stopChatPlayback();
   renderChat();
-  saveConversations();
   renderChatHistoryList(conv.id);
+}
+
+function moveConversationToFront(convId) {
+  const idx = chatState.conversations.findIndex(c => c.id === convId);
+  if (idx <= 0) return;
+  const [conv] = chatState.conversations.splice(idx, 1);
+  chatState.conversations.unshift(conv);
+}
+
+function startNewConversation(initialTitle, options = {}) {
+  const docDetails = {
+    filePath: resultState.meta?.markdownPath,
+    title: resultState.meta?.title
+  };
+  const inferredTitle = deriveDocumentTitle(resultState.meta || {}, docDetails);
+  const docKey = options.docKey ?? activeDocumentKey ?? deriveDocumentKey(resultState.meta || {}, docDetails);
+  const docTitle = options.docTitle ?? (activeDocumentTitle || inferredTitle);
+  const resolvedTitle = initialTitle || docTitle;
+  const finalTitle = ensureConversationTitle(resolvedTitle);
+  const conv = {
+    id: `conv-${Date.now()}`,
+    title: finalTitle,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [],
+    docKey: docKey || null,
+    docTitle: docTitle || finalTitle
+  };
+  chatState.conversations.unshift(conv);
+  if (chatState.conversations.length > 40) chatState.conversations.length = 40;
+  focusConversation(conv);
+  saveConversations();
   return conv;
+}
+
+function ensureConversationTitle(baseTitle, excludeId = null) {
+  const fallback = (baseTitle && baseTitle.trim()) ? baseTitle.trim() : '新的對話';
+  const existingTitles = chatState.conversations
+    .filter(conv => conv.id !== excludeId)
+    .map(conv => conv.title || '')
+    .filter(Boolean);
+  if (!existingTitles.includes(fallback)) return fallback;
+  let index = 2;
+  let candidate = `${fallback} (${index})`;
+  while (existingTitles.includes(candidate)) {
+    index += 1;
+    candidate = `${fallback} (${index})`;
+  }
+  return candidate;
+}
+
+function normalizeConversationTitle(value) {
+  return (value || '').trim().replace(/\s*\(\d+\)$/, '').trim().toLowerCase();
+}
+
+function deriveDocumentKey(meta, extras = {}) {
+  const normalize = (value) => (typeof value === 'string' ? value.trim() : '');
+  const candidates = [
+    ['collection', normalize(meta?.ragCollection)],
+    ['collection', normalize(meta?.rag?.collection)],
+    ['collection', normalize(meta?.collection_name)],
+    ['collection', normalize(meta?.collectionName)],
+    ['collection', normalize(meta?.collection)],
+    ['history', normalize(extras.historyId)],
+    ['document', normalize(extras.documentId)],
+    ['session', normalize(extras.sessionId)],
+    ['session', normalize(meta?.sessionId)],
+    ['doc', normalize(extras.documentName)],
+    ['markdown', normalize(meta?.markdownPath)],
+    ['json', normalize(meta?.translated_json_name || meta?.translatedJsonName)],
+    ['file', normalize(extras.filePath || meta?.sourceFile)]
+  ];
+  for (const [prefix, value] of candidates) {
+    if (value) return `${prefix}:${value}`;
+  }
+  if (extras.title) return `title:${normalize(extras.title)}`;
+  return null;
+}
+
+function deriveDocumentTitle(meta, extras = {}) {
+  const titleSources = [
+    extras.historyTitle,
+    extras.displayTitle,
+    extras.documentTitle,
+    extras.title,
+    extras.documentName,
+    extras.fileLabel,
+    extras.fileName,
+    meta?.displayTitle,
+    meta?.document_display_name,
+    meta?.document_name,
+    meta?.documentName,
+    meta?.title,
+    extras.filePath,
+    meta?.markdownPath
+  ];
+  for (const value of titleSources) {
+    if (typeof value === 'string' && value.trim()) {
+      if (value.includes('\\') || value.includes('/')) {
+        return pathBasename(value.trim());
+      }
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+function handleDocumentChange(meta, extras = {}) {
+  const docKey = deriveDocumentKey(meta || {}, extras);
+  if (!docKey) return;
+  if (docKey === activeDocumentKey) return;
+  activeDocumentKey = docKey;
+  const title = deriveDocumentTitle(meta || {}, extras);
+  activeDocumentTitle = title || '';
+  adoptLegacyNotesForDocument(docKey, activeDocumentTitle);
+  adoptLegacyHighlightsForDocument(docKey, activeDocumentTitle);
+  renderNotes();
+  renderHighlights();
+  applyAnnotations();
+  renderContextChips();
+  refreshSuggestedQuestions();
+  const activeConv = getActiveConversation();
+  let existing = chatState.conversations.find(conv => conv.docKey === docKey);
+  if (!existing && title) {
+    const normalizedTarget = normalizeConversationTitle(title);
+    existing = chatState.conversations.find(conv => !conv.docKey && normalizeConversationTitle(conv.title) === normalizedTarget);
+    if (existing) existing.docKey = docKey;
+  }
+
+  if (existing) {
+    if (title) existing.title = ensureConversationTitle(title, existing.id);
+    existing.docTitle = title || existing.docTitle || '';
+    moveConversationToFront(existing.id);
+    focusConversation(existing);
+    saveConversations();
+  } else if (activeConv && Array.isArray(activeConv.messages) && activeConv.messages.length === 0) {
+    activeConv.docKey = docKey;
+    activeConv.docTitle = title || activeConv.docTitle || '';
+    if (title) activeConv.title = ensureConversationTitle(title, activeConv.id);
+    focusConversation(activeConv);
+    saveConversations();
+  } else {
+    startNewConversation(title, { docKey, docTitle: title });
+    console.log('[Chat] Document changed，新建對話', docKey);
+  }
 }
 
 function saveConversations() {
@@ -2451,12 +2696,14 @@ function collectContextSnippets() {
     const recent = bookmarkState.items.slice(0, 2).map(b => `• ${b.headingText || '無標題'}: ${b.snippet || ''}`);
     segments.push(`書籤摘要:\n${recent.join('\n')}`);
   }
-  if (noteState.items.length) {
-    const recentNotes = noteState.items.slice(0, 2).map(n => `• ${n.headingText || '筆記'}: ${n.text}`);
+  const activeNotes = getActiveDocumentNotes();
+  if (activeNotes.length) {
+    const recentNotes = activeNotes.slice(0, 2).map(n => `• ${n.headingText || '筆記'}: ${n.text}`);
     segments.push(`筆記摘要:\n${recentNotes.join('\n')}`);
   }
-  if (annotationState.highlights?.length) {
-    const latestHighlight = annotationState.highlights[annotationState.highlights.length - 1];
+  const docHighlights = getActiveDocumentHighlights();
+  if (docHighlights.length) {
+    const latestHighlight = docHighlights[docHighlights.length - 1];
     segments.push(`標註摘錄:\n${latestHighlight.snippet}`);
   }
   return segments;
@@ -2514,44 +2761,6 @@ function getHeadingById(id) {
   return resultState.headings.find(h => h.id === id) || null;
 }
 
-function buildUserQuestionReferences(questionText) {
-  const references = [];
-  const seen = new Set();
-  const pushRef = (headingId, label, snippet) => {
-    if (!headingId || seen.has(headingId)) return;
-    seen.add(headingId);
-    references.push({
-      headingId,
-      label: label || headingId,
-      headingText: label || headingId,
-      snippet: (snippet || '').trim()
-    });
-  };
-
-  const addHeading = (headingId, preferredSnippet) => {
-    if (!headingId) return;
-    const heading = getHeadingById(headingId);
-    const label = heading?.text || headingId;
-    let snippet = preferredSnippet?.trim();
-    if (!snippet) snippet = extractHeadingContent(headingId, 240);
-    if (!snippet && heading?.text) snippet = heading.text;
-    pushRef(headingId, label, snippet);
-  };
-
-  if (selectionState.headingId) {
-    addHeading(selectionState.headingId, selectionState.text);
-  }
-
-  const derived = deriveReferencesFromAnswer(questionText || '');
-  derived.forEach(ref => addHeading(ref.headingId));
-
-  if (!references.length) {
-    const current = getCurrentHeading();
-    addHeading(current?.id || '');
-  }
-
-  return references;
-}
 
 function generateFollowUpSuggestions(answer) {
   const suggestions = [];
@@ -2584,7 +2793,7 @@ function refreshSuggestedQuestions() {
     if (heading?.text) suggestions.push(`請總結 ${heading.text}`);
   }
   if (bookmarkState.items.length) suggestions.push('整理我的書籤摘要');
-  if (noteState.items.length) suggestions.push('根據筆記提供學習建議');
+  if (getActiveDocumentNotes().length) suggestions.push('根據筆記提供學習建議');
   chatState.suggestions = [...new Set(suggestions)].slice(0, 6);
   renderSuggestedQuestions();
 }
@@ -2806,11 +3015,7 @@ async function sendChat() {
   if (!text) return;
   const conv = ensureActiveConversation();
   const hadUserMessage = conv?.messages?.some(m => m.role === 'user');
-  const userReferences = buildUserQuestionReferences(text);
   const userMessage = { role: 'user', content: text };
-  if (userReferences.length) {
-    userMessage.references = userReferences;
-  }
   conv.messages.push(userMessage);
   if (!hadUserMessage && !chatPrefs.suggestionsCollapsed) {
     autoCollapseSuggestions();
@@ -2833,12 +3038,26 @@ async function sendChat() {
       console.warn('無法載入聊天設定，將使用預設參數', settingsError);
     }
     if (resultState.meta?.markdownPath) payload.source = resultState.meta.markdownPath;
-    const ragCollection = resultState.meta?.ragCollection || resultState.meta?.rag?.collection;
-    if (ragCollection) payload.collection = ragCollection;
+    const collectionSources = [
+      resultState.meta?.ragCollection,
+      resultState.meta?.rag?.collection,
+      resultState.meta?.collection_name,
+      resultState.meta?.collectionName,
+      resultState.meta?.collection,
+      resultState.meta?.translation?.collection_name
+    ];
+    for (const candidate of collectionSources) {
+      if (!payload.collection && typeof candidate === 'string' && candidate.trim()) {
+        payload.collection = candidate.trim();
+      }
+    }
     if (resultState.meta?.translatedJsonPath) payload.translatedJsonPath = resultState.meta.translatedJsonPath;
     if (!payload.collection && resultState.meta?.translation?.json_path) {
       const parts = String(resultState.meta.translation.json_path).split(/[\\/]/);
       payload.collection = parts.length ? parts[parts.length - 1] : '';
+    }
+    if (typeof payload.collection === 'string') {
+      payload.collection = payload.collection.trim();
     }
     if (!payload.collection) delete payload.collection;
     const res = await window.electronAPI?.chatAsk?.(payload);
@@ -3051,7 +3270,15 @@ highlightListEl?.addEventListener('click', (event) => {
 
 btnClearHighlights?.addEventListener('click', clearAllHighlights);
 
-btnChatNew?.addEventListener('click', () => startNewConversation());
+btnChatNew?.addEventListener('click', () => {
+  const docDetails = {
+    filePath: resultState.meta?.markdownPath,
+    title: resultState.meta?.title
+  };
+  const docTitle = deriveDocumentTitle(resultState.meta || {}, docDetails);
+  const docKey = activeDocumentKey ?? deriveDocumentKey(resultState.meta || {}, docDetails);
+  startNewConversation(docTitle, { docKey, docTitle });
+});
 
 btnToggleSuggestions?.addEventListener('click', () => {
   setSuggestionsCollapsed(!chatPrefs.suggestionsCollapsed);
@@ -3297,7 +3524,7 @@ async function refreshProcessedDocs() {
   }
 }
 
-function applyHistoricalDocument(payload) {
+function applyHistoricalDocument(payload, context = {}) {
   if (!payload || typeof payload !== 'object') return false;
   const mdPrimary = typeof payload.markdown === 'string' ? payload.markdown : '';
   const mdZh = typeof payload.zh === 'string' ? payload.zh : (typeof payload.contentZh === 'string' ? payload.contentZh : '');
@@ -3313,6 +3540,17 @@ function applyHistoricalDocument(payload) {
   if (wrapUpload) wrapUpload.style.display = 'none';
   if (processingView) processingView.style.display = 'none';
   if (resultView) resultView.style.display = 'block';
+  handleDocumentChange(resultState.meta, {
+    sessionId: payload.sessionId,
+    filePath: payload.filePath || payload.meta?.markdownPath || payload.path || '',
+    title: payload.meta?.title || payload.meta?.document_name || payload.title || payload.displayName || '',
+    historyTitle: context.historyTitle || payload.historyTitle || payload.displayName || payload.title || '',
+    documentTitle: payload.title || payload.displayName || '',
+    documentName: payload.document_name || payload.documentName || payload.meta?.document_name || '',
+    documentId: payload.documentId || payload.document_id || context.documentId || '',
+    historyId: context.historyId || payload.historyId || payload.id || '',
+    collection: payload.collection || payload.collectionName || payload.meta?.collection || ''
+  });
   return true;
 }
 
@@ -3320,6 +3558,8 @@ async function openProcessedDocumentById(id) {
   if (!id) return;
   hideHistoryRemovalConfirm();
   const fallbackEntry = processedDocsState.items.find(doc => doc.id === id);
+  const historyTitle = fallbackEntry?.title || '';
+  const historyId = fallbackEntry?.id || id;
   try {
     const res = await window.electronAPI?.loadProcessedDoc?.(id);
     let doc = null;
@@ -3331,7 +3571,7 @@ async function openProcessedDocumentById(id) {
     if (!doc && fallbackEntry?.raw) {
       doc = fallbackEntry.raw;
     }
-    if (doc && applyHistoricalDocument(doc)) {
+    if (doc && applyHistoricalDocument(doc, { historyTitle, historyId })) {
       closeHistory();
       showToast('已載入歷程文件', 'success', 1400);
     } else {
@@ -3517,6 +3757,12 @@ btnDeleteFile?.addEventListener('click', async () => {
   showFiles([]);
   updateActionButtons();
   setUploadControlsVisible(true);
+  activeDocumentKey = null;
+  activeDocumentTitle = '';
+  renderNotes();
+  renderHighlights();
+  renderContextChips();
+  refreshSuggestedQuestions();
   showToast('已清除檔案', 'success', 1200);
 });
 
@@ -3538,6 +3784,12 @@ btnNewFile?.addEventListener('click', () => {
   chatState.messages = [];
   renderChat();
   resetProcessingLogsUI();
+  activeDocumentKey = null;
+  activeDocumentTitle = '';
+  renderNotes();
+  renderHighlights();
+  renderContextChips();
+  refreshSuggestedQuestions();
 });
 
 // 設定 Modal

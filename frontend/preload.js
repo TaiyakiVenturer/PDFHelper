@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ,processedList: () => ipcRenderer.invoke('processed-docs:list')
   ,loadProcessedDoc: (id) => ipcRenderer.invoke('processed-docs:load', id)
   ,removeProcessedDoc: (id) => ipcRenderer.invoke('processed-docs:remove', id)
+  ,reconstructMarkdown: (options) => ipcRenderer.invoke('document:reconstruct', options)
   ,getNativeTheme: () => ({
     shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
     themeSource: nativeTheme.themeSource

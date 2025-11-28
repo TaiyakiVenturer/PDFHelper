@@ -737,13 +737,25 @@ const resultState = {
   headings: [],
   stats: { words: 0, sections: 0 }
 };
+
+function clearResultContent(options = {}) {
+  const { preserveLanguage = false } = options;
+  resultState.markdown = '';
+  resultState.zh = '';
+  resultState.en = '';
+  resultState.meta = null;
+  resultState.headings = [];
+  resultState.stats = { words: 0, sections: 0 };
+  if (!preserveLanguage) resultState.lang = 'zh';
+}
 const STORAGE_KEYS = {
   bookmarks: 'pdfhelper.reader.bookmarks',
   notes: 'pdfhelper.reader.notes',
   annotations: 'pdfhelper.reader.annotations',
   readerPrefs: 'pdfhelper.reader.preferences',
   chatPrefs: 'pdfhelper.chat.preferences',
-  chatHistory: 'pdfhelper.chat.history'
+  chatHistory: 'pdfhelper.chat.history',
+  languagePrefs: 'pdfhelper.reader.languagePrefs'
 };
 const tocState = { items: [], activeId: null };
 const searchState = { query: '', hits: [], activeIndex: -1 };
@@ -757,6 +769,7 @@ if (typeof readerPrefs.tocVisible !== 'boolean') {
   persistToStorage(STORAGE_KEYS.readerPrefs, readerPrefs);
 }
 const chatPrefs = loadFromStorage(STORAGE_KEYS.chatPrefs, { suggestionsCollapsed: false });
+const languagePrefs = loadFromStorage(STORAGE_KEYS.languagePrefs, {});
 const processedDocsState = { items: [], loading: false };
 const referenceTrail = [];
 const selectionState = { range: null, text: '', headingId: null, fromSecondary: false, highlightId: null };
@@ -865,16 +878,219 @@ function persistToStorage(key, value) {
     console.warn('無法儲存資料到 localStorage:', err);
   }
 }
-function currentMarkdown() {
-  if (resultState.zh || resultState.en) {
-    return resultState.lang === 'en' ? (resultState.en || resultState.markdown || '') : (resultState.zh || resultState.markdown || '');
+
+function hasMarkdownContent(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function rememberLanguagePreference(docKey, lang) {
+  if (!docKey) return;
+  const normalized = lang === 'en' ? 'en' : 'zh';
+  if (languagePrefs[docKey] === normalized)
+    return;
+  languagePrefs[docKey] = normalized;
+  persistToStorage(STORAGE_KEYS.languagePrefs, languagePrefs);
+}
+
+function getSavedLanguageForDoc(docKey) {
+  if (!docKey) return null;
+  const value = languagePrefs[docKey];
+  return value === 'en' ? 'en' : (value === 'zh' ? 'zh' : null);
+}
+
+let langZhRadio = null;
+let langEnRadio = null;
+
+function updateLanguageToggleUI(lang) {
+  const normalized = lang === 'en' ? 'en' : 'zh';
+  if (!langZhRadio) langZhRadio = document.getElementById('langZh');
+  if (!langEnRadio) langEnRadio = document.getElementById('langEn');
+  if (langZhRadio) langZhRadio.checked = normalized !== 'en';
+  if (langEnRadio) langEnRadio.checked = normalized === 'en';
+}
+
+function getTranslatedJsonName() {
+  const meta = resultState.meta || {};
+  const direct = meta.translated_json_name || meta.translatedJsonName;
+  if (direct) return direct;
+  const viaTranslation = meta.translation?.json_name || meta.translation?.jsonName;
+  if (viaTranslation) return viaTranslation;
+  const pathCandidate = meta.translated_json_path || meta.translation?.json_path || meta.translation?.jsonPath;
+  if (typeof pathCandidate === 'string' && pathCandidate.trim()) {
+    const parts = pathCandidate.split(/[\\/]/);
+    return parts[parts.length - 1] || pathCandidate;
   }
-  return resultState.markdown || '';
+  return '';
+}
+
+function normalizeDocumentMeta(metaSource = {}, payload = {}) {
+  const preferString = (...values) => {
+    for (const value of values) {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed)
+          return trimmed;
+      }
+    }
+    return '';
+  };
+  const meta = { ...(metaSource || {}) };
+  const translation = (typeof payload.translation === 'object' && payload.translation) ? payload.translation : (meta.translation || {});
+  if (translation && Object.keys(translation).length && !meta.translation) {
+    meta.translation = { ...translation };
+  }
+  const collection = preferString(meta.collection_name, meta.collectionName, payload.collection, payload.collectionName);
+  if (collection) {
+    meta.collection_name = collection;
+    if (!meta.collection)
+      meta.collection = collection;
+  }
+  const translatedJsonName = preferString(
+    meta.translated_json_name,
+    meta.translatedJsonName,
+    payload.translatedJsonName,
+    payload.translated_json_name,
+    translation?.json_name,
+    translation?.jsonName
+  );
+  if (translatedJsonName)
+    meta.translated_json_name = translatedJsonName;
+  const translatedJsonPath = preferString(
+    meta.translated_json_path,
+    meta.translatedJsonPath,
+    payload.translatedJsonPath,
+    payload.translated_json_path,
+    translation?.json_path,
+    translation?.jsonPath
+  );
+  if (translatedJsonPath)
+    meta.translated_json_path = translatedJsonPath;
+  const markdownPath = preferString(meta.markdownPath, payload.markdownPath, payload.filePath);
+  if (markdownPath)
+    meta.markdownPath = markdownPath;
+  const langValue = preferString(meta.lang, meta.language, payload.lang, payload.language);
+  if (langValue) {
+    meta.lang = langValue;
+    meta.language = langValue;
+  }
+  if (!meta.sessionId && payload.sessionId)
+    meta.sessionId = payload.sessionId;
+  if (!meta.title && payload.title)
+    meta.title = payload.title;
+  if (!meta.document_name && payload.document_name)
+    meta.document_name = payload.document_name;
+  if (!meta.documentName && payload.documentName)
+    meta.documentName = payload.documentName;
+  return meta;
+}
+
+async function fetchReconstructedMarkdown(mode = 'translated') {
+  if (!window.electronAPI?.reconstructMarkdown) {
+    return { ok: false, error: '當前版本不支援載入原文內容' };
+  }
+  const jsonName = getTranslatedJsonName();
+  if (!jsonName) {
+    return { ok: false, error: '缺少 JSON 檔案資訊，請重新處理文件' };
+  }
+  try {
+    const res = await window.electronAPI.reconstructMarkdown({ jsonName, mode });
+    if (!res || res.ok === false) {
+      return { ok: false, error: res?.error || '無法取得 Markdown 內容' };
+    }
+    if (!hasMarkdownContent(res.markdown)) {
+      return { ok: false, error: '尚未取得有效的 Markdown 內容' };
+    }
+    return { ok: true, markdown: res.markdown, markdownPath: res.markdownPath || '' };
+  } catch (err) {
+    return { ok: false, error: err?.message || '載入內容時發生錯誤' };
+  }
+}
+
+async function ensureLanguageContent(lang) {
+  const normalized = lang === 'en' ? 'en' : 'zh';
+  if (normalized === 'en') {
+    if (hasMarkdownContent(resultState.en)) return { ok: true };
+    const fetched = await fetchReconstructedMarkdown('origin');
+    if (fetched.ok) {
+      resultState.en = fetched.markdown;
+      resultState.meta = { ...(resultState.meta || {}), originMarkdownPath: fetched.markdownPath || resultState.meta?.originMarkdownPath };
+    }
+    return fetched;
+  }
+  if (hasMarkdownContent(resultState.zh)) return { ok: true };
+  const fetched = await fetchReconstructedMarkdown('translated');
+  if (fetched.ok) {
+    resultState.zh = fetched.markdown;
+    resultState.meta = { ...(resultState.meta || {}), markdownPath: fetched.markdownPath || resultState.meta?.markdownPath };
+    return fetched;
+  }
+  if (!hasMarkdownContent(resultState.en) && hasMarkdownContent(resultState.markdown)) {
+    resultState.zh = resultState.markdown;
+    return { ok: true, fallback: true, error: fetched.error };
+  }
+  return fetched;
+}
+
+async function persistLanguageSetting(lang) {
+  try {
+    await window.electronAPI?.saveSettings?.({ lang });
+  } catch (err) {
+    console.warn('儲存語言偏好失敗:', err);
+  }
+}
+
+async function setResultLanguage(targetLang, options = {}) {
+  const desired = targetLang === 'en' ? 'en' : 'zh';
+  const previous = resultState.lang === 'en' ? 'en' : 'zh';
+  const {
+    force = false,
+    persistSettings = true,
+    rememberPreference = true,
+    silent = false
+  } = options;
+  if (!force && desired === previous) {
+    updateLanguageToggleUI(desired);
+    return true;
+  }
+  if (desired === 'en' && !hasMarkdownContent(resultState.en)) {
+    showToast('正在載入原文內容…', 'info', 1400);
+  }
+  const ensured = await ensureLanguageContent(desired);
+  if (!ensured.ok) {
+    if (!silent) showToast(ensured.error || '無法切換語言', 'error', 2400);
+    updateLanguageToggleUI(previous);
+    return false;
+  }
+  resultState.lang = desired;
+  updateLanguageToggleUI(desired);
+  renderMarkdown();
+  if (rememberPreference && activeDocumentKey) {
+    rememberLanguagePreference(activeDocumentKey, desired);
+  }
+  if (persistSettings) {
+    await persistLanguageSetting(desired);
+  }
+  return true;
+}
+function currentMarkdown() {
+  const hasDefault = hasMarkdownContent(resultState.markdown);
+  const hasZh = hasMarkdownContent(resultState.zh);
+  const hasEn = hasMarkdownContent(resultState.en);
+  if (resultState.lang === 'en') {
+    if (hasEn) return resultState.en;
+    if (!hasZh && hasDefault) return resultState.markdown;
+    return '';
+  }
+  // 中文視圖
+  if (hasZh) return resultState.zh;
+  if (!hasEn && hasDefault) return resultState.markdown;
+  return '';
 }
 
 function renderMarkdown() {
   ensureReaderContainers();
   if (!mdContainer) return;
+  updateLanguageToggleUI(resultState.lang);
   const src = currentMarkdown();
   if (!src || !src.trim()) {
     mdContainer.innerHTML = '<div class="muted" style="padding:12px;">目前沒有可顯示的內容</div>';
@@ -2140,7 +2356,7 @@ function updateProcessingTime() {
   procTime.textContent = `處理時間: ${timeStr}`;
 }
 
-window.electronAPI?.onProcessEvent?.((evt) => {
+window.electronAPI?.onProcessEvent?.(async (evt) => {
   if (!evt || (activeSessionId && evt.sessionId && evt.sessionId !== activeSessionId)) return;
   if (evt.sessionId && !activeSessionId) {
     activeSessionId = evt.sessionId;
@@ -2207,14 +2423,20 @@ window.electronAPI?.onProcessEvent?.((evt) => {
     }
     
     // 切到結果畫面並渲染 markdown
+  clearResultContent();
   const mdPrimary = typeof evt.content === 'string' ? evt.content : '';
   const mdZh = typeof evt.contentZh === 'string' ? evt.contentZh : '';
   const mdEn = typeof evt.contentEn === 'string' ? evt.contentEn : '';
-  if (mdZh) resultState.zh = mdZh;
-  if (mdEn) resultState.en = mdEn;
-  resultState.markdown = mdPrimary || mdEn || mdZh || resultState.markdown;
-    resultState.meta = evt.metadata || null;
+  resultState.zh = mdZh || '';
+  resultState.en = mdEn || '';
+  resultState.markdown = mdPrimary || mdZh || mdEn || '';
+    resultState.meta = normalizeDocumentMeta(evt.metadata || {}, evt.metadata || {});
+    resultState.lang = 'zh';
     clearSelection();
+    const ensured = await ensureLanguageContent('zh');
+    if (!ensured.ok && ensured.error) {
+      showToast(ensured.error, 'warning', 2200);
+    }
     renderMarkdown();
     handleDocumentChange(resultState.meta, {
       sessionId: evt.sessionId,
@@ -2569,6 +2791,17 @@ function handleDocumentChange(meta, extras = {}) {
   } else {
     startNewConversation(title, { docKey, docTitle: title });
     console.log('[Chat] Document changed，新建對話', docKey);
+  }
+
+  const savedLang = getSavedLanguageForDoc(docKey);
+  const missingContent = savedLang === 'en'
+    ? !hasMarkdownContent(resultState.en)
+    : savedLang === 'zh' && !hasMarkdownContent(resultState.zh);
+  if (savedLang && (savedLang !== resultState.lang || missingContent)) {
+    setResultLanguage(savedLang, { persistSettings: false, force: missingContent }).catch(err => console.warn('套用文件語言偏好失敗:', err));
+  } else {
+    rememberLanguagePreference(docKey, resultState.lang);
+    updateLanguageToggleUI(resultState.lang);
   }
 }
 
@@ -3092,25 +3325,16 @@ chatInputEl?.addEventListener('keydown', (e) => {
   }
 });
 
-// 語言切換（中文/English）
+// 語言切換（中文/原文）
 const langToggle = document.getElementById('langToggle');
-langToggle?.addEventListener('change', async (e) => {
+if (!langZhRadio) langZhRadio = document.getElementById('langZh');
+if (!langEnRadio) langEnRadio = document.getElementById('langEn');
+langToggle?.addEventListener('change', (e) => {
   const target = e.target;
   if (!(target instanceof HTMLInputElement)) return;
   if (target.name === 'lang') {
-    resultState.lang = target.value === 'en' ? 'en' : 'zh';
-    renderMarkdown();
-    // 儲存到設定（與主題一致的做法）
-    try {
-      const existed = await window.electronAPI?.loadSettings?.();
-      await window.electronAPI?.saveSettings?.({
-        company: existed?.company || '',
-        model: existed?.model || '',
-        apiKey: existed?.apiKey || '',
-        theme: existed?.theme || 'dark',
-        lang: resultState.lang
-      });
-    } catch {}
+    const intent = target.value === 'en' ? 'en' : 'zh';
+    setResultLanguage(intent).catch(err => console.error('語言切換失敗:', err));
   }
 });
 
@@ -3524,32 +3748,39 @@ async function refreshProcessedDocs() {
   }
 }
 
-function applyHistoricalDocument(payload, context = {}) {
+async function applyHistoricalDocument(payload, context = {}) {
   if (!payload || typeof payload !== 'object') return false;
+  clearResultContent();
   const mdPrimary = typeof payload.markdown === 'string' ? payload.markdown : '';
   const mdZh = typeof payload.zh === 'string' ? payload.zh : (typeof payload.contentZh === 'string' ? payload.contentZh : '');
   const mdEn = typeof payload.en === 'string' ? payload.en : (typeof payload.contentEn === 'string' ? payload.contentEn : '');
   if (!mdPrimary && !mdZh && !mdEn) return false;
-  if (mdZh) resultState.zh = mdZh;
-  if (mdEn) resultState.en = mdEn;
-  if (mdPrimary || mdZh || mdEn) resultState.markdown = mdPrimary || mdEn || mdZh || resultState.markdown;
-  resultState.meta = payload.meta || payload.metadata || payload.info || resultState.meta;
-  if (payload.lang) resultState.lang = payload.lang;
+  resultState.zh = mdZh || '';
+  resultState.en = mdEn || '';
+  resultState.markdown = mdPrimary || mdZh || mdEn || '';
+  const rawMeta = payload.meta || payload.metadata || payload.info || {};
+  const normalizedMeta = normalizeDocumentMeta(rawMeta, payload);
+  resultState.meta = normalizedMeta;
+  resultState.lang = 'zh';
   clearSelection();
+  const ensured = await ensureLanguageContent('zh');
+  if (!ensured.ok && ensured.error) {
+    showToast(ensured.error, 'warning', 2200);
+  }
   renderMarkdown();
   if (wrapUpload) wrapUpload.style.display = 'none';
   if (processingView) processingView.style.display = 'none';
   if (resultView) resultView.style.display = 'block';
   handleDocumentChange(resultState.meta, {
     sessionId: payload.sessionId,
-    filePath: payload.filePath || payload.meta?.markdownPath || payload.path || '',
-    title: payload.meta?.title || payload.meta?.document_name || payload.title || payload.displayName || '',
+    filePath: payload.filePath || normalizedMeta.markdownPath || payload.path || '',
+    title: normalizedMeta.title || normalizedMeta.document_name || payload.title || payload.displayName || '',
     historyTitle: context.historyTitle || payload.historyTitle || payload.displayName || payload.title || '',
     documentTitle: payload.title || payload.displayName || '',
-    documentName: payload.document_name || payload.documentName || payload.meta?.document_name || '',
+    documentName: payload.document_name || payload.documentName || normalizedMeta.document_name || '',
     documentId: payload.documentId || payload.document_id || context.documentId || '',
     historyId: context.historyId || payload.historyId || payload.id || '',
-    collection: payload.collection || payload.collectionName || payload.meta?.collection || ''
+    collection: payload.collection || payload.collectionName || normalizedMeta.collection || normalizedMeta.collection_name || ''
   });
   return true;
 }
@@ -3571,7 +3802,7 @@ async function openProcessedDocumentById(id) {
     if (!doc && fallbackEntry?.raw) {
       doc = fallbackEntry.raw;
     }
-    if (doc && applyHistoricalDocument(doc, { historyTitle, historyId })) {
+    if (doc && await applyHistoricalDocument(doc, { historyTitle, historyId })) {
       closeHistory();
       showToast('已載入歷程文件', 'success', 1400);
     } else {

@@ -1,5 +1,5 @@
 // main.js - Electron 主程序
-const { app, BrowserWindow, ipcMain, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -15,7 +15,13 @@ let currentDocumentState = {
 };
 
 const SUPPORTED_PROCESS_METHODS = new Set(['auto', 'ocr', 'txt']);
-const SUPPORTED_SOURCE_LANGUAGES = new Set(['auto', 'ch', 'chinese_cht', 'en', 'korean', 'japan', 'th', 'el', 'latin', 'arabic', 'east_slavic', 'devanagari']);
+const SUPPORTED_SOURCE_LANGUAGES = new Set(['en', 'ch', 'chinese_cht', 'en', 'korean', 'japan', 'th', 'el', 'latin', 'arabic', 'east_slavic', 'devanagari']);
+
+const GITHUB_RELEASE_OWNER = 'TaiyakiVenturer';
+const GITHUB_RELEASE_REPO = 'PDFHelper';
+const RELEASE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 分鐘快取結果，避免過度呼叫 GitHub API
+let cachedReleaseInfo = null;
+let cachedReleaseFetchedAt = 0;
 
 // 啟動畫面狀態
 let splashWindow = null;
@@ -186,6 +192,8 @@ app.whenReady().then(async() => {
   console.log("[INFO] 後端伺服器啟動成功。");
   sendStartupStatus('後端伺服器啟動成功，準備開啟介面。', 'success');
 
+  await applyLLMSettingsToBackend(readSettings(), 'startup');
+
   closeSplashWindow();
   createWindow();
   app.on('activate', () => {
@@ -341,6 +349,41 @@ function writeSettings(data) {
   }
 }
 
+async function applyLLMSettingsToBackend(settings, reason = 'manual') {
+  try {
+    const translatorConfig = settings?.translator || {};
+    const embeddingConfig = settings?.embedding || {};
+    const ragConfig = settings?.rag || {};
+
+    const tasks = [];
+    const queueUpdate = (service, config) => {
+      const hasModel = Boolean(config?.model);
+      const hasCompany = Boolean(config?.company);
+      const requiresKey = config?.company !== 'ollama';
+      const hasKey = Boolean(config?.apiKey);
+      if (!hasModel || !hasCompany) return;
+      if (requiresKey && !hasKey) return;
+      tasks.push(
+        apiClient.updateAPIKey(service, config.company, config.apiKey, config.model)
+          .then(() => {
+            console.log(`[settings-sync:${reason}] ${service} -> ${config.company}/${config.model}`);
+          })
+          .catch((err) => {
+            console.error(`[settings-sync:${reason}] 更新 ${service} 失敗:`, err);
+          })
+      );
+    };
+
+    queueUpdate('translator', translatorConfig);
+    queueUpdate('embedding', embeddingConfig);
+    queueUpdate('rag', ragConfig);
+
+    if (tasks.length) await Promise.allSettled(tasks);
+  } catch (err) {
+    console.error('[settings-sync] 套用設定到後端時發生錯誤:', err);
+  }
+}
+
 // 歷史紀錄 I/O
 function readHistory() {
   try {
@@ -387,6 +430,65 @@ function writeChatHistory(conversations) {
     console.error('寫入聊天記錄失敗:', e);
     return false;
   }
+}
+
+function normalizeVersionString(input) {
+  if (!input) return '';
+  return String(input).trim().replace(/^v/i, '');
+}
+
+function compareVersions(a, b) {
+  const arrA = normalizeVersionString(a).split('.').map(part => parseInt(part.replace(/[^0-9]/g, ''), 10) || 0);
+  const arrB = normalizeVersionString(b).split('.').map(part => parseInt(part.replace(/[^0-9]/g, ''), 10) || 0);
+  const maxLen = Math.max(arrA.length, arrB.length);
+  for (let i = 0; i < maxLen; i += 1) {
+    const valA = arrA[i] ?? 0;
+    const valB = arrB[i] ?? 0;
+    if (valA > valB) return 1;
+    if (valA < valB) return -1;
+  }
+  return 0;
+}
+
+async function fetchLatestReleaseFromGitHub() {
+  const url = `https://api.github.com/repos/${GITHUB_RELEASE_OWNER}/${GITHUB_RELEASE_REPO}/releases/latest`;
+  const res = await fetch(url, {
+    headers: {
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'PDFHelper-Updater'
+    }
+  });
+  if (!res.ok) {
+    throw new Error(`GitHub 回應錯誤 (${res.status})`);
+  }
+  const json = await res.json();
+  const assets = Array.isArray(json?.assets)
+    ? json.assets.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        size: asset.size,
+        downloadUrl: asset.browser_download_url || asset.url,
+        contentType: asset.content_type
+      }))
+    : [];
+  return {
+    tagName: json?.tag_name || '',
+    name: json?.name || json?.tag_name || '',
+    body: json?.body || '',
+    htmlUrl: json?.html_url || `https://github.com/${GITHUB_RELEASE_OWNER}/${GITHUB_RELEASE_REPO}/releases`,
+    publishedAt: json?.published_at || null,
+    assets
+  };
+}
+
+async function getLatestReleaseInfo(force = false) {
+  if (!force && cachedReleaseInfo && (Date.now() - cachedReleaseFetchedAt) < RELEASE_CACHE_TTL_MS) {
+    return cachedReleaseInfo;
+  }
+  const release = await fetchLatestReleaseFromGitHub();
+  cachedReleaseInfo = release;
+  cachedReleaseFetchedAt = Date.now();
+  return release;
 }
 
 // 寫入拖放偵錯日誌（附加）
@@ -471,7 +573,7 @@ ipcMain.handle('process:start', async (event, payload) => {
     console.log('[process:start] PDF 已複製到:', targetPath);
     
     const method = SUPPORTED_PROCESS_METHODS.has(rawMethod) ? rawMethod : 'auto';
-    const lang = SUPPORTED_SOURCE_LANGUAGES.has(rawLang) ? rawLang : 'auto';
+    const lang = SUPPORTED_SOURCE_LANGUAGES.has(rawLang) ? rawLang : 'en';
 
     // 發送初始進度
     win?.webContents.send('process:evt', {
@@ -606,7 +708,7 @@ ipcMain.handle('process:start', async (event, payload) => {
                   console.log('[process:start] 開始重組 Markdown:', evtObj.metadata.translated_json_name);
                   const reconstructResult = await apiClient.reconstructMarkdown(
                     evtObj.metadata.translated_json_name,
-                    method,
+                    "auto",
                     "translated"
                   );
 
@@ -769,47 +871,46 @@ ipcMain.handle('settings:save', async (_event, data) => {
   console.log('[settings:save] 已寫入本地設定檔:', result);
 
   // 同步更新後端配置
-  try {
-    const translatorConfig = result.translator || {};
-    const embeddingConfig = result.embedding || {};
-    const ragConfig = result.rag || {};
-
-    // 更新翻譯器配置
-    if (translatorConfig.model && ((translatorConfig.apiKey && translatorConfig.company) || translatorConfig.company === 'ollama')) {
-      // 更新後端 API Key
-      await apiClient.updateAPIKey("translator", translatorConfig.company, translatorConfig.apiKey, translatorConfig.model);
-      console.log('[settings:save] 已更新翻譯器配置:', translatorConfig.company, translatorConfig.model);
-    }
-    
-    // 更新 Embedding 配置
-    if (embeddingConfig.model && ((embeddingConfig.apiKey && embeddingConfig.company) || embeddingConfig.company === 'ollama')) {
-      // 更新後端 API Key
-      await apiClient.updateAPIKey("embedding", embeddingConfig.company, embeddingConfig.apiKey, embeddingConfig.model);
-      console.log('[settings:save] 已更新 Embedding 配置:', embeddingConfig.company, embeddingConfig.model);
-    }
-
-    // 更新 RAG 配置
-    if (ragConfig.model && ((ragConfig.apiKey && ragConfig.company) || ragConfig.company === 'ollama')) {
-      // 更新後端 API Key
-      await apiClient.updateAPIKey("rag", ragConfig.company, ragConfig.apiKey, ragConfig.model);
-      console.log('[settings:save] 已更新 RAG 配置:', ragConfig.company, ragConfig.model);
-    }
-    
-    console.log('[settings:save] 後端配置同步完成');
-  } catch (error) {
-    console.error('[settings:save] 更新後端配置失敗:', error);
-  }
+  await applyLLMSettingsToBackend(result, 'settings:save');
   
   return result;
 });
 
-// IPC: 檢查更新（簡化版）
-ipcMain.handle('app:check-updates', () => {
-  return {
-    currentVersion: app.getVersion(),
-    hasUpdate: false,
-    message: '已是最新版本'
-  };
+// IPC: 檢查更新（從 GitHub 取得最新釋出資訊）
+ipcMain.handle('app:check-updates', async () => {
+  const currentVersion = app.getVersion();
+  try {
+    const release = await getLatestReleaseInfo();
+    const latestVersion = normalizeVersionString(release?.tagName || release?.name || '');
+    const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
+    return {
+      currentVersion,
+      latestVersion,
+      hasUpdate,
+      releaseName: release?.name || '',
+      releaseNotes: release?.body || '',
+      releaseUrl: release?.htmlUrl || `https://github.com/${GITHUB_RELEASE_OWNER}/${GITHUB_RELEASE_REPO}/releases`,
+      publishedAt: release?.publishedAt || null,
+      assets: release?.assets || []
+    };
+  } catch (err) {
+    console.error('[app:check-updates] 無法取得最新版本資訊:', err);
+    return {
+      currentVersion,
+      hasUpdate: false,
+      message: '無法取得最新版本資訊',
+      error: err?.message || '檢查更新失敗',
+      releaseUrl: `https://github.com/${GITHUB_RELEASE_OWNER}/${GITHUB_RELEASE_REPO}/releases`
+    };
+  }
+});
+
+ipcMain.handle('app:open-release-page', async (_event, url) => {
+  const target = (typeof url === 'string' && url.trim())
+    ? url.trim()
+    : `https://github.com/${GITHUB_RELEASE_OWNER}/${GITHUB_RELEASE_REPO}/releases/latest`;
+  await shell.openExternal(target);
+  return { ok: true };
 });
 
 /**
@@ -968,8 +1069,7 @@ ipcMain.handle('chat:ask', async (_event, payload) => {
     
     // 優先使用 payload 中的 collection，否則使用全局狀態
     let document_name = payload?.collection || currentDocumentState.collectionName || '';
-    console.log('[chat:ask] 初始 collection_name:', document_name);
-
+    
     // 如果還是沒有，嘗試從歷史記錄中找最新的
     if (!document_name) {
       const history = readHistory();
@@ -1127,6 +1227,12 @@ ipcMain.handle('processed-docs:load', async (_event, docId) => {
     createdAt: record.createdAt || null,
     updatedAt: record.updatedAt || null
   };
+
+  currentDocumentState.sessionId = record.sessionId || null;
+  const currentCollection = meta.collection_name || meta.collection || record.collectionName || null;
+  currentDocumentState.collectionName = currentCollection;
+  currentDocumentState.markdownPath = markdownPath || null;
+  console.log('[processed-docs:load] 設定當前文件狀態:', currentDocumentState);
   return { ok: true, document: payload };
 });
 
@@ -1151,6 +1257,38 @@ ipcMain.handle('processed-docs:remove', async (_event, docId) => {
   history.splice(index, 1);
   writeHistory(history);
   return { ok: true };
+});
+
+ipcMain.handle('document:reconstruct', async (_event, payload = {}) => {
+  try {
+    const jsonName = payload.jsonName || payload.json_name;
+    if (!jsonName) {
+      return { ok: false, error: '缺少 JSON 檔案名稱' };
+    }
+    const mode = payload.mode === 'origin' ? 'origin' : 'translated';
+    const method = payload.method || 'auto';
+    const result = await apiClient.reconstructMarkdown(jsonName, method, mode);
+    if (!result?.success || !result.data?.markdown_path) {
+      return { ok: false, error: result?.message || '重組 Markdown 失敗' };
+    }
+    const markdownPath = result.data.markdown_path;
+    if (!markdownPath || !fs.existsSync(markdownPath)) {
+      return { ok: false, error: '找不到重建後的 Markdown 檔案' };
+    }
+    const markdownContent = fs.readFileSync(markdownPath, 'utf-8');
+    if (!markdownContent || !markdownContent.trim()) {
+      return { ok: false, error: '重建的 Markdown 內容為空' };
+    }
+    return {
+      ok: true,
+      markdown: markdownContent,
+      markdownPath,
+      mode
+    };
+  } catch (err) {
+    console.error('[document:reconstruct] 發生錯誤:', err);
+    return { ok: false, error: err?.message || '重組失敗' };
+  }
 });
 
 // 保留外部內容注入接口：external:content

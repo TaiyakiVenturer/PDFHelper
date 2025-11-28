@@ -799,6 +799,18 @@ let scrollProgress = 0;
 let activeDocumentKey = null;
 let activeDocumentTitle = '';
 
+function resetReaderScroll(position = 0) {
+  const top = typeof position === 'number' ? position : 0;
+  if (mdContainer) {
+    if (typeof mdContainer.scrollTo === 'function') mdContainer.scrollTo({ top, left: 0, behavior: 'auto' });
+    else mdContainer.scrollTop = top;
+  }
+  if (mdContainerSecondary) {
+    if (typeof mdContainerSecondary.scrollTo === 'function') mdContainerSecondary.scrollTo({ top, left: 0, behavior: 'auto' });
+    else mdContainerSecondary.scrollTop = top;
+  }
+}
+
 function getNotesForDocument(docKey) {
   if (!docKey) return [];
   return noteState.items.filter(item => item.docKey === docKey);
@@ -3768,6 +3780,7 @@ async function applyHistoricalDocument(payload, context = {}) {
     showToast(ensured.error, 'warning', 2200);
   }
   renderMarkdown();
+  requestAnimationFrame(() => resetReaderScroll(0));
   if (wrapUpload) wrapUpload.style.display = 'none';
   if (processingView) processingView.style.display = 'none';
   if (resultView) resultView.style.display = 'block';

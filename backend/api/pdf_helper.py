@@ -377,7 +377,7 @@ class PDFHelper:
         else:
             ProgressManager.progress_update(27, "已跳過PDF處理階段，準備翻譯JSON內容", "translating-json")
 
-        file_name = pdf_name[:pdf_name.rfind(".")]
+        file_name, pdf_path = self.pdf_processor._check_hashed_filename(pdf_name)
         if stage <= ProgressStage.PROCESSED_PDF.value:
             # 獲取生成的JSON檔案路徑
             if stage < ProgressStage.PROCESSED_PDF.value:

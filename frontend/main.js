@@ -968,7 +968,8 @@ ipcMain.handle('chat:ask', async (_event, payload) => {
     
     // 優先使用 payload 中的 collection，否則使用全局狀態
     let document_name = payload?.collection || currentDocumentState.collectionName || '';
-    
+    console.log('[chat:ask] 初始 collection_name:', document_name);
+
     // 如果還是沒有，嘗試從歷史記錄中找最新的
     if (!document_name) {
       const history = readHistory();

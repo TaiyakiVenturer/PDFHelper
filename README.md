@@ -148,9 +148,9 @@ npm run start
 詳細授權資訊請參考 [LICENSE_GUIDE.md](./docs/LICENSE_GUIDE.md)
 
 ### 第三方套件授權
-- MinerU - AGPL-3.0
-- ChromaDB - Apache-2.0
-- PyTorch - BSD-3-Clause
+- [MinerU](https://github.com/opendatalab/MinerU.git) - AGPL-3.0
+- [ChromaDB](https://github.com/chroma-core/chroma.git) - Apache-2.0
+- [PyTorch](https://pytorch.org) - BSD-3-Clause
 
 ## 📞 聯絡資訊
 

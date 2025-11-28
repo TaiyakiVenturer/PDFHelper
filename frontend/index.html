@@ -346,9 +346,7 @@
       .provider-badge { margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; vertical-align: middle; display: inline-block; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); }
       .provider-badge.openai { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.45); color: #10b981; }
       .provider-badge.google { background: rgba(2,136,209,0.12); border-color: rgba(2,136,209,0.45); color: #0288d1; }
-      .provider-badge.xai { background: rgba(109,40,217,0.12); border-color: rgba(109,40,217,0.45); color: #6d28d9; }
-      .provider-badge.anthropic { background: rgba(244,114,182,0.12); border-color: rgba(244,114,182,0.45); color: #f472b6; }
-  .provider-badge.ollama { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.45); color: #22c55e; }
+      .provider-badge.ollama { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.45); color: #22c55e; }
 
       /* 結果畫面佈局 */
   .result-wrap { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 420px); gap: 16px; height: 100%; padding: 16px 16px 8px 16px; }
@@ -380,8 +378,10 @@
   .msg-content code { background: var(--surface-2); border: 1px solid var(--border); padding: 0 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace; }
   .msg-content pre { background: var(--surface-2); border: 1px solid var(--border); padding: 8px; border-radius: 8px; overflow: auto; }
   .msg-content pre code { background: none; border: none; padding: 0; }
-  .msg-references { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .reference-chip { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--accent-border); background: rgba(14,165,233,0.2); color: var(--accent-bg); font-size: 12px; cursor: pointer; }
+  .msg-references { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .reference-chip { padding: 8px 10px; border-radius: 12px; border: 1px solid var(--accent-border); background: rgba(14,165,233,0.15); color: var(--text); font-size: 12px; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 2px; white-space: normal; line-height: 1.4; }
+  .reference-chip-title { font-weight: 600; color: var(--accent-bg); }
+  .reference-chip-snippet { font-size: 11px; color: var(--text); opacity: 0.9; }
   .followup-list { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
   .followup-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--button-bg); color: var(--muted); cursor: pointer; font-size: 12px; }
   .followup-btn:hover { background: var(--button-hover-bg); color: var(--text); }
@@ -791,8 +791,6 @@
                 <label for="langEn">English</label>
               </div>
               <button id="btnToggleToc" class="btn" type="button" title="切換目錄面板">顯示目錄</button>
-              <button id="btnToggleSplit" class="btn" type="button" title="切換分割檢視">分割視窗</button>
-              <button id="btnOpenNewWindow" class="btn" type="button" title="開啟新視窗">新視窗</button>
               <button id="btnNewFile" class="btn" title="處理另一個檔案">新檔案</button>
             </div>
           </div>
@@ -814,7 +812,7 @@
               </div>
             </div>
           </div>
-          <div class="reader-content toc-hidden">
+          <div id="readerContent" class="reader-content toc-hidden">
             <nav id="tocSidebar" class="toc hidden" aria-label="文件目錄">
               <div class="toc-header">
                 <span>目錄</span>
@@ -966,8 +964,6 @@
                     <option value="">請選擇</option>
                     <option value="openai">OpenAI</option>
                     <option value="google">Google</option>
-                    <option value="xai">xAI</option>
-                    <option value="anthropic">Anthropic</option>
                     <option value="ollama">Ollama</option>
                   </select>
                 </div>
@@ -1000,8 +996,6 @@
                     <option value="">請選擇</option>
                     <option value="openai">OpenAI</option>
                     <option value="google">Google</option>
-                    <option value="xai">xAI</option>
-                    <option value="anthropic">Anthropic</option>
                     <option value="ollama">Ollama</option>
                   </select>
                 </div>
@@ -1034,8 +1028,6 @@
                     <option value="">請選擇</option>
                     <option value="openai">OpenAI</option>
                     <option value="google">Google</option>
-                    <option value="xai">xAI</option>
-                    <option value="anthropic">Anthropic</option>
                     <option value="ollama">Ollama</option>
                   </select>
                 </div>

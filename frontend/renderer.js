@@ -115,8 +115,6 @@ const contextChipsEl = document.getElementById('contextChips');
 const btnPrevSection = document.getElementById('btnPrevSection');
 const btnNextSection = document.getElementById('btnNextSection');
 const btnToggleToc = document.getElementById('btnToggleToc');
-const btnToggleSplit = document.getElementById('btnToggleSplit');
-const btnOpenNewWindow = document.getElementById('btnOpenNewWindow');
 const btnNewFile = document.getElementById('btnNewFile');
 const btnSyncScroll = document.getElementById('btnSyncScroll');
 const secondarySourceSelect = document.getElementById('secondarySource');
@@ -753,7 +751,7 @@ const bookmarkState = { items: loadFromStorage(STORAGE_KEYS.bookmarks, []) };
 const noteState = { items: loadFromStorage(STORAGE_KEYS.notes, []) };
 const annotationState = loadFromStorage(STORAGE_KEYS.annotations, { highlights: [] });
 if (!annotationState.highlights) annotationState.highlights = [];
-const readerPrefs = loadFromStorage(STORAGE_KEYS.readerPrefs, { split: false, syncScroll: false, tocVisible: false });
+const readerPrefs = loadFromStorage(STORAGE_KEYS.readerPrefs, { syncScroll: false, tocVisible: false });
 if (typeof readerPrefs.tocVisible !== 'boolean') {
   readerPrefs.tocVisible = false;
   persistToStorage(STORAGE_KEYS.readerPrefs, readerPrefs);
@@ -847,7 +845,10 @@ function renderMarkdown() {
     activeHeadingId = null;
     postProcessMarkdown();
     renderMathInContainer(mdContainer);
-    enableSplitView(Boolean(readerPrefs.split), false);
+    if (readerPanels) readerPanels.dataset.split = 'false';
+    if (secondaryPanel) secondaryPanel.hidden = true;
+    if (mdContainerSecondary) mdContainerSecondary.innerHTML = '';
+    toggleSyncScroll(false, false);
     applyAnnotations();
     renderHighlights();
     if (searchState.query) {
@@ -1107,77 +1108,6 @@ function populateSecondarySourceOptions() {
   secondarySourceSelect.innerHTML = opts.join('');
 }
 
-function enableSplitView(enable, persistPreference = true) {
-  ensureReaderContainers();
-  if (!readerPanels || !secondaryPanel || !mdContainerSecondary) return;
-  readerPrefs.split = enable;
-  if (persistPreference) {
-    persistToStorage(STORAGE_KEYS.readerPrefs, readerPrefs);
-  }
-  btnToggleSplit?.classList.toggle('active', enable);
-  if (enable) {
-    readerPanels.dataset.split = 'true';
-    secondaryPanel.hidden = false;
-    renderSecondaryMarkdown();
-    toggleSyncScroll(Boolean(readerPrefs.syncScroll), false);
-    if (readerPrefs.syncScroll) toggleSyncScroll(true);
-  } else {
-    readerPanels.dataset.split = 'false';
-    secondaryPanel.hidden = true;
-    mdContainerSecondary.innerHTML = '';
-    toggleSyncScroll(false, false);
-  }
-}
-
-function setSecondaryContent(html) {
-  ensureReaderContainers();
-  if (!mdContainerSecondary) return;
-  const processed = cloneHtmlForSecondary(html);
-  mdContainerSecondary.innerHTML = processed;
-}
-
-function getAlternateMarkdown() {
-  const primary = String(currentMarkdown() || '').trim();
-  const candidates = [];
-  if (resultState.lang === 'zh') {
-    candidates.push(resultState.en, resultState.markdown);
-  } else if (resultState.lang === 'en') {
-    candidates.push(resultState.zh, resultState.markdown);
-  } else {
-    candidates.push(resultState.zh, resultState.en);
-  }
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    const trimmed = String(candidate).trim();
-    if (trimmed && trimmed !== primary) return trimmed;
-  }
-  return '';
-}
-
-function renderSecondaryMarkdown() {
-  ensureReaderContainers();
-  if (!mdContainerSecondary) return;
-  const altMarkdown = getAlternateMarkdown();
-  if (!altMarkdown || !altMarkdown.trim()) {
-    mdContainerSecondary.innerHTML = '<div class="muted" style="padding:12px;">尚無其他語言的內容</div>';
-    return;
-  }
-  const markdownPath = resultState.meta?.markdownPath || '';
-  const html = convertMarkdownToHtml(altMarkdown, markdownPath);
-  setSecondaryContent(html);
-  renderMathInContainer(mdContainerSecondary);
-}
-
-function cloneHtmlForSecondary(html) {
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = html;
-  wrapper.querySelectorAll('[id]').forEach(el => {
-    const original = el.id;
-    el.dataset.anchor = original;
-    el.id = `${original}__secondary`;
-  });
-  return wrapper.innerHTML;
-}
 
 function toggleSyncScroll(enable, persistPreference = true) {
   ensureReaderContainers();
@@ -1809,23 +1739,6 @@ function removeHighlightById(id) {
   return true;
 }
 
-function openReaderInNewWindow() {
-  const api = window.electronAPI?.openReaderWindow;
-  if (!api) {
-    showToast('目前環境不支援新視窗', 'warning', 1600);
-    return;
-  }
-  const payload = {
-    markdown: currentMarkdown(),
-    lang: resultState.lang,
-    meta: resultState.meta,
-    headings: resultState.headings,
-    bookmarks: bookmarkState.items,
-    notes: noteState.items,
-    annotations: annotationState.highlights
-  };
-  api(payload).catch?.((err) => console.error('開啟新視窗失敗', err));
-}
 const procStatus = document.getElementById('procStatus');
 // const uploadCard = document.querySelector('.upload-card'); // 不再使用整卡片點擊/拖放
 
@@ -2344,7 +2257,11 @@ function renderChat() {
       ? msg.references.filter(ref => ref && ref.headingId)
       : [];
     const references = referenceList.length
-      ? `<div class="msg-references">${referenceList.map(ref => `<button class="reference-chip" type="button" data-heading="${escapeHtml(ref.headingId || '')}">${escapeHtml(ref.label || ref.headingText || '引用')}</button>`).join('')}</div>`
+      ? `<div class="msg-references">${referenceList.map(ref => {
+          const title = escapeHtml(ref.label || ref.headingText || '引用');
+          const snippet = ref.snippet ? `<div class="reference-chip-snippet">${escapeHtml(ref.snippet)}</div>` : '';
+          return `<button class="reference-chip" type="button" data-heading="${escapeHtml(ref.headingId || '')}"><div class="reference-chip-title">${title}</div>${snippet}</button>`;
+        }).join('')}</div>`
       : '';
     const followups = (msg.followups && msg.followups.length)
       ? `<div class="followup-list">${msg.followups.map(text => `<button class="followup-btn" type="button" data-followup="${escapeHtml(text)}">${escapeHtml(text)}</button>`).join('')}</div>`
@@ -2592,6 +2509,50 @@ function normalizeReferences(list) {
   return unique;
 }
 
+function getHeadingById(id) {
+  if (!id) return null;
+  return resultState.headings.find(h => h.id === id) || null;
+}
+
+function buildUserQuestionReferences(questionText) {
+  const references = [];
+  const seen = new Set();
+  const pushRef = (headingId, label, snippet) => {
+    if (!headingId || seen.has(headingId)) return;
+    seen.add(headingId);
+    references.push({
+      headingId,
+      label: label || headingId,
+      headingText: label || headingId,
+      snippet: (snippet || '').trim()
+    });
+  };
+
+  const addHeading = (headingId, preferredSnippet) => {
+    if (!headingId) return;
+    const heading = getHeadingById(headingId);
+    const label = heading?.text || headingId;
+    let snippet = preferredSnippet?.trim();
+    if (!snippet) snippet = extractHeadingContent(headingId, 240);
+    if (!snippet && heading?.text) snippet = heading.text;
+    pushRef(headingId, label, snippet);
+  };
+
+  if (selectionState.headingId) {
+    addHeading(selectionState.headingId, selectionState.text);
+  }
+
+  const derived = deriveReferencesFromAnswer(questionText || '');
+  derived.forEach(ref => addHeading(ref.headingId));
+
+  if (!references.length) {
+    const current = getCurrentHeading();
+    addHeading(current?.id || '');
+  }
+
+  return references;
+}
+
 function generateFollowUpSuggestions(answer) {
   const suggestions = [];
   const heading = getCurrentHeading();
@@ -2639,6 +2600,7 @@ function renderSuggestedQuestions() {
     return;
   }
   suggestedQuestionsEl.innerHTML = chatState.suggestions.map(text => `<button class="suggestion-item" type="button" data-suggestion="${escapeHtml(text)}">${escapeHtml(text)}</button>`).join('');
+  renderMathInContainer(suggestedQuestionsEl);
   applySuggestionsVisibility();
 }
 
@@ -2844,7 +2806,11 @@ async function sendChat() {
   if (!text) return;
   const conv = ensureActiveConversation();
   const hadUserMessage = conv?.messages?.some(m => m.role === 'user');
+  const userReferences = buildUserQuestionReferences(text);
   const userMessage = { role: 'user', content: text };
+  if (userReferences.length) {
+    userMessage.references = userReferences;
+  }
   conv.messages.push(userMessage);
   if (!hadUserMessage && !chatPrefs.suggestionsCollapsed) {
     autoCollapseSuggestions();
@@ -2956,10 +2922,6 @@ btnToggleToc?.addEventListener('click', () => {
   persistToStorage(STORAGE_KEYS.readerPrefs, readerPrefs);
 });
 
-btnToggleSplit?.addEventListener('click', () => {
-  enableSplitView(!readerPrefs.split);
-});
-
 btnPrevSection?.addEventListener('click', () => jumpToAdjacentHeading(-1));
 btnNextSection?.addEventListener('click', () => jumpToAdjacentHeading(1));
 
@@ -2974,7 +2936,6 @@ secondarySourceSelect?.addEventListener('change', (event) => {
   if (target) smoothScrollIntoView(mdContainerSecondary, target);
 });
 
-btnOpenNewWindow?.addEventListener('click', () => openReaderInNewWindow());
 
 let searchDebounce = null;
 searchInputEl?.addEventListener('input', (event) => {
@@ -3170,7 +3131,6 @@ if (btnToggleToc) {
   btnToggleToc.textContent = tocInitiallyVisible ? '隱藏目錄' : '顯示目錄';
   btnToggleToc.classList.toggle('active', tocInitiallyVisible);
 }
-btnToggleSplit?.classList.toggle('active', Boolean(readerPrefs.split));
 btnSyncScroll?.classList.toggle('active', Boolean(readerPrefs.syncScroll));
 
 document.addEventListener('contextmenu', handleContextMenuEvent);
@@ -3688,7 +3648,7 @@ function resetUpdateControls() {
 function setProviderBadge(badgeEl, company) {
   if (!badgeEl) return;
   badgeEl.className = 'provider-badge';
-  const map = { openai: 'OpenAI', google: 'Google', xai: 'xAI', anthropic: 'Anthropic', ollama: 'Ollama' };
+  const map = { openai: 'OpenAI', google: 'Google',ollama: 'Ollama' };
   if (!company) { badgeEl.textContent = ''; return; }
   badgeEl.textContent = map[company] || '';
   badgeEl.classList.add(company);

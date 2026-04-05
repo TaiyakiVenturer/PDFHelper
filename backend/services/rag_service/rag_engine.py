@@ -60,12 +60,12 @@ class RAGEngine:
     """RAG查詢增強生成引擎"""
     
     def __init__(self, 
-            document_processor_obj: DocumentProcessor,
-            embedding_service_obj: EmbeddingService,
-            chromadb_obj: ChromaVectorStore,
-            llm_service_obj: BaseLLMService,
-            verbose: bool = False,
-        ):
+        document_processor_obj: DocumentProcessor,
+        embedding_service_obj: EmbeddingService,
+        chromadb_obj: ChromaVectorStore,
+        llm_service_obj: BaseLLMService,
+        verbose: bool = False,
+    ):
         """
         初始化RAG引擎
         
@@ -147,8 +147,12 @@ class RAGEngine:
             logger.error(f"文件向量化儲存時出錯: {e}")
             return False, None
 
-    def search(self, searching_content: str, collection_name: str,
-        top_k: int = 7, filter_dict: Optional[Dict[str, Any]] = None,
+    def search(
+        self, 
+        searching_content: str, 
+        collection_name: str,
+        top_k: int = 7, 
+        filter_dict: Optional[Dict[str, Any]] = None,
     ) -> Optional[List[SearchResult]]:
         """
         查詢相關文件片段
@@ -271,8 +275,13 @@ class RAGEngine:
 
         return "\n".join(context_parts)
 
-    def ask(self, question: str, collection_name: str, top_k: int = 10, 
-        filter_dict: Optional[Dict[str, Any]] = None, include_sources: bool = True
+    def ask(
+        self, 
+        question: str, 
+        collection_name: str, 
+        top_k: int = 10, 
+        filter_dict: Optional[Dict[str, Any]] = None, 
+        include_sources: bool = True
     ) -> RAGResponse:
         """
         完整的RAG查詢流程
